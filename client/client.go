@@ -55,6 +55,11 @@ type Config struct {
 	// waits for its acknowledgement (default 30s).
 	ControlTimeout time.Duration
 
+	// CallbackTimeout bounds how long a CanUseTool / hook callback may run
+	// before the SDK abandons it and lets the turn proceed (default 60s). A
+	// hung callback would otherwise stall the agent indefinitely.
+	CallbackTimeout time.Duration
+
 	// CanUseTool, when set, is invoked for every tool call the agent attempts,
 	// to allow/deny it (the can_use_tool control callback). Setting it switches
 	// the session into permission-routing mode: --permission-prompt-tool stdio

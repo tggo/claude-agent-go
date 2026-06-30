@@ -90,6 +90,9 @@ func ParseOutput(output []byte) (resultText string, metadata *ExecutionMetadata,
 			if len(msg.ModelUsage) > 0 {
 				metadata.ModelUsage = msg.ModelUsage
 			}
+			if len(msg.StructuredOutput) > 0 {
+				metadata.StructuredOutput = msg.StructuredOutput
+			}
 		}
 	}
 

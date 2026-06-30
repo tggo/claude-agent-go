@@ -36,6 +36,10 @@ type ClaudeOutputMessage struct {
 	// Usage fields (in result message)
 	Usage      *TokenUsage            `json:"usage,omitempty"`
 	ModelUsage map[string]*ModelUsage `json:"modelUsage,omitempty"`
+
+	// StructuredOutput carries a structured (object) result when the CLI emits
+	// one, kept raw so a string Result field never fails to parse.
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty"`
 }
 
 // MCPServerStatus represents the status of an MCP server connection.
@@ -127,4 +131,7 @@ type ExecutionMetadata struct {
 	ModelUsage    map[string]*ModelUsage `json:"model_usage,omitempty" bson:"model_usage,omitempty"`
 	MCPServers    []MCPServerStatus      `json:"mcp_servers,omitempty" bson:"mcp_servers,omitempty"`
 	ClaudeVersion string                 `json:"claude_version,omitempty" bson:"claude_version,omitempty"`
+
+	// StructuredOutput is the raw structured result, when the CLI emits one.
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty" bson:"structured_output,omitempty"`
 }

@@ -45,6 +45,11 @@ type StreamEvent struct {
 	// Event is the raw wrapped Anthropic streaming event (stream_event lines,
 	// emitted under --include-partial-messages). Decode via Partial().
 	Event json.RawMessage `json:"event,omitempty"`
+
+	// Raw is the original line bytes, set by ParseStreamLine. Useful for event
+	// types the SDK does not model (e.g. rate_limit_event) — Unmarshal it
+	// yourself for the fields you need.
+	Raw []byte `json:"-"`
 }
 
 // ParseStreamLine parses a single line from stream-json output.
@@ -57,7 +62,15 @@ func ParseStreamLine(line []byte) *StreamEvent {
 	if err := json.Unmarshal(line, &event); err != nil {
 		return nil
 	}
+	event.Raw = line
 	return &event
+}
+
+// IsRateLimit reports whether this is a rate_limit_event line. The CLI emits
+// these periodically; surface them (via RunStream's ProgressFunc) to back off.
+// Decode StreamEvent.Raw for the specific fields.
+func (e *StreamEvent) IsRateLimit() bool {
+	return e.Type == "rate_limit_event"
 }
 
 // IsResult returns true if this event is the final result.

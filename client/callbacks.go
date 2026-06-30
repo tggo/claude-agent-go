@@ -3,7 +3,13 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
 )
+
+// defaultCallbackTimeout bounds how long a user permission/hook callback may run
+// before the SDK gives up and lets the agent's turn proceed.
+const defaultCallbackTimeout = 60 * time.Second
 
 // This file implements the *incoming* half of the control protocol: requests
 // the CLI sends TO the SDK while a turn is running — tool-permission decisions
@@ -118,22 +124,23 @@ func (c *Client) handleControlRequest(line []byte) {
 }
 
 func (c *Client) dispatchControl(req incomingControlRequest) (map[string]any, error) {
-	ctx := context.Background()
 	switch req.Request.Subtype {
 	case "can_use_tool":
 		if c.cfg.CanUseTool == nil {
 			return nil, errNoPermissionCallback
 		}
-		res, err := c.cfg.CanUseTool(ctx, req.Request.ToolName, req.Request.Input, PermissionContext{
-			ToolUseID:   req.Request.ToolUseID,
-			DisplayName: req.Request.DisplayName,
-			Description: req.Request.Description,
-			Suggestions: req.Request.Suggestions,
+		return c.runCallback(func(ctx context.Context) (map[string]any, error) {
+			res, err := c.cfg.CanUseTool(ctx, req.Request.ToolName, req.Request.Input, PermissionContext{
+				ToolUseID:   req.Request.ToolUseID,
+				DisplayName: req.Request.DisplayName,
+				Description: req.Request.Description,
+				Suggestions: req.Request.Suggestions,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return res.toResponseData(req.Request.Input), nil
 		})
-		if err != nil {
-			return nil, err
-		}
-		return res.toResponseData(req.Request.Input), nil
 
 	case "hook_callback":
 		c.pendingMu.Lock()
@@ -142,14 +149,46 @@ func (c *Client) dispatchControl(req incomingControlRequest) (map[string]any, er
 		if cb == nil {
 			return nil, errNoHookCallback
 		}
-		out, err := cb(ctx, req.Request.Input, req.Request.ToolUseID)
-		if err != nil {
-			return nil, err
-		}
-		return rawToMap(out), nil
+		return c.runCallback(func(ctx context.Context) (map[string]any, error) {
+			out, err := cb(ctx, req.Request.Input, req.Request.ToolUseID)
+			if err != nil {
+				return nil, err
+			}
+			return rawToMap(out), nil
+		})
 
 	default:
 		return nil, errUnsupportedControl
+	}
+}
+
+// runCallback runs a user permission/hook callback with a bound timeout, so a
+// hung callback can't stall the agent's turn forever. On timeout it returns an
+// error (delivered to the CLI as a control_response error, letting the turn
+// proceed); the callback goroutine is abandoned.
+func (c *Client) runCallback(fn func(context.Context) (map[string]any, error)) (map[string]any, error) {
+	d := c.cfg.CallbackTimeout
+	if d <= 0 {
+		d = defaultCallbackTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+
+	type result struct {
+		data map[string]any
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		data, err := fn(ctx)
+		ch <- result{data, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("callback timed out after %v", d)
+	case r := <-ch:
+		return r.data, r.err
 	}
 }
 

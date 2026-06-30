@@ -17,6 +17,10 @@ type ServerConfig struct {
 	URL     string            `json:"url,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
 
+	// AlwaysLoad keeps the server's tools in context even when unused
+	// (Claude Code 2.1.121+). Omitted when false.
+	AlwaysLoad bool `json:"alwaysLoad,omitempty"`
+
 	// stdio transport
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`

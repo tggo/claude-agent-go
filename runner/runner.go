@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os/exec"
 	"strings"
@@ -75,6 +76,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
+	}
+	if cfg.MaxBufferSize <= 0 {
+		cfg.MaxBufferSize = maxScanBuf
 	}
 	// Default transport runs the binary locally. WithBinary / cfg.Binary feed
 	// the local transport, so existing configs keep working unchanged.
@@ -178,15 +182,15 @@ func (r *Runner) Run(ctx context.Context, in Input) (*Result, error) {
 
 	procDone, err := startTeardown(cmdCtx, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("claude cli start failed: %w", err)
+		return nil, &CLINotFoundError{Binary: r.cfg.Binary, Err: err}
 	}
 	err = cmd.Wait()
 	close(procDone)
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("claude cli timeout after %v: %w", r.cfg.ProcessTimeout, err)
+			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: err}
 		}
-		return nil, fmt.Errorf("claude cli execution failed: %w (output: %s)", err, sanitizeOutput(stdout.Bytes()))
+		return nil, &ProcessError{ExitCode: exitCodeOf(err), Stderr: sanitizeOutput(stdout.Bytes()), Err: err}
 	}
 
 	return &Result{
@@ -213,15 +217,15 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
 
 	procDone, err := startTeardown(cmdCtx, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("claude cli start failed: %w", err)
+		return nil, &CLINotFoundError{Binary: r.cfg.Binary, Err: err}
 	}
 	err = cmd.Wait()
 	close(procDone)
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("claude cli timeout after %v: %w", r.cfg.ProcessTimeout, err)
+			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: err}
 		}
-		return nil, fmt.Errorf("claude cli execution failed: %w (stderr: %s)", err, sanitizeOutput(stderr.Bytes()))
+		return nil, &ProcessError{ExitCode: exitCodeOf(err), Stderr: sanitizeOutput(stderr.Bytes()), Err: err}
 	}
 
 	resultText, meta, err := claudecli.ParseOutput(stdout.Bytes())
@@ -253,17 +257,21 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		return nil, fmt.Errorf("create stdout pipe: %w", err)
 	}
 	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	if r.cfg.StderrFunc != nil {
+		cmd.Stderr = io.MultiWriter(&stderr, &lineWriter{fn: r.cfg.StderrFunc})
+	} else {
+		cmd.Stderr = &stderr
+	}
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "stream", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
 	procDone, err := startTeardown(cmdCtx, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("claude cli start failed: %w", err)
+		return nil, &CLINotFoundError{Binary: r.cfg.Binary, Err: err}
 	}
 
 	scanner := bufio.NewScanner(stdoutPipe)
-	scanner.Buffer(make([]byte, 0, maxScanBuf), maxScanBuf)
+	scanner.Buffer(make([]byte, 0, r.cfg.MaxBufferSize), r.cfg.MaxBufferSize)
 
 	var allLines [][]byte
 	var resultEvent *claudecli.StreamEvent
@@ -293,12 +301,12 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	close(procDone)
 	if waitErr != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("claude cli timeout after %v: %w", r.cfg.ProcessTimeout, waitErr)
+			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: waitErr}
 		}
 		if cmdCtx.Err() != nil {
 			return nil, fmt.Errorf("claude cli cancelled: %w", cmdCtx.Err())
 		}
-		return nil, fmt.Errorf("claude cli execution failed: %w (stderr: %s)", waitErr, sanitizeOutput(stderr.Bytes()))
+		return nil, &ProcessError{ExitCode: exitCodeOf(waitErr), Stderr: sanitizeOutput(stderr.Bytes()), Err: waitErr}
 	}
 
 	resultText, finalEvent := claudecli.ExtractTextFromStream(allLines)
@@ -323,6 +331,26 @@ func (r *Runner) modelOf(in Input) string {
 		return in.Model
 	}
 	return r.cfg.DefaultModel
+}
+
+// lineWriter calls fn for each complete '\n'-terminated line written to it,
+// buffering any partial trailing line until the next write.
+type lineWriter struct {
+	fn  func(string)
+	buf []byte
+}
+
+func (w *lineWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	for {
+		i := bytes.IndexByte(w.buf, '\n')
+		if i < 0 {
+			break
+		}
+		w.fn(string(w.buf[:i]))
+		w.buf = w.buf[i+1:]
+	}
+	return len(p), nil
 }
 
 // sanitizeOutput redacts embedded tokens and truncates long output for logs/errors.

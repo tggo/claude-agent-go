@@ -171,6 +171,23 @@ func TestRunTimeouts(t *testing.T) {
 	}
 }
 
+// fakeClaudeStderr writes a line to stderr, then emits a valid stream-json result.
+func fakeClaudeStderr(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake binary uses /bin/sh")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\n" +
+		"echo 'warming up' >&2\n" +
+		`printf '%s\n' '{"type":"result","subtype":"success","session_id":"s","result":"ok","total_cost_usd":0.01}'` + "\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	return path
+}
+
 func TestRunBadJSON(t *testing.T) {
 	bin := fakeClaude(t, "this is not json at all")
 	r := New(WithBinary(bin))

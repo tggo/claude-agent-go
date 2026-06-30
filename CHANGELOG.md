@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- Add entries here as you merge. Move them under a new version on release. -->
+### Added
+- Typed errors: `runner.CLINotFoundError`, `ProcessError` (exit code + stderr),
+  `TimeoutError`, with `IsCLINotFound` / `IsProcessError` / `IsTimeout` helpers.
+- `runner.WithMaxBufferSize` (configurable stream scan buffer, guards against a
+  non-positive size) and `runner.WithStderrCallback` (live stderr line capture).
+- `runner.Input.ForkSession` (`--fork-session`).
+- `mcp.ServerConfig.AlwaysLoad` (Claude Code 2.1.121+).
+- `client.Config.CallbackTimeout` — bounds `CanUseTool`/hook callbacks so a hung
+  callback can't stall the agent's turn.
+- `client.NewHooks()` fluent hook builder.
+- `claudecli`: structured-output capture (`ExecutionMetadata.StructuredOutput`),
+  `StreamEvent.Raw`, and `StreamEvent.IsRateLimit()`.
+
+### Notes
+- Improvements informed by a scan of the leading Go Claude SDKs; see `todo.md`
+  for the remaining roadmap (retry/backoff, budget tracker, fleet, Docker run,
+  Kubernetes transport).
 
 ## [0.1.0] - 2026-06-30
 

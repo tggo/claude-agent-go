@@ -57,6 +57,15 @@ type Config struct {
 	// IncludeHookEvents enables --include-hook-events in stream mode.
 	IncludeHookEvents bool
 
+	// MaxBufferSize bounds a single stream-json line in RunStream (default
+	// 64 MiB). Values <= 0 are ignored and the default is used.
+	MaxBufferSize int
+
+	// StderrFunc, when set, is called for each line the CLI writes to stderr,
+	// for live log capture during long runs (RunStream). It runs inline on the
+	// stderr reader — keep it quick.
+	StderrFunc func(line string)
+
 	// Entrypoint sets CLAUDE_CODE_ENTRYPOINT for telemetry/attribution.
 	// Empty leaves it unset.
 	Entrypoint string
@@ -114,6 +123,22 @@ func WithHookEvents(on bool) Option {
 	return func(c *Config) { c.IncludeHookEvents = on }
 }
 
+// WithMaxBufferSize sets the max stream-json line size (bytes) for RunStream.
+// Non-positive values are ignored, keeping the 64 MiB default — this guards
+// against a scanner panic from a negative/zero buffer.
+func WithMaxBufferSize(n int) Option {
+	return func(c *Config) {
+		if n > 0 {
+			c.MaxBufferSize = n
+		}
+	}
+}
+
+// WithStderrCallback streams the CLI's stderr lines to fn during RunStream.
+func WithStderrCallback(fn func(line string)) Option {
+	return func(c *Config) { c.StderrFunc = fn }
+}
+
 // WithEnv appends extra environment variables ("KEY=value") to every invocation.
 func WithEnv(env ...string) Option {
 	return func(c *Config) { c.Env = append(c.Env, env...) }
@@ -149,6 +174,10 @@ type Input struct {
 
 	// Continue resumes the most recent session in WorkDir (--continue).
 	Continue bool
+
+	// ForkSession, with Resume, forks the resumed session into a new one
+	// (--fork-session) instead of continuing it in place.
+	ForkSession bool
 
 	// PermissionMode sets --permission-mode (e.g. "acceptEdits", "plan",
 	// "bypassPermissions"). Empty leaves it to the CLI default. Note: when

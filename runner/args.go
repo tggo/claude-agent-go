@@ -67,6 +67,9 @@ func (r *Runner) buildArgs(in Input, mode outputMode) []string {
 	if in.Continue {
 		args = append(args, "--continue")
 	}
+	if in.ForkSession {
+		args = append(args, "--fork-session")
+	}
 	if in.SettingsPath != "" {
 		args = append(args, "--settings", in.SettingsPath)
 	}
