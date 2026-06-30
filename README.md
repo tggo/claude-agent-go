@@ -157,6 +157,9 @@ See [`examples/`](./examples):
 | `hooks` | a `PreToolUse` hook that blocks a command |
 | `agents` | an inline subagent delegated to via Task |
 | `worktree` | run an agent in an isolated git worktree; changes land on a throwaway branch |
+| `worktree-parallel` | N agents on goroutines, one worktree each, committing concurrently without colliding |
+| `worktree-client` | an interactive multi-turn session inside a worktree, building a file across turns then committing |
+| `worktree-pr` | agent commits in a worktree, then pushes the branch and opens a GitHub PR via `gh` |
 
 Run one:
 
@@ -179,7 +182,12 @@ r.Run(ctx, runner.Input{WorkDir: wt, Prompt: "...implement the change and commit
 ```
 
 Spawn one worktree per goroutine to fan out work; `RemoveWorktree` tears each
-down. See [`examples/worktree`](./examples/worktree).
+down. See [`examples/worktree`](./examples/worktree) for a single run,
+[`examples/worktree-parallel`](./examples/worktree-parallel) for concurrent
+agents, [`examples/worktree-client`](./examples/worktree-client) for an
+interactive session in a worktree, and
+[`examples/worktree-pr`](./examples/worktree-pr) for committing and opening a
+pull request from the branch.
 
 ## Feature coverage vs the Python SDK
 
