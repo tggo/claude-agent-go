@@ -1,5 +1,10 @@
 # claude-agent-go
 
+[![CI](https://github.com/tggo/claude-agent-go/actions/workflows/ci.yml/badge.svg)](https://github.com/tggo/claude-agent-go/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/tggo/claude-agent-go.svg)](https://pkg.go.dev/github.com/tggo/claude-agent-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tggo/claude-agent-go)](https://goreportcard.com/report/github.com/tggo/claude-agent-go)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 A Go SDK for building agents on top of the **Claude Code CLI** — the Go
 counterpart to the official Python `claude-agent-sdk`.
 

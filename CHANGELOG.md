@@ -1,0 +1,46 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+<!-- Add entries here as you merge. Move them under a new version on release. -->
+
+## [0.1.0] - 2026-06-30
+
+First public release. A Go SDK for building agents on top of the Claude Code CLI.
+
+### Added
+- `runner` — one-shot execution: `Run` (plain), `RunJSON` (cost/session/token
+  metadata), `RunStream` (live events + `ProgressFunc`, token-level deltas).
+- `client` — interactive multi-turn sessions over the bidirectional stream-json
+  protocol, with the control protocol: `can_use_tool` permission callbacks,
+  hook callbacks, inline subagents, skills allowlist, and interrupt-with-ack.
+- `tools` — expose Go functions as in-process MCP tools: untyped `Serve` and
+  typed `Register[In,Out]` with JSON Schema inferred from a struct.
+- `transport` — launch the binary locally (`Local`), in a container
+  (`DockerExec`), or on a remote host (`SSH`).
+- `workspace` — project/session directories, `CLAUDE.md` placement, and git
+  worktrees for running agents in isolation/parallel.
+- `mcp` — write `--mcp-config` files for external MCP servers.
+- `claudecli` — output types and parsers (sessions, cost, tokens, typed content
+  blocks, partial-stream deltas).
+- `signal` — marker-agnostic outcome detection.
+- `Input` flags: resume, continue, permission-mode, add-dir, settings,
+  partial-messages, hook-events, and verbatim passthrough.
+- Examples: basic, stream, tools, interactive, permissions, hooks, agents,
+  worktree (+ parallel / client / pr), transport.
+
+### Notes
+- Targets Claude CLI `2.1.196`. The `can_use_tool` control path requires the CLI
+  to emit `control_request{subtype:"can_use_tool"}` under
+  `--permission-prompt-tool stdio`, which was fixed in `2.1.196`.
+- Zero external runtime dependencies beyond the official MCP Go SDK (used only by
+  `tools`). >90% unit coverage on every substantive package; 18 integration tests
+  assert behavior against the real binary.
+
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/tggo/claude-agent-go/releases/tag/v0.1.0
