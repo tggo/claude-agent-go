@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>claude-agent-go — a Go SDK for the Claude Code CLI</title>
+<meta name="description" content="A typed, dependency-light Go SDK that drives the Claude Code CLI: one-shot runs, interactive sessions, in-process Go tools, permission and hook callbacks, inline subagents. Behaviorally verified against the real binary." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A1320;          /* deep ink background */
+    --ink-2:#0E1B2A;        /* raised panel */
+    --ink-3:#13263A;        /* hover / lines */
+    --cyan:#3DD6F5;         /* Go-adjacent signal */
+    --cyan-deep:#00ADD8;    /* Go brand cyan */
+    --coral:#FF6B5C;        /* the "decision / deny" signal */
+    --amber:#F2C14E;        /* tool / value */
+    --text:#E7EFF6;
+    --muted:#8499AB;
+    --faint:#54677A;
+    --line:#1C3047;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--ink);color:var(--text);
+    font-family:var(--disp);line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(900px 500px at 78% -8%, rgba(0,173,216,.12), transparent 60%);
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:rgba(61,214,245,.28)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+  .mono{font-family:var(--mono)}
+
+  /* nav */
+  nav{display:flex;align-items:center;justify-content:space-between;padding:22px 28px;max-width:1080px;margin:0 auto}
+  .brand{font-family:var(--mono);font-weight:600;letter-spacing:-.02em;font-size:15px}
+  .brand b{color:var(--cyan)}
+  .nav-links{display:flex;gap:26px;font-size:14px;color:var(--muted)}
+  .nav-links a:hover{color:var(--text)}
+  .nav-links a:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:3px}
+
+  /* hero */
+  .hero{display:grid;grid-template-columns:1.02fr 1fr;gap:54px;align-items:center;padding:70px 0 84px}
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan-deep);margin:0 0 22px}
+  h1{font-size:clamp(38px,6vw,62px);line-height:1.02;letter-spacing:-.035em;font-weight:700;margin:0 0 22px}
+  h1 .pipe{color:var(--cyan)}
+  .lede{font-size:18px;color:var(--muted);max-width:34ch;margin:0 0 30px}
+  .lede b{color:var(--text);font-weight:500}
+  .cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .get{font-family:var(--mono);font-size:14px;background:var(--ink-2);border:1px solid var(--line);
+    padding:13px 16px;border-radius:9px;color:var(--text);display:flex;align-items:center;gap:12px}
+  .get .dollar{color:var(--faint)}
+  .get b{color:var(--cyan);font-weight:600}
+  .btn{font-family:var(--mono);font-size:14px;padding:13px 18px;border-radius:9px;border:1px solid var(--cyan-deep);
+    color:var(--ink);background:var(--cyan);font-weight:600;transition:transform .12s ease, box-shadow .2s ease}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px -10px rgba(61,214,245,.6)}
+  .btn:focus-visible{outline:2px solid var(--text);outline-offset:3px}
+  .ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .ghost:hover{border-color:var(--cyan);box-shadow:none}
+
+  .badges{display:flex;gap:18px;margin-top:30px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .badges span{display:flex;align-items:center;gap:8px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan)}
+  .dot.coral{background:var(--coral)} .dot.amber{background:var(--amber)}
+
+  /* signature: the stream transcript */
+  .stream{background:linear-gradient(180deg,var(--ink-2),#0B1828);border:1px solid var(--line);
+    border-radius:14px;overflow:hidden;box-shadow:0 30px 80px -40px rgba(0,0,0,.8)}
+  .stream-bar{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);
+    font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.04em}
+  .tl{width:10px;height:10px;border-radius:50%;background:#26384a}
+  .stream-bar .label{margin-left:8px}
+  .feed{font-family:var(--mono);font-size:12.6px;line-height:1.95;padding:18px 18px 22px;min-height:330px}
+  .ln{display:block;white-space:pre-wrap;opacity:0;transform:translateY(4px);animation:in .5s forwards}
+  .ln .arrow{color:var(--faint)}
+  .ev-user{color:var(--text)}
+  .k{color:var(--faint)} .v-type{color:var(--cyan)} .v-tool{color:var(--amber)} .v-deny{color:var(--coral)}
+  .v-str{color:#9ad8c0} .comment{color:var(--faint);font-style:italic}
+  @keyframes in{to{opacity:1;transform:none}}
+
+  /* section scaffolding */
+  section{padding:64px 0;border-top:1px solid var(--line)}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:40px}
+  .sec-num{font-family:var(--mono);font-size:12.5px;color:var(--cyan-deep)}
+  h2{font-size:clamp(26px,3.4vw,34px);letter-spacing:-.025em;margin:0;font-weight:600}
+  .sec-sub{color:var(--muted);font-size:16px;max-width:60ch;margin:10px 0 0}
+
+  /* capability grid */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+  .card{background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:22px 22px 20px;
+    transition:border-color .18s ease, transform .18s ease}
+  .card:hover{border-color:var(--cyan-deep);transform:translateY(-2px)}
+  .card h3{font-family:var(--mono);font-size:14.5px;margin:0 0 8px;font-weight:600;color:var(--text)}
+  .card h3 .tag{color:var(--cyan)}
+  .card p{margin:0 0 14px;color:var(--muted);font-size:14.5px}
+  .snip{font-family:var(--mono);font-size:12.2px;line-height:1.7;color:#bcd0e0;background:#0A1623;
+    border:1px solid var(--line);border-radius:8px;padding:12px 13px;overflow-x:auto;white-space:pre}
+  .snip .kw{color:var(--cyan)} .snip .fn{color:var(--amber)} .snip .st{color:#9ad8c0} .snip .cm{color:var(--faint)}
+
+  /* verified band */
+  .verify{display:grid;grid-template-columns:1fr 1fr;gap:42px;align-items:center}
+  .stat{font-family:var(--mono)}
+  .stat .big{font-size:54px;font-weight:600;letter-spacing:-.03em;color:var(--cyan);line-height:1}
+  .stat .big small{font-size:22px;color:var(--muted)}
+  .checks{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+  .checks li{display:flex;gap:12px;align-items:flex-start;font-size:14.5px;color:var(--muted)}
+  .checks b{color:var(--text);font-weight:500}
+  .tick{color:var(--cyan);font-family:var(--mono);flex:0 0 auto;margin-top:1px}
+
+  footer{border-top:1px solid var(--line);padding:34px 0 56px;color:var(--faint);font-size:13.5px;
+    display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;font-family:var(--mono)}
+  footer a{color:var(--muted)} footer a:hover{color:var(--cyan)}
+
+  @media (max-width:860px){
+    .hero{grid-template-columns:1fr;gap:38px;padding:44px 0 56px}
+    .grid,.verify{grid-template-columns:1fr}
+    .nav-links{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .ln{animation:none;opacity:1;transform:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">claude<b>·</b>agent<b>·</b>go</div>
+  <div class="nav-links">
+    <a href="#capabilities">Capabilities</a>
+    <a href="#verified">Verified</a>
+    <a href="https://github.com/tggo/claude-agent-go">GitHub</a>
+  </div>
+</nav>
+
+<header class="wrap hero">
+  <div>
+    <p class="eyebrow">Go SDK · Claude Code CLI</p>
+    <h1>Build agents in Go,<br>over the <span class="pipe">stream</span>.</h1>
+    <p class="lede">A typed, dependency-light client for the <b>claude</b> binary. One-shot runs, live sessions, in-process Go tools, and Go callbacks for every permission and hook — <b>spoken over one bidirectional pipe</b>.</p>
+    <div class="cta">
+      <div class="get"><span class="dollar">$</span><span>go get <b>github.com/tggo/claude-agent-go</b></span></div>
+      <a class="btn" href="https://github.com/tggo/claude-agent-go">View on GitHub →</a>
+    </div>
+    <div class="badges">
+      <span><i class="dot"></i>Zero runtime deps</span>
+      <span><i class="dot amber"></i>&gt;90% coverage</span>
+      <span><i class="dot coral"></i>17 live-binary tests</span>
+    </div>
+  </div>
+
+  <!-- signature: the protocol it speaks -->
+  <div class="stream" aria-hidden="true">
+    <div class="stream-bar"><i class="tl"></i><i class="tl"></i><i class="tl"></i><span class="label">stdin · stdout — stream-json</span></div>
+    <div class="feed" id="feed"></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section id="capabilities">
+  <div class="sec-head"><span class="sec-num">01</span><div><h2>Everything the CLI can do, typed</h2>
+    <p class="sec-sub">The agent loop stays in the binary. The SDK gives you a clean Go surface over it — and over the control protocol most wrappers never reach.</p></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h3>In-process tools <span class="tag">// tools</span></h3>
+      <p>The agent calls your Go functions during a run. No server to deploy. Untyped, or typed with schema inferred from a struct.</p>
+      <div class="snip"><span class="kw">tools</span>.<span class="fn">Register</span>(reg, <span class="st">"add"</span>, <span class="st">"Add two ints"</span>,
+  <span class="kw">func</span>(ctx, in Args) (Out, <span class="kw">error</span>) {
+    <span class="kw">return</span> Out{in.A + in.B}, <span class="kw">nil</span>
+  })</div>
+    </div>
+    <div class="card">
+      <h3>Permission callbacks <span class="tag">// can_use_tool</span></h3>
+      <p>Decide allow / deny for every tool call, in Go, while the turn is paused. Deny actually blocks it.</p>
+      <div class="snip"><span class="cm">// deny shell, allow the rest</span>
+<span class="kw">if</span> tool == <span class="st">"Bash"</span> {
+  <span class="kw">return</span> client.<span class="fn">Deny</span>(<span class="st">"no shell"</span>), <span class="kw">nil</span>
+}
+<span class="kw">return</span> client.<span class="fn">Allow</span>(), <span class="kw">nil</span></div>
+    </div>
+    <div class="card">
+      <h3>Hook callbacks <span class="tag">// PreToolUse</span></h3>
+      <p>Run Go logic before a tool fires — observe it, rewrite its input, or block it outright.</p>
+      <div class="snip"><span class="cm">// block, with a reason the model sees</span>
+{<span class="st">"permissionDecision"</span>: <span class="st">"deny"</span>,
+ <span class="st">"permissionDecisionReason"</span>: <span class="st">"policy"</span>}</div>
+    </div>
+    <div class="card">
+      <h3>Inline subagents <span class="tag">// agents</span></h3>
+      <p>Define subagents from Go — no files on disk. The main agent delegates to them through the Task tool.</p>
+      <div class="snip"><span class="kw">Agents</span>: {<span class="st">"reviewer"</span>: {
+  Description: <span class="st">"Audits diffs"</span>,
+  Prompt: <span class="st">"You are terse."</span>,
+  Model: <span class="st">"opus"</span>,
+}}</div>
+    </div>
+    <div class="card">
+      <h3>Interactive sessions <span class="tag">// client</span></h3>
+      <p>One long-running process, many turns, full memory. Token-level streaming and interrupt-with-ack included.</p>
+      <div class="snip">c.<span class="fn">Query</span>(ctx, <span class="st">"Remember 7."</span>, nil)
+t := c.<span class="fn">Query</span>(ctx, <span class="st">"Which number?"</span>, nil)
+<span class="cm">// t.Text → "7"</span></div>
+    </div>
+    <div class="card">
+      <h3>One-shot runs <span class="tag">// runner</span></h3>
+      <p>Plain, JSON, or streaming — with cost, session id, tokens, and turns parsed for you. Resume across processes.</p>
+      <div class="snip">res := r.<span class="fn">RunJSON</span>(ctx, Input{
+  Prompt: <span class="st">"Summarize."</span>,
+})
+<span class="cm">// res.TotalCostUSD, res.SessionID</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="verified">
+  <div class="sec-head"><span class="sec-num">02</span><div><h2>Claims you can re-run</h2>
+    <p class="sec-sub">Every capability has an integration test that asserts the effect against the real binary — a denied tool that doesn't write, a skill whose marker appears only when loaded, a subagent whose prompt reaches the answer.</p></div>
+  </div>
+  <div class="verify">
+    <div class="stat">
+      <div class="big">17<small> / 17</small></div>
+      <p style="color:var(--muted);margin:14px 0 0;max-width:30ch">live-binary integration tests passing — plus &gt;90% unit coverage on every package.</p>
+    </div>
+    <ul class="checks">
+      <li><span class="tick">✓</span><span><b>Deny blocks.</b> can_use_tool denial leaves the file uncreated, not just the callback fired.</span></li>
+      <li><span class="tick">✓</span><span><b>Skills filter.</b> A local skill's marker appears when allowed and vanishes when the allowlist omits it.</span></li>
+      <li><span class="tick">✓</span><span><b>Subagents run.</b> A token that exists only in the subagent's prompt reaches the final answer.</span></li>
+      <li><span class="tick">✓</span><span><b>Resume continues.</b> A second process recalls a codeword from the first session.</span></li>
+      <li><span class="tick">✓</span><span><b>Tools execute.</b> The Go handler runs and its result shapes the reply.</span></li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <span>MIT · built for Go 1.25 · needs the claude CLI</span>
+  <span><a href="https://github.com/tggo/claude-agent-go">github.com/tggo/claude-agent-go</a></span>
+</footer>
+
+<script>
+  // The signature: replay a real bidirectional stream-json exchange.
+  var lines = [
+    '<span class="comment">// a turn goes in over stdin</span>',
+    '<span class="arrow">→ </span><span class="ev-user">{<span class="k">"type"</span>:<span class="v-type">"user"</span>, <span class="k">"content"</span>:<span class="v-str">"check the weather, then write a note"</span>}</span>',
+    '<span class="arrow">← </span>{<span class="k">"type"</span>:<span class="v-type">"assistant"</span>}  <span class="comment">// thinking…</span>',
+    '<span class="arrow">← </span>{<span class="k">"type"</span>:<span class="v-type">"control_request"</span>, <span class="k">"subtype"</span>:<span class="v-tool">"can_use_tool"</span>, <span class="k">"tool"</span>:<span class="v-tool">"get_weather"</span>}',
+    '<span class="arrow">→ </span>{<span class="k">"behavior"</span>:<span class="v-type">"allow"</span>}  <span class="comment">// your Go callback</span>',
+    '<span class="arrow">← </span>{<span class="k">"type"</span>:<span class="v-type">"control_request"</span>, <span class="k">"subtype"</span>:<span class="v-tool">"can_use_tool"</span>, <span class="k">"tool"</span>:<span class="v-tool">"Write"</span>}',
+    '<span class="arrow">→ </span>{<span class="k">"behavior"</span>:<span class="v-deny">"deny"</span>, <span class="k">"message"</span>:<span class="v-str">"read-only session"</span>}',
+    '<span class="arrow">← </span>{<span class="k">"type"</span>:<span class="v-type">"result"</span>, <span class="k">"result"</span>:<span class="v-str">"21°C, sunny. (note blocked)"</span>, <span class="k">"cost_usd"</span>:0.014}'
+  ];
+  var feed = document.getElementById('feed');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function render(){
+    feed.innerHTML='';
+    lines.forEach(function(html,i){
+      var el=document.createElement('span');
+      el.className='ln'; el.innerHTML=html;
+      el.style.animationDelay=(reduce?0:(i*0.42))+'s';
+      feed.appendChild(el);
+    });
+  }
+  render();
+  if(!reduce){ setInterval(render, lines.length*420 + 4200); }
+</script>
+</body>
+</html>

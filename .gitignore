@@ -1,0 +1,14 @@
+# Binaries and build output
+*.exe
+*.test
+*.out
+/bin/
+
+# Local scratch
+mcp.demo.json
+*.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
