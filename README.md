@@ -156,12 +156,30 @@ See [`examples/`](./examples):
 | `permissions` | a `can_use_tool` allow/deny callback |
 | `hooks` | a `PreToolUse` hook that blocks a command |
 | `agents` | an inline subagent delegated to via Task |
+| `worktree` | run an agent in an isolated git worktree; changes land on a throwaway branch |
 
 Run one:
 
 ```sh
 go run ./examples/basic -prompt "Say hi"
 ```
+
+### Parallel agents with git worktrees
+
+The `workspace` package gives each run an isolated checkout, so many agents can
+work the same repo at once without colliding:
+
+```go
+ws := workspace.New(baseDir, nil)
+wt, branch, _ := ws.CreateWorktree(ctx, repoDir, runID) // git worktree add -b temp/wt-<id>
+defer ws.RemoveWorktree(ctx, repoDir, wt)
+
+r.Run(ctx, runner.Input{WorkDir: wt, Prompt: "...implement the change and commit it..."})
+// the agent's edits and commits land on `branch`; the main checkout stays clean
+```
+
+Spawn one worktree per goroutine to fan out work; `RemoveWorktree` tears each
+down. See [`examples/worktree`](./examples/worktree).
 
 ## Feature coverage vs the Python SDK
 
