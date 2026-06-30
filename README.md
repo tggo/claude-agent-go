@@ -40,6 +40,7 @@ Requires the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI on
 | `tools` | Expose Go functions to the agent as MCP tools, in-process — untyped or typed with schema inference. |
 | `claudecli` | Output types and parsers (sessions, cost, tokens, content blocks, partial deltas). |
 | `mcp` | Write `--mcp-config` files for external MCP servers. |
+| `transport` | How the binary is launched: local exec, `docker exec`, or `ssh`. |
 | `workspace` | Project/session dirs, `CLAUDE.md`, git worktrees. |
 | `signal` | Marker-agnostic outcome detection. |
 
@@ -79,6 +80,26 @@ tools.Register(reg, "add", "Add two integers",
     })
 srv, _ := reg.Serve()
 ```
+
+### Transports — local, docker, or ssh
+
+By default the SDK runs the `claude` binary locally. The `transport` package lets
+you launch it elsewhere without changing any other code — `docker exec` and
+`ssh` are just local commands that forward stdin/stdout to a remote process:
+
+```go
+// inside a container
+r := runner.New(runner.WithTransport(transport.DockerExec{Container: "agent-box"}))
+
+// on a remote host
+r := runner.New(runner.WithTransport(transport.SSH{Host: "user@server", Options: []string{"-tt"}}))
+```
+
+`client.Config.Transport` works the same way. Caveats for remote transports:
+teardown kills the local proxy (use `ssh -tt` or stop the container for
+guaranteed remote cleanup); in-process `tools` serve on the host's localhost and
+need a tunnel to be reachable remotely; and the remote claude needs its own
+credentials. See [`examples/transport`](./examples/transport).
 
 ### Interactive sessions
 
@@ -160,6 +181,7 @@ See [`examples/`](./examples):
 | `worktree-parallel` | N agents on goroutines, one worktree each, committing concurrently without colliding |
 | `worktree-client` | an interactive multi-turn session inside a worktree, building a file across turns then committing |
 | `worktree-pr` | agent commits in a worktree, then pushes the branch and opens a GitHub PR via `gh` |
+| `transport` | run the same agent locally, in a container (`docker exec`), or on a remote host (`ssh`) |
 
 Run one:
 

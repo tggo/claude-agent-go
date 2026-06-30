@@ -22,23 +22,25 @@ import (
 
 	"github.com/tggo/claude-agent-go/claudecli"
 	"github.com/tggo/claude-agent-go/internal/procgroup"
+	"github.com/tggo/claude-agent-go/transport"
 )
 
 // Config configures a Client. Zero values get sane defaults in New.
 type Config struct {
-	Binary          string        // default "claude"
-	Model           string        // default "sonnet"
-	WorkDir         string        // subprocess working dir
-	SystemPrompt    string        // --system-prompt
-	AllowedTools    []string      // repeated --allowedTools
-	MCPConfigPath   string        // --mcp-config
-	PermissionMode  string        // --permission-mode
-	SkipPermissions bool          // --dangerously-skip-permissions (default true)
-	MaxTurns        int           // --max-turns (default 50)
-	Entrypoint      string        // CLAUDE_CODE_ENTRYPOINT
-	Env             []string      // extra env
-	ExtraArgs       []string      // verbatim passthrough
-	StartTimeout    time.Duration // bound on process startup (default 30s)
+	Binary          string              // default "claude" (feeds the default transport)
+	Transport       transport.Transport // how the binary is launched; default transport.Local{Binary}
+	Model           string              // default "sonnet"
+	WorkDir         string              // subprocess working dir
+	SystemPrompt    string              // --system-prompt
+	AllowedTools    []string            // repeated --allowedTools
+	MCPConfigPath   string              // --mcp-config
+	PermissionMode  string              // --permission-mode
+	SkipPermissions bool                // --dangerously-skip-permissions (default true)
+	MaxTurns        int                 // --max-turns (default 50)
+	Entrypoint      string              // CLAUDE_CODE_ENTRYPOINT
+	Env             []string            // extra env
+	ExtraArgs       []string            // verbatim passthrough
+	StartTimeout    time.Duration       // bound on process startup (default 30s)
 
 	// IncludePartialMessages enables token-level streaming
 	// (--include-partial-messages): Query's onEvent additionally receives
@@ -130,16 +132,17 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	applyClientDefaults(&cfg)
 
 	args := buildClientArgs(cfg)
-	//nolint:gosec // binary path comes from trusted config.
-	cmd := exec.Command(cfg.Binary, args...)
-	cmd.Dir = cfg.WorkDir
 
-	env := os.Environ()
+	var env []string
 	if cfg.Entrypoint != "" {
 		env = append(env, "CLAUDE_CODE_ENTRYPOINT="+cfg.Entrypoint)
 	}
 	env = append(env, cfg.Env...)
-	cmd.Env = env
+
+	cmd := cfg.Transport.Command(ctx, args, transport.CommandOpts{
+		WorkDir: cfg.WorkDir,
+		Env:     env,
+	})
 	procgroup.Setup(cmd)
 
 	stdin, err := cmd.StdinPipe()
@@ -198,6 +201,9 @@ func applyClientDefaults(cfg *Config) {
 	}
 	if cfg.ControlTimeout == 0 {
 		cfg.ControlTimeout = defaultControlTimeout
+	}
+	if cfg.Transport == nil {
+		cfg.Transport = transport.Local{Binary: cfg.Binary}
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()

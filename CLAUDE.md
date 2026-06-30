@@ -26,6 +26,7 @@ Module: `github.com/tggo/claude-agent-go` · Go 1.25.
 | `client` | Interactive multi-turn session over bidirectional stream-json: `New`/`Query`/`Interrupt`/`Close`, plus the control protocol — `can_use_tool` permission callbacks, hook callbacks, inline agents, skills allowlist. |
 | `tools` | Expose Go functions to the agent as MCP tools, in-process: `Serve` (untyped) and `Register[In,Out]` (typed, schema-inferred). |
 | `mcp` | Writes `--mcp-config` files (`HTTPServer`/`StdioServer`/`WriteConfig`). |
+| `transport` | How the binary is launched: `Local` (default), `DockerExec`, `SSH`. Builds the `*exec.Cmd`; runner/client own piping + teardown. |
 | `workspace` | Project/session dirs, `CLAUDE.md` placement, git worktrees, `RunGit`. |
 | `signal` | Marker-agnostic outcome detection. |
 | `internal/procgroup` | Cross-platform process-group setup/kill. |

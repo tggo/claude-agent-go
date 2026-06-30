@@ -9,13 +9,20 @@ package runner
 import (
 	"log/slog"
 	"time"
+
+	"github.com/tggo/claude-agent-go/transport"
 )
 
 // Config holds defaults for a Runner. Zero values are replaced with sane
 // defaults in New, so a bare Config{} is usable.
 type Config struct {
-	// Binary is the path to the Claude CLI binary (default: "claude").
+	// Binary is the path to the Claude CLI binary (default: "claude"). Used to
+	// build the default local Transport; ignored when Transport is set.
 	Binary string
+
+	// Transport decides how the binary is launched (local exec, docker exec,
+	// ssh…). Defaults to transport.Local{Binary}. See the transport package.
+	Transport transport.Transport
 
 	// DefaultModel is used when an Input does not override it
 	// (default: "sonnet"). Accepts CLI aliases (sonnet/opus/haiku) or full IDs.
@@ -64,8 +71,13 @@ type Config struct {
 // Option mutates a Config. Use with New for ergonomic construction.
 type Option func(*Config)
 
-// WithBinary sets the CLI binary path.
+// WithBinary sets the CLI binary path (feeds the default local transport).
 func WithBinary(path string) Option { return func(c *Config) { c.Binary = path } }
+
+// WithTransport sets how the binary is launched (local, docker, ssh…).
+func WithTransport(t transport.Transport) Option {
+	return func(c *Config) { c.Transport = t }
+}
 
 // WithModel sets the default model.
 func WithModel(model string) Option { return func(c *Config) { c.DefaultModel = model } }

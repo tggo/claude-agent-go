@@ -6,13 +6,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/tggo/claude-agent-go/claudecli"
 	"github.com/tggo/claude-agent-go/internal/procgroup"
+	"github.com/tggo/claude-agent-go/transport"
 )
 
 // Default configuration values, applied for zero-valued Config fields in New.
@@ -76,6 +76,11 @@ func applyDefaults(cfg *Config) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
+	// Default transport runs the binary locally. WithBinary / cfg.Binary feed
+	// the local transport, so existing configs keep working unchanged.
+	if cfg.Transport == nil {
+		cfg.Transport = transport.Local{Binary: cfg.Binary}
+	}
 }
 
 // Result is the unified output of any run method. Fields not relevant to a
@@ -108,51 +113,76 @@ type Result struct {
 
 // ProgressFunc is invoked for each parsed stream event during RunStream.
 // eventNum is the 1-based count of lines read so far. It is the seam where
-// callers attach side effects such as heartbeats or live UI — the
-// Runner itself stays infrastructure-free. Must not block for long; it runs
-// inline on the read loop.
+// callers attach side effects such as heartbeats or live UI — the Runner
+// itself stays infrastructure-free. Must not block for long; it runs inline on
+// the read loop.
 type ProgressFunc func(ev claudecli.StreamEvent, eventNum int)
 
-// prepareCmd builds the *exec.Cmd shared by all modes: argv, working dir,
-// environment, stdin prompt. The caller wires stdout/stderr and runs it.
-func (r *Runner) prepareCmd(ctx context.Context, in Input, mode outputMode) *exec.Cmd {
+// buildCmd assembles the *exec.Cmd via the configured transport: argv, working
+// dir, environment, and stdin prompt. The caller wires stdout/stderr and runs
+// it. The command is NOT context-bound — teardown is owned by startTeardown.
+func (r *Runner) buildCmd(ctx context.Context, in Input, mode outputMode) *exec.Cmd {
 	args := r.buildArgs(in, mode)
 
-	//nolint:gosec // binary path comes from trusted config, not user input.
-	cmd := exec.CommandContext(ctx, r.cfg.Binary, args...)
-	cmd.Dir = in.WorkDir
-	cmd.Stdin = strings.NewReader(in.Prompt)
-
-	env := os.Environ()
+	var env []string
 	if r.cfg.Entrypoint != "" {
 		env = append(env, "CLAUDE_CODE_ENTRYPOINT="+r.cfg.Entrypoint)
 	}
 	env = append(env, r.cfg.Env...)
 	env = append(env, in.Env...)
-	cmd.Env = env
 
+	cmd := r.cfg.Transport.Command(ctx, args, transport.CommandOpts{
+		WorkDir: in.WorkDir,
+		Env:     env,
+	})
+	cmd.Stdin = strings.NewReader(in.Prompt)
 	return cmd
 }
 
+// startTeardown puts cmd in its own process group, starts it, and kills the
+// group when cmdCtx is done (timeout/cancel). The returned channel must be
+// closed once cmd.Wait() returns, to stop the watcher. Works the same for any
+// transport — it tears down the local process (and its group); remote cleanup
+// is the transport's caveat.
+func startTeardown(cmdCtx context.Context, cmd *exec.Cmd) (chan struct{}, error) {
+	procgroup.Setup(cmd)
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	procDone := make(chan struct{})
+	go func() {
+		select {
+		case <-cmdCtx.Done():
+			procgroup.Kill(cmd)
+		case <-procDone:
+		}
+	}()
+	return procDone, nil
+}
+
 // Run executes the CLI in plain-text mode (--print) and returns stdout.
-// Use when you only need the final text and no cost/session metadata.
 func (r *Runner) Run(ctx context.Context, in Input) (*Result, error) {
 	if strings.TrimSpace(in.Prompt) == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
 	}
 	start := time.Now()
-
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
-	cmd := r.prepareCmd(cmdCtx, in, modePlain)
+	cmd := r.buildCmd(cmdCtx, in, modePlain)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "plain", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
-	if err := cmd.Run(); err != nil {
+	procDone, err := startTeardown(cmdCtx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("claude cli start failed: %w", err)
+	}
+	err = cmd.Wait()
+	close(procDone)
+	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("claude cli timeout after %v: %w", r.cfg.ProcessTimeout, err)
 		}
@@ -165,27 +195,29 @@ func (r *Runner) Run(ctx context.Context, in Input) (*Result, error) {
 	}, nil
 }
 
-// RunJSON executes the CLI in JSON mode (--output-format json), buffering the
-// full output and parsing it with claudecli.ParseOutput. Returns rich metadata
-// (cost, tokens, session, model usage). Best for short-to-medium runs where
-// streaming heartbeats are unnecessary.
+// RunJSON executes the CLI in JSON mode and parses cost/session/token metadata.
 func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
 	if strings.TrimSpace(in.Prompt) == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
 	}
 	start := time.Now()
-
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
-	cmd := r.prepareCmd(cmdCtx, in, modeJSON)
+	cmd := r.buildCmd(cmdCtx, in, modeJSON)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "json", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
-	if err := cmd.Run(); err != nil {
+	procDone, err := startTeardown(cmdCtx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("claude cli start failed: %w", err)
+	}
+	err = cmd.Wait()
+	close(procDone)
+	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("claude cli timeout after %v: %w", r.cfg.ProcessTimeout, err)
 		}
@@ -197,11 +229,7 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
 		return nil, fmt.Errorf("parse claude output: %w", err)
 	}
 
-	res := &Result{
-		ResultText: resultText,
-		Metadata:   meta,
-		Duration:   time.Since(start),
-	}
+	res := &Result{ResultText: resultText, Metadata: meta, Duration: time.Since(start)}
 	if meta != nil {
 		res.SessionID = meta.SessionID
 		res.TotalCostUSD = meta.TotalCostUSD
@@ -210,37 +238,16 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
 	return res, nil
 }
 
-// RunStream executes the CLI in stream-json mode, reading newline-delimited
-// events as they arrive and invoking progress (if non-nil) per event. This is
-// the mode for long-running autonomous tasks: it lets callers emit heartbeats
-// so an outer deadline (an HTTP request timeout, a job heartbeat) does not fire. The
-// whole process group is killed on context cancellation or timeout.
+// RunStream executes the CLI in stream-json mode, invoking progress per event.
 func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc) (*Result, error) {
 	if strings.TrimSpace(in.Prompt) == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
 	}
 	start := time.Now()
-
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
-	// Use plain Command (not CommandContext) so we control teardown via the
-	// process group — CommandContext would only kill the leader, orphaning
-	// git/test children spawned by the agent.
-	args := r.buildArgs(in, modeStream)
-	//nolint:gosec // binary path comes from trusted config.
-	cmd := exec.Command(r.cfg.Binary, args...)
-	cmd.Dir = in.WorkDir
-	cmd.Stdin = strings.NewReader(in.Prompt)
-	env := os.Environ()
-	if r.cfg.Entrypoint != "" {
-		env = append(env, "CLAUDE_CODE_ENTRYPOINT="+r.cfg.Entrypoint)
-	}
-	env = append(env, r.cfg.Env...)
-	env = append(env, in.Env...)
-	cmd.Env = env
-	procgroup.Setup(cmd)
-
+	cmd := r.buildCmd(cmdCtx, in, modeStream)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("create stdout pipe: %w", err)
@@ -250,19 +257,10 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "stream", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
-	if err := cmd.Start(); err != nil {
+	procDone, err := startTeardown(cmdCtx, cmd)
+	if err != nil {
 		return nil, fmt.Errorf("claude cli start failed: %w", err)
 	}
-
-	// Kill the whole group on cancellation/timeout.
-	procDone := make(chan struct{})
-	go func() {
-		select {
-		case <-cmdCtx.Done():
-			procgroup.Kill(cmd)
-		case <-procDone:
-		}
-	}()
 
 	scanner := bufio.NewScanner(stdoutPipe)
 	scanner.Buffer(make([]byte, 0, maxScanBuf), maxScanBuf)
@@ -270,14 +268,12 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	var allLines [][]byte
 	var resultEvent *claudecli.StreamEvent
 	eventNum := 0
-
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		lineCopy := make([]byte, len(line))
 		copy(lineCopy, line)
 		allLines = append(allLines, lineCopy)
 		eventNum++
-
 		ev := claudecli.ParseStreamLine(lineCopy)
 		if ev == nil {
 			continue
@@ -289,14 +285,12 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 			progress(*ev, eventNum)
 		}
 	}
-
 	if scanErr := scanner.Err(); scanErr != nil {
 		r.cfg.Logger.Warn("claude cli: scanner error", "err", scanErr)
 	}
 
 	waitErr := cmd.Wait()
 	close(procDone)
-
 	if waitErr != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return nil, fmt.Errorf("claude cli timeout after %v: %w", r.cfg.ProcessTimeout, waitErr)
@@ -312,10 +306,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		resultEvent = finalEvent
 	}
 
-	res := &Result{
-		ResultText: resultText,
-		Duration:   time.Since(start),
-	}
+	res := &Result{ResultText: resultText, Duration: time.Since(start)}
 	if resultEvent != nil {
 		res.SessionID = resultEvent.SessionID
 		res.TotalCostUSD = resultEvent.Cost()
