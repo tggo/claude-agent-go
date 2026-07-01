@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `transport.DockerRun` — run claude in a fresh, throwaway container (`docker run
+  --rm --init`), created for the run and removed on exit; closes the remote-teardown
+  gap for docker. Verified live against the docker daemon.
 - `fleet` package — fan a batch of tasks (with a dependency DAG) across a pool of
   workers, each task in its own git worktree, aggregating cost with a soft spend cap.
 - `runner.RunJSONWithRetry` + `RetryPolicy` — retry transient failures with

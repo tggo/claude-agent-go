@@ -75,9 +75,8 @@ Scanned the top Go SDKs: severity1 (~160★), lancekrogers (42★), character-ai
 - [x] **`fleet`** — worker pool + `SharedTaskList` (atomic claim + dependency DAG) +
       tagged `OnResult` stream; one worktree per task; cost aggregation + soft
       spend cap; optional per-task retry. _(done)_
-- [ ] **`transport.DockerRun`** — ephemeral container lifecycle (create `--network none`
-      `--memory`/`--cpus`, `rm -f` teardown, OOM/exit-124 detection). Closes the
-      remote-teardown gap. _(character-ai sandbox_docker.go)_
+- [x] **`transport.DockerRun`** — ephemeral `docker run --rm --init` container with
+      network/memory/cpu limits; --rm + signal-proxy teardown; verified live. _(done)_
 - [ ] **Per-transport teardown** — guaranteed remote cleanup (ssh remote pkill /
       `docker stop`), not just killing the local proxy. _(character-ai)_
 - [ ] **`transport.Kubernetes`** — `kubectl exec` / Job-per-run.

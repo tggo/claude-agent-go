@@ -22,9 +22,10 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "local", "transport: local | docker | ssh")
+	mode := flag.String("mode", "local", "transport: local | docker | docker-run | ssh")
 	prompt := flag.String("prompt", "Reply with exactly: PONG", "prompt")
 	container := flag.String("container", "", "container name (docker mode)")
+	image := flag.String("image", "", "image (docker-run mode)")
 	host := flag.String("host", "", "user@host (ssh mode)")
 	bin := flag.String("bin", "claude", "claude binary path on the target")
 	flag.Parse()
@@ -38,6 +39,12 @@ func main() {
 			log.Fatal("docker mode needs -container")
 		}
 		tr = transport.DockerExec{Container: *container, Binary: *bin}
+	case "docker-run":
+		if *image == "" {
+			log.Fatal("docker-run mode needs -image")
+		}
+		// Ephemeral container: created for the run, removed on exit (--rm).
+		tr = transport.DockerRun{Image: *image, Binary: *bin, Network: "none"}
 	case "ssh":
 		if *host == "" {
 			log.Fatal("ssh mode needs -host")

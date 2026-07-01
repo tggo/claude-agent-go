@@ -71,6 +71,42 @@ func TestDockerExecDefaults(t *testing.T) {
 	}
 }
 
+func TestDockerRun(t *testing.T) {
+	c := DockerRun{
+		Image: "myimg", Network: "none", Memory: "512m", CPUs: "1",
+		Name: "run-1", Options: []string{"-v", "/h:/c:ro"},
+	}.Command(ctx, []string{"--print"}, CommandOpts{WorkDir: "/w", Env: []string{"K=v"}})
+
+	got := strings.Join(c.Args, " ")
+	for _, want := range []string{
+		"run -i --rm",
+		"--init",
+		"--name run-1",
+		"--network none",
+		"--memory 512m",
+		"--cpus 1",
+		"-w /w",
+		"-e K=v",
+		"-v /h:/c:ro",
+		"myimg claude --print",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in: %s", want, got)
+		}
+	}
+}
+
+func TestDockerRunNoInitDefaults(t *testing.T) {
+	c := DockerRun{Image: "img", NoInit: true}.Command(ctx, []string{"--print"}, CommandOpts{})
+	got := strings.Join(c.Args, " ")
+	if strings.Contains(got, "--init") {
+		t.Errorf("NoInit should omit --init: %s", got)
+	}
+	if !strings.Contains(got, "run -i --rm img claude --print") {
+		t.Errorf("got: %s", got)
+	}
+}
+
 func TestSSH(t *testing.T) {
 	c := SSH{Host: "user@host", Port: "2222", Options: []string{"-tt"}}.Command(ctx,
 		[]string{"--print", "--system-prompt", "be terse"},

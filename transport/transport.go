@@ -95,6 +95,69 @@ func (d DockerExec) Command(ctx context.Context, args []string, opt CommandOpts)
 	return exec.Command(docker, a...)
 }
 
+// ---- Docker (ephemeral) ----
+
+// DockerRun runs claude in a fresh, throwaway container via `docker run --rm`.
+// Unlike DockerExec (which needs a pre-existing container), DockerRun creates
+// the container for the run and removes it on exit — closing the "remote process
+// lingers" gap: --rm cleans up on normal exit, and because the container is run
+// attached (no TTY), docker proxies signals to it, so killing the launcher on
+// cancel/timeout stops and removes the container too. --init (default on) makes
+// PID 1 forward signals and reap zombies.
+type DockerRun struct {
+	Image   string   // container image (required)
+	Binary  string   // claude path inside the image, default "claude"
+	Network string   // --network (e.g. "none" for no egress); "" = default
+	Memory  string   // --memory (e.g. "512m"); "" = unlimited
+	CPUs    string   // --cpus (e.g. "1"); "" = unlimited
+	User    string   // --user
+	Docker  string   // docker binary, default "docker"
+	Name    string   // --name (optional; useful for out-of-band cleanup)
+	NoInit  bool     // set true to omit --init
+	Options []string // extra `docker run` flags, e.g. {"-v", "/host:/ctr:ro"}
+}
+
+func (d DockerRun) Command(ctx context.Context, args []string, opt CommandOpts) *exec.Cmd {
+	docker := d.Docker
+	if docker == "" {
+		docker = "docker"
+	}
+	bin := d.Binary
+	if bin == "" {
+		bin = "claude"
+	}
+	a := []string{"run", "-i", "--rm"}
+	if !d.NoInit {
+		a = append(a, "--init")
+	}
+	if d.Name != "" {
+		a = append(a, "--name", d.Name)
+	}
+	if d.Network != "" {
+		a = append(a, "--network", d.Network)
+	}
+	if d.Memory != "" {
+		a = append(a, "--memory", d.Memory)
+	}
+	if d.CPUs != "" {
+		a = append(a, "--cpus", d.CPUs)
+	}
+	if d.User != "" {
+		a = append(a, "-u", d.User)
+	}
+	if opt.WorkDir != "" {
+		a = append(a, "-w", opt.WorkDir)
+	}
+	for _, e := range opt.Env {
+		a = append(a, "-e", e)
+	}
+	a = append(a, d.Options...)
+	a = append(a, d.Image, bin)
+	a = append(a, args...)
+	//nolint:gosec // image/args come from trusted config.
+	return exec.Command(docker, a...)
+}
+
 // ---- SSH ----
 
 // SSH runs claude on a remote host via ssh. Stdin/stdout are forwarded by ssh,
