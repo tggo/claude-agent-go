@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `fleet` package — fan a batch of tasks (with a dependency DAG) across a pool of
+  workers, each task in its own git worktree, aggregating cost with a soft spend cap.
 - `runner.RunJSONWithRetry` + `RetryPolicy` — retry transient failures with
   backoff (honoring server retry-after); accumulates the cost of every attempt
   into `Result.TotalCostUSD` and stops at `MaxSpendUSD` so retries can’t multiply spend.

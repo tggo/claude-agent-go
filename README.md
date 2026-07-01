@@ -46,6 +46,7 @@ Requires the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI on
 | `claudecli` | Output types and parsers (sessions, cost, tokens, content blocks, partial deltas). |
 | `mcp` | Write `--mcp-config` files for external MCP servers. |
 | `transport` | How the binary is launched: local exec, `docker exec`, or `ssh`. |
+| `fleet` | Fan a batch of tasks (with a dependency DAG) across a pool of workers, one worktree each, aggregating cost. |
 | `workspace` | Project/session dirs, `CLAUDE.md`, git worktrees. |
 | `signal` | Marker-agnostic outcome detection. |
 
@@ -107,6 +108,32 @@ res, err := r.RunJSONWithRetry(ctx, in, runner.RetryPolicy{
 
 Classification is pluggable via `RetryPolicy.Retryable`; the default retries
 transient errors and CLI error-results, never a missing binary or a clean result.
+
+### Fleet — fan tasks across workers
+
+Submit a batch of tasks (optionally a dependency DAG); the fleet spreads them
+across a pool of workers, each task in its own git worktree, aggregating cost
+with a spend cap. Give each worker a different transport and the same batch runs
+across containers or hosts:
+
+```go
+f, _ := fleet.New(fleet.Config{
+    Workers: []fleet.Worker{
+        {Name: "host-a", Runner: runner.New(runner.WithTransport(transport.SSH{Host: "a"}))},
+        {Name: "host-b", Runner: runner.New(runner.WithTransport(transport.SSH{Host: "b"}))},
+    },
+    Workspace:   ws, Repo: repoDir,          // one isolated worktree per task
+    MaxSpendUSD: 5.00,                        // fleet-wide spend cap
+    Retry:       &runner.RetryPolicy{MaxAttempts: 3},
+})
+rep, _ := f.Run(ctx, []fleet.Task{
+    {ID: "build",  Input: runner.Input{Prompt: "…"}},
+    {ID: "review", Input: runner.Input{Prompt: "…"}, DependsOn: []string{"build"}},
+})
+// rep.TotalCostUSD, rep.Failed, rep.Skipped
+```
+
+See [`examples/fleet`](./examples/fleet).
 
 ### Transports — local, docker, or ssh
 
@@ -210,6 +237,7 @@ See [`examples/`](./examples):
 | `worktree-pr` | agent commits in a worktree, then pushes the branch and opens a GitHub PR via `gh` |
 | `transport` | run the same agent locally, in a container (`docker exec`), or on a remote host (`ssh`) |
 | `retry` | retry transient failures with backoff, accumulating cost and capping total spend |
+| `fleet` | fan tasks across workers, each in its own worktree, with a dependency DAG and a spend cap |
 
 Run one:
 

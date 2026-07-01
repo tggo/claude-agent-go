@@ -26,9 +26,7 @@ We already have the two pieces nobody else ships as first-class:
 - [ ] **Remote workspace** — make `workspace` git operations run *through the
       transport*, so worktrees/clone/commit happen on the remote side, not just
       locally. This unlocks the full remote-FS workflow.
-- [ ] **Fleet/pool API** — a higher-level orchestrator: submit a batch of tasks,
-      it spreads them across configured transports (N containers / M hosts),
-      one worktree each, collects results. Goroutine-native fan-out.
+- [x] **Fleet/pool API** — done, see `fleet` package + `examples/fleet`.
 - [ ] **Reverse tunnel for in-process tools** — auto port-forward (SSH `-R` /
       docker host networking) so `tools` (local HTTP MCP) are reachable from a
       remote agent. Removes the current caveat.
@@ -74,9 +72,9 @@ Scanned the top Go SDKs: severity1 (~160★), lancekrogers (42★), character-ai
       attempts; `MaxSpendUSD` caps retry spend). _(done)_
 - [ ] **BudgetTracker** — cumulative cross-run cost cap with warn/exceed callbacks
       (we only have a per-call `--max-budget-usd` flag). _(lancekrogers)_
-- [ ] **`runner/fleet`** — `Scheduler` interface + `SharedTaskList` (atomic claim +
-      dependency DAG) + tagged aggregate `Stream`. Spread tasks across transports,
-      one worktree each. _(armatrix topologies)_
+- [x] **`fleet`** — worker pool + `SharedTaskList` (atomic claim + dependency DAG) +
+      tagged `OnResult` stream; one worktree per task; cost aggregation + soft
+      spend cap; optional per-task retry. _(done)_
 - [ ] **`transport.DockerRun`** — ephemeral container lifecycle (create `--network none`
       `--memory`/`--cpus`, `rm -f` teardown, OOM/exit-124 detection). Closes the
       remote-teardown gap. _(character-ai sandbox_docker.go)_
