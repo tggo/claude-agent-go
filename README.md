@@ -86,6 +86,28 @@ tools.Register(reg, "add", "Add two integers",
 srv, _ := reg.Serve()
 ```
 
+### Retries with cost accounting
+
+Transient failures (rate limits, `overloaded`, 5xx, timeouts) are retried with
+exponential backoff that honors a server `retry-after`. Crucially, retries can
+quietly multiply token spend — so the cost of **every** attempt is accumulated
+into `Result.TotalCostUSD`, and `MaxSpendUSD` stops retrying once cumulative
+spend hits the cap:
+
+```go
+res, err := r.RunJSONWithRetry(ctx, in, runner.RetryPolicy{
+    MaxAttempts: 4,
+    MaxSpendUSD: 0.50, // never spend more than $0.50 across retries
+    OnRetry: func(ri runner.RetryInfo) {
+        log.Printf("attempt %d failed; spent $%.4f so far", ri.Attempt, ri.SpentUSD)
+    },
+})
+// res.Attempts, res.TotalCostUSD (cumulative across all attempts)
+```
+
+Classification is pluggable via `RetryPolicy.Retryable`; the default retries
+transient errors and CLI error-results, never a missing binary or a clean result.
+
 ### Transports — local, docker, or ssh
 
 By default the SDK runs the `claude` binary locally. The `transport` package lets
@@ -187,6 +209,7 @@ See [`examples/`](./examples):
 | `worktree-client` | an interactive multi-turn session inside a worktree, building a file across turns then committing |
 | `worktree-pr` | agent commits in a worktree, then pushes the branch and opens a GitHub PR via `gh` |
 | `transport` | run the same agent locally, in a container (`docker exec`), or on a remote host (`ssh`) |
+| `retry` | retry transient failures with backoff, accumulating cost and capping total spend |
 
 Run one:
 

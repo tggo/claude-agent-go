@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `runner.RunJSONWithRetry` + `RetryPolicy` — retry transient failures with
+  backoff (honoring server retry-after); accumulates the cost of every attempt
+  into `Result.TotalCostUSD` and stops at `MaxSpendUSD` so retries can’t multiply spend.
 - Typed errors: `runner.CLINotFoundError`, `ProcessError` (exit code + stderr),
   `TimeoutError`, with `IsCLINotFound` / `IsProcessError` / `IsTimeout` helpers.
 - `runner.WithMaxBufferSize` (configurable stream scan buffer, guards against a

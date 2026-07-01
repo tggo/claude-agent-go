@@ -113,6 +113,10 @@ type Result struct {
 
 	// Duration is the wall-clock time of the invocation.
 	Duration time.Duration
+
+	// Attempts is the number of tries it took (1 unless run with retry). Set by
+	// the *WithRetry methods.
+	Attempts int
 }
 
 // ProgressFunc is invoked for each parsed stream event during RunStream.
@@ -238,6 +242,7 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
 		res.SessionID = meta.SessionID
 		res.TotalCostUSD = meta.TotalCostUSD
 		res.NumTurns = meta.NumTurns
+		res.IsError = meta.IsError
 	}
 	return res, nil
 }

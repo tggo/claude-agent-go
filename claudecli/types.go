@@ -26,12 +26,13 @@ type ClaudeOutputMessage struct {
 	Message *AssistantMessage `json:"message,omitempty"`
 
 	// Result message fields (type="result")
-	IsError      bool    `json:"is_error,omitempty"`
-	DurationMs   int64   `json:"duration_ms,omitempty"`
-	DurationAPI  int64   `json:"duration_api_ms,omitempty"`
-	NumTurns     int     `json:"num_turns,omitempty"`
-	Result       string  `json:"result,omitempty"`
-	TotalCostUSD float64 `json:"total_cost_usd,omitempty"`
+	IsError        bool            `json:"is_error,omitempty"`
+	DurationMs     int64           `json:"duration_ms,omitempty"`
+	DurationAPI    int64           `json:"duration_api_ms,omitempty"`
+	NumTurns       int             `json:"num_turns,omitempty"`
+	Result         string          `json:"result,omitempty"`
+	TotalCostUSD   float64         `json:"total_cost_usd,omitempty"`
+	APIErrorStatus json.RawMessage `json:"api_error_status,omitempty"`
 
 	// Usage fields (in result message)
 	Usage      *TokenUsage            `json:"usage,omitempty"`
@@ -121,16 +122,19 @@ type ModelUsage struct {
 // ExecutionMetadata contains extracted execution data from Claude CLI output.
 // This is stored alongside the review for analytics and debugging.
 type ExecutionMetadata struct {
-	SessionID     string                 `json:"session_id" bson:"session_id"`
-	TotalCostUSD  float64                `json:"total_cost_usd" bson:"total_cost_usd"`
-	DurationMs    int64                  `json:"duration_ms" bson:"duration_ms"`
-	DurationAPI   int64                  `json:"duration_api_ms" bson:"duration_api_ms"`
-	NumTurns      int                    `json:"num_turns" bson:"num_turns"`
-	Model         string                 `json:"model" bson:"model"`
-	TokenUsage    *TokenUsage            `json:"token_usage,omitempty" bson:"token_usage,omitempty"`
-	ModelUsage    map[string]*ModelUsage `json:"model_usage,omitempty" bson:"model_usage,omitempty"`
-	MCPServers    []MCPServerStatus      `json:"mcp_servers,omitempty" bson:"mcp_servers,omitempty"`
-	ClaudeVersion string                 `json:"claude_version,omitempty" bson:"claude_version,omitempty"`
+	SessionID      string                 `json:"session_id" bson:"session_id"`
+	TotalCostUSD   float64                `json:"total_cost_usd" bson:"total_cost_usd"`
+	IsError        bool                   `json:"is_error,omitempty" bson:"is_error,omitempty"`
+	Subtype        string                 `json:"subtype,omitempty" bson:"subtype,omitempty"`
+	APIErrorStatus json.RawMessage        `json:"api_error_status,omitempty" bson:"api_error_status,omitempty"`
+	DurationMs     int64                  `json:"duration_ms" bson:"duration_ms"`
+	DurationAPI    int64                  `json:"duration_api_ms" bson:"duration_api_ms"`
+	NumTurns       int                    `json:"num_turns" bson:"num_turns"`
+	Model          string                 `json:"model" bson:"model"`
+	TokenUsage     *TokenUsage            `json:"token_usage,omitempty" bson:"token_usage,omitempty"`
+	ModelUsage     map[string]*ModelUsage `json:"model_usage,omitempty" bson:"model_usage,omitempty"`
+	MCPServers     []MCPServerStatus      `json:"mcp_servers,omitempty" bson:"mcp_servers,omitempty"`
+	ClaudeVersion  string                 `json:"claude_version,omitempty" bson:"claude_version,omitempty"`
 
 	// StructuredOutput is the raw structured result, when the CLI emits one.
 	StructuredOutput json.RawMessage `json:"structured_output,omitempty" bson:"structured_output,omitempty"`

@@ -69,9 +69,9 @@ Scanned the top Go SDKs: severity1 (~160★), lancekrogers (42★), character-ai
 - **Fluent hooks builder** — `NewHooks().PreToolUse("Bash", fn).Build()`. _(character-ai)_
 
 ### Roadmap (fleet/remote niche — highest value first)
-- [ ] **Retry + error classification + jittered backoff** — a transient 529/network
-      blip kills a run today. New `runner/retry.go` honoring rate-limit retry-after.
-      _(lancekrogers — fleet-critical)_
+- [x] **Retry + error classification + jittered backoff** — `runner.RunJSONWithRetry`
+      + `RetryPolicy` (honors rate-limit retry-after; accumulates cost across
+      attempts; `MaxSpendUSD` caps retry spend). _(done)_
 - [ ] **BudgetTracker** — cumulative cross-run cost cap with warn/exceed callbacks
       (we only have a per-call `--max-budget-usd` flag). _(lancekrogers)_
 - [ ] **`runner/fleet`** — `Scheduler` interface + `SharedTaskList` (atomic claim +

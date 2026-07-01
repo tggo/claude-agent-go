@@ -79,6 +79,9 @@ func ParseOutput(output []byte) (resultText string, metadata *ExecutionMetadata,
 			}
 
 			metadata.TotalCostUSD = msg.TotalCostUSD
+			metadata.IsError = msg.IsError
+			metadata.Subtype = msg.Subtype
+			metadata.APIErrorStatus = msg.APIErrorStatus
 			metadata.DurationMs = msg.DurationMs
 			metadata.DurationAPI = msg.DurationAPI
 			metadata.NumTurns = msg.NumTurns
