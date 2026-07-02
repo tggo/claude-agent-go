@@ -174,8 +174,9 @@ r := runner.New(runner.WithTransport(transport.SSH{Host: "user@server", Options:
 
 `client.Config.Transport` works the same way. Caveats for remote transports:
 teardown kills the local proxy (use `ssh -tt` or stop the container for
-guaranteed remote cleanup); in-process `tools` serve on the host's localhost and
-need a tunnel to be reachable remotely; and the remote claude needs its own
+guaranteed remote cleanup); in-process `tools` serve on the host's localhost — reach them from a remote
+agent with `tools.Server.ConfigForHost` + `tools.DockerHostGateway()` (docker)
+or `tools.SSHReverseTunnel()` (ssh); and the remote claude needs its own
 credentials. See [`examples/transport`](./examples/transport).
 
 ### Interactive sessions

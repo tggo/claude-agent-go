@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Remote reachability for in-process tools: `tools.Server.Port` / `ConfigForHost`
+  plus `tools.DockerHostGateway()` and `tools.SSHReverseTunnel()` so a container
+  or ssh agent can reach the host tools server (docker path verified live).
 - `cag` CLI (`cmd/cag`) — run agents without writing Go: `cag run` (with
   --transport local/ssh/docker/docker-run) and `cag fleet <config.yaml>` (a worker
   pool from YAML, with dependencies, worktrees, retry, and a spend cap).

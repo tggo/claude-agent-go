@@ -136,16 +136,34 @@ func startServer(serverName string, mcpSrv *mcpsdk.Server) (*Server, error) {
 	return s, nil
 }
 
-// URL is the base URL the CLI connects to.
+// URL is the base URL the CLI connects to (on 127.0.0.1).
 func (s *Server) URL() string { return s.url }
 
 // Name is the server name (the key under which it is registered).
 func (s *Server) Name() string { return s.name }
 
-// Config returns the mcp.ServerConfig for this server, keyed by its name, ready
-// to merge into a map for mcp.WriteConfig.
+// Port is the TCP port the server listens on.
+func (s *Server) Port() int { return s.lis.Addr().(*net.TCPAddr).Port }
+
+// Config returns the mcp.ServerConfig for this server (reachable on 127.0.0.1),
+// keyed by its name — for a local agent.
 func (s *Server) Config() (string, mcp.ServerConfig) {
 	return s.name, mcp.ServerConfig{Type: "http", URL: s.url}
+}
+
+// ConfigForHost returns the mcp.ServerConfig with the URL rewritten to reach the
+// server from a REMOTE agent (container or ssh host) that can't use the host's
+// 127.0.0.1. Use with:
+//   - Docker: host = "host.docker.internal" (add the host-gateway mapping to the
+//     transport, e.g. transport.DockerRun{Options: tools.DockerHostGateway()}).
+//   - SSH: set up a reverse tunnel so the remote's 127.0.0.1:port maps back to
+//     the host (transport.SSH{Options: tools.SSHReverseTunnel(s.Port())}), then
+//     host = "127.0.0.1".
+func (s *Server) ConfigForHost(host string) (string, mcp.ServerConfig) {
+	return s.name, mcp.ServerConfig{
+		Type: "http",
+		URL:  fmt.Sprintf("http://%s:%d/", host, s.Port()),
+	}
 }
 
 // Close stops the HTTP server. Safe to call multiple times.

@@ -26,9 +26,8 @@ We already have the two pieces nobody else ships as first-class:
       transport*, so worktrees/clone/commit happen on the remote side, not just
       locally. This unlocks the full remote-FS workflow.
 - [x] **Fleet/pool API** — done, see `fleet` package + `examples/fleet`.
-- [ ] **Reverse tunnel for in-process tools** — auto port-forward (SSH `-R` /
-      docker host networking) so `tools` (local HTTP MCP) are reachable from a
-      remote agent. Removes the current caveat.
+- [x] **Reverse tunnel for in-process tools** — `ConfigForHost` + `DockerHostGateway`
+      / `SSHReverseTunnel`; docker reachability verified live. _(done)_
 - [ ] **Teardown per transport** — guaranteed remote cleanup (ssh `-tt` +
       remote pkill / `docker stop`), not just killing the local proxy.
 - [ ] **Health/preflight** — verify the target has `claude` + creds before
