@@ -5,27 +5,39 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/tggo/claude-agent-go)](https://goreportcard.com/report/github.com/tggo/claude-agent-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-A Go SDK for building agents on top of the **Claude Code CLI** — the Go
-counterpart to the official Python `claude-agent-sdk`.
+**Run Claude Code agents anywhere — locally, in containers, or across a fleet of
+machines — from one typed Go API.**
 
-It drives the `claude` binary as a subprocess: builds the CLI argv, streams the
-prompt over stdin, and parses the output back into typed Go structs. It does
-**not** reimplement the agent loop — that lives in the CLI. What it adds is a
-clean, typed, dependency-light Go surface over everything the CLI can do:
-one-shot runs, interactive sessions, in-process Go tools, permission and hook
-callbacks, inline subagents, and a skills allowlist.
+`claude-agent-go` drives the `claude` binary. Most Go SDKs stop at "run it on
+this box." This one treats *where* the agent runs as a swappable transport, and
+adds the orchestration to run many agents at once, safely:
+
+- 🚀 **Transports** — the same run executes via local exec, `docker exec`, an
+  ephemeral `docker run`, or over `ssh`. Swap one field, nothing else changes.
+- 🧵 **Fleet** — fan a batch of tasks (with a dependency DAG) across a pool of
+  workers, each in its own isolated **git worktree**, with cost aggregated and a
+  spend cap.
+- 💸 **Cost-aware** — every run reports cost/tokens; retries accumulate spend and
+  stop at a cap; a `budget.Tracker` enforces a fleet-wide ceiling.
+- 🛠️ **Full agent surface** — one-shot & interactive sessions, in-process Go
+  tools, permission/hook callbacks, inline subagents, streaming.
 
 ```go
-r := runner.New(runner.WithModel("sonnet"))
-res, _ := r.RunJSON(ctx, runner.Input{Prompt: "Summarize this repo."})
-fmt.Println(res.ResultText, res.TotalCostUSD, res.SessionID)
+// one line moves the agent off your laptop:
+r := runner.New(runner.WithTransport(transport.SSH{Host: "gpu-box"}))
+res, _ := r.RunJSON(ctx, runner.Input{Prompt: "Run the test suite and summarize failures."})
 ```
+
+It does **not** reimplement the agent loop — that lives in the CLI, so you get
+upstream models/tools for free. It adds a typed, dependency-light Go surface over
+everything the CLI can do, plus the remote/parallel execution layer above.
 
 - **Zero external runtime dependencies** beyond the official MCP Go SDK (used
   only by the `tools` package). testify is test-only.
-- **Behaviorally verified** against the real `claude` binary — 17 integration
-  tests assert effects, not just that flags were passed.
-- **>90% unit coverage** across every substantive package.
+- **Behaviorally verified** against the real `claude` binary — integration tests
+  assert effects (a denied tool that doesn't write, a subagent whose prompt
+  reaches the answer, an ssh/docker run that actually reaches the binary).
+- **>90% unit coverage** across every substantive package; parsers fuzzed.
 
 ## Install
 

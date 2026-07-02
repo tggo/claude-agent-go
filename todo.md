@@ -19,8 +19,7 @@ We already have the two pieces nobody else ships as first-class:
 
 ### Roadmap toward the niche
 
-- [ ] **Reframe the README/landing** around remote + parallel execution, not
-      feature-parity. Lead with "run N agents across containers/hosts."
+- [x] **Reframe the README** around remote + parallel execution. _(done)_
 - [ ] **Kubernetes transport** — `transport.Kubernetes{}` → `kubectl exec` into
       a pod (or a Job per run). The obvious next transport after Docker/SSH.
 - [ ] **Remote workspace** — make `workspace` git operations run *through the
@@ -70,8 +69,8 @@ Scanned the top Go SDKs: severity1 (~160★), lancekrogers (42★), character-ai
 - [x] **Retry + error classification + jittered backoff** — `runner.RunJSONWithRetry`
       + `RetryPolicy` (honors rate-limit retry-after; accumulates cost across
       attempts; `MaxSpendUSD` caps retry spend). _(done)_
-- [ ] **BudgetTracker** — cumulative cross-run cost cap with warn/exceed callbacks
-      (we only have a per-call `--max-budget-usd` flag). _(lancekrogers)_
+- [x] **BudgetTracker** — `budget.Tracker`: cross-run cap + warn/exceed callbacks,
+      per-session spend, CanSpend gate; 100% covered. _(done)_
 - [x] **`fleet`** — worker pool + `SharedTaskList` (atomic claim + dependency DAG) +
       tagged `OnResult` stream; one worktree per task; cost aggregation + soft
       spend cap; optional per-task retry. _(done)_

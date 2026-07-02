@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `budget.Tracker` — thread-safe cross-run/fleet spend tracker with a hard cap,
+  warn/exceed callbacks, per-session totals, and a CanSpend gate.
+- Fuzz targets for the `claudecli` parsers (ParseOutput, ParseStreamLine, JSON extractors).
 - `transport.DockerRun` — run claude in a fresh, throwaway container (`docker run
   --rm --init`), created for the run and removed on exit; closes the remote-teardown
   gap for docker. Verified live against the docker daemon.
