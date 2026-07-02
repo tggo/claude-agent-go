@@ -75,6 +75,11 @@ type Config struct {
 
 	// Logger receives structured logs. Defaults to slog.Default().
 	Logger *slog.Logger
+
+	// Observer, if set, receives a RunRecord after every run (success or error)
+	// — the seam for tracing/metrics. Dep-free: bridge it to OpenTelemetry,
+	// Prometheus, or logs in a few lines (see docs). See WithObserver.
+	Observer Observer
 }
 
 // Option mutates a Config. Use with New for ergonomic construction.
@@ -146,6 +151,9 @@ func WithEnv(env ...string) Option {
 
 // WithLogger sets the structured logger.
 func WithLogger(l *slog.Logger) Option { return func(c *Config) { c.Logger = l } }
+
+// WithObserver sets the run observer for tracing/metrics.
+func WithObserver(o Observer) Option { return func(c *Config) { c.Observer = o } }
 
 // Input describes a single Claude CLI invocation. Working-directory and
 // session/MCP-file management are the caller's responsibility (see the

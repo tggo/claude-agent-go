@@ -158,6 +158,30 @@ rep, _ := f.Run(ctx, []fleet.Task{
 
 See [`examples/fleet`](./examples/fleet).
 
+### Observability — cost, tokens, tracing
+
+`WithObserver` emits a `RunRecord` after every run (cost, tokens, turns,
+transport, duration, error). It's dependency-free — bridge it to OpenTelemetry,
+Prometheus, or logs without the SDK taking those deps:
+
+```go
+r := runner.New(runner.WithObserver(otelObserver{tracer}))
+
+// the ~10-line bridge (RunRecord carries StartedAt+Duration for an exact span):
+func (o otelObserver) ObserveRun(rec runner.RunRecord) {
+    _, span := o.tracer.Start(context.Background(), "claude.run", trace.WithTimestamp(rec.StartedAt))
+    span.SetAttributes(
+        attribute.String("claude.transport", rec.Transport),
+        attribute.Float64("claude.cost_usd", rec.CostUSD),
+        attribute.Int("claude.turns", rec.NumTurns))
+    if rec.Err != nil { span.RecordError(rec.Err) }
+    span.End(trace.WithTimestamp(rec.StartedAt.Add(rec.Duration)))
+}
+```
+
+For a fleet-wide budget with warn/exceed callbacks, wrap runs with a
+`budget.Tracker` (feed it each `Result.TotalCostUSD`).
+
 ### Transports — local, docker, or ssh
 
 By default the SDK runs the `claude` binary locally. The `transport` package lets

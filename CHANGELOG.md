@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `runner.WithObserver` / `RunRecord` — a dependency-free tracing/metrics seam
+  emitting cost/tokens/turns/transport/duration per run (bridge to OpenTelemetry
+  or Prometheus in ~10 lines; core stays dep-free).
 - Remote reachability for in-process tools: `tools.Server.Port` / `ConfigForHost`
   plus `tools.DockerHostGateway()` and `tools.SSHReverseTunnel()` so a container
   or ssh agent can reach the host tools server (docker path verified live).

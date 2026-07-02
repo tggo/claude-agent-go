@@ -169,11 +169,12 @@ func startTeardown(cmdCtx context.Context, cmd *exec.Cmd) (chan struct{}, error)
 }
 
 // Run executes the CLI in plain-text mode (--print) and returns stdout.
-func (r *Runner) Run(ctx context.Context, in Input) (*Result, error) {
+func (r *Runner) Run(ctx context.Context, in Input) (res *Result, err error) {
 	if strings.TrimSpace(in.Prompt) == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
 	}
 	start := time.Now()
+	defer func() { r.observe("plain", in, start, res, err) }()
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
@@ -204,11 +205,12 @@ func (r *Runner) Run(ctx context.Context, in Input) (*Result, error) {
 }
 
 // RunJSON executes the CLI in JSON mode and parses cost/session/token metadata.
-func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
+func (r *Runner) RunJSON(ctx context.Context, in Input) (res *Result, err error) {
 	if strings.TrimSpace(in.Prompt) == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
 	}
 	start := time.Now()
+	defer func() { r.observe("json", in, start, res, err) }()
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
@@ -237,7 +239,7 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
 		return nil, fmt.Errorf("parse claude output: %w", err)
 	}
 
-	res := &Result{ResultText: resultText, Metadata: meta, Duration: time.Since(start)}
+	res = &Result{ResultText: resultText, Metadata: meta, Duration: time.Since(start)}
 	if meta != nil {
 		res.SessionID = meta.SessionID
 		res.TotalCostUSD = meta.TotalCostUSD
@@ -248,11 +250,12 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (*Result, error) {
 }
 
 // RunStream executes the CLI in stream-json mode, invoking progress per event.
-func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc) (*Result, error) {
+func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc) (res *Result, err error) {
 	if strings.TrimSpace(in.Prompt) == "" {
 		return nil, fmt.Errorf("prompt cannot be empty")
 	}
 	start := time.Now()
+	defer func() { r.observe("stream", in, start, res, err) }()
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
@@ -319,7 +322,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		resultEvent = finalEvent
 	}
 
-	res := &Result{ResultText: resultText, Duration: time.Since(start)}
+	res = &Result{ResultText: resultText, Duration: time.Since(start)}
 	if resultEvent != nil {
 		res.SessionID = resultEvent.SessionID
 		res.TotalCostUSD = resultEvent.Cost()

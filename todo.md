@@ -32,7 +32,8 @@ We already have the two pieces nobody else ships as first-class:
       remote pkill / `docker stop`), not just killing the local proxy.
 - [ ] **Health/preflight** — verify the target has `claude` + creds before
       burning a run (we already do repo preflight; extend to transports).
-- [ ] **Observability** — per-run cost/turns/duration aggregated across a fleet.
+- [x] **Observability** — `runner.WithObserver`/`RunRecord` (dep-free; OTel/Prometheus
+      bridge in ~10 lines) + `budget.Tracker` for fleet-wide cost. _(done)_
 
 ### Keep (already differentiating)
 - SSH transport, worktree isolation, typed generic tools (`Register[In,Out]`),
