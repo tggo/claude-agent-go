@@ -41,11 +41,22 @@ everything the CLI can do, plus the remote/parallel execution layer above.
 
 ## Install
 
+As a library:
+
 ```sh
 go get github.com/tggo/claude-agent-go@latest
 ```
 
-Requires the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI on
+Or the `cag` CLI — run agents without writing Go:
+
+```sh
+go install github.com/tggo/claude-agent-go/cmd/cag@latest
+
+cag run --transport ssh --host gpu-box "run the test suite and summarize failures"
+cag fleet examples/cag/fleet.yaml     # a batch across a worker pool, from YAML
+```
+
+Both require the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI on
 `PATH` and valid credentials.
 
 ## Packages

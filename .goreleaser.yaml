@@ -1,0 +1,62 @@
+version: 2
+
+project_name: cag
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cag
+    main: ./cmd/cag
+    binary: cag
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: cag
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Publishes a Homebrew formula to github.com/tggo/homebrew-tap on each release.
+# Requires: the tap repo to exist and a HOMEBREW_TAP_GITHUB_TOKEN secret with
+# write access to it. Remove this block to skip Homebrew.
+brews:
+  - name: cag
+    repository:
+      owner: tggo
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/tggo/claude-agent-go"
+    description: "A runner for Claude Code agents — local, docker, ssh, and fleet"
+    license: "MIT"
+    install: |
+      bin.install "cag"
+    test: |
+      system "#{bin}/cag", "version"
+
+release:
+  footer: |
+    Install the CLI:
+    ```sh
+    brew install tggo/tap/cag        # once the tap is set up
+    go install github.com/tggo/claude-agent-go/cmd/cag@latest
+    ```

@@ -1,0 +1,44 @@
+# Example fleet config for: cag fleet examples/cag/fleet.yaml
+#
+# Runs a batch of tasks across a pool of workers. Give workers different
+# transports to spread the batch across containers / hosts. Set `repo` to run
+# each task in its own isolated git worktree off that repo.
+
+model: haiku            # default model for every worker
+maxTurns: 12
+timeout: 5m
+maxSpendUSD: 2.00       # fleet-wide spend cap (soft)
+# repo: /path/to/clone  # uncomment to run each task in its own git worktree
+
+retry:                  # optional per-task retry on transient failures
+  maxAttempts: 3
+  maxSpendUSD: 0.50
+
+workers:
+  - name: local-1
+    transport: local
+
+  - name: local-2
+    transport: local
+
+  # - name: gpu-box            # run on a remote host over ssh
+  #   transport: ssh
+  #   host: user@gpu-box
+  #   sshOpts: ["-tt"]
+
+  # - name: sandbox            # run in a fresh, throwaway container
+  #   transport: docker-run
+  #   image: my/agent:latest
+  #   network: none
+  #   memory: 512m
+
+tasks:
+  - id: greet
+    prompt: "Reply with exactly: HELLO"
+
+  - id: count
+    prompt: "Reply with exactly: 42"
+
+  - id: wrap
+    prompt: "Reply with exactly: DONE"
+    dependsOn: [greet, count]   # runs only after greet and count succeed

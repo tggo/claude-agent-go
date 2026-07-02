@@ -12,3 +12,6 @@ mcp.demo.json
 .DS_Store
 .idea/
 .vscode/
+
+# goreleaser
+dist/
