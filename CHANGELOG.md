@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-16
+
 ### Added
+- `runner.ProcessError.Stdout` / `.ProcessState` / `.MaxRSSBytes()` — a CLI that
+  exits non-zero without writing to stderr now still yields a diagnosable error:
+  the tail of stdout, the exit reason (a signal, where the OS reports one), and
+  peak memory, so an OOM kill is distinguishable from a crash (#1).
 - `runner.WithObserver` / `RunRecord` — a dependency-free tracing/metrics seam
   emitting cost/tokens/turns/transport/duration per run (bridge to OpenTelemetry
   or Prometheus in ~10 lines; core stays dep-free).
@@ -34,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TimeoutError`, with `IsCLINotFound` / `IsProcessError` / `IsTimeout` helpers.
 - `runner.WithMaxBufferSize` (configurable stream scan buffer, guards against a
   non-positive size) and `runner.WithStderrCallback` (live stderr line capture).
+
+### Changed
+- `runner.WithStderrCallback` now streams stderr in every run mode (`Run`,
+  `RunJSON`, `RunStream`), not just `RunStream`, so a run that dies mid-flight has
+  already delivered its logs instead of depending on the final buffer.
+
+### Fixed
+- `runner.Run` filed stdout under `ProcessError.Stderr`, discarding the real
+  stderr entirely. Both streams now land in their own field. **Callers that
+  string-match `ProcessError.Stderr` after `Run` will find that content under
+  `.Stdout` now**; `RunJSON`/`RunStream` are unaffected.
 - `runner.Input.ForkSession` (`--fork-session`).
 - `mcp.ServerConfig.AlwaysLoad` (Claude Code 2.1.121+).
 - `client.Config.CallbackTimeout` — bounds `CanUseTool`/hook callbacks so a hung
@@ -80,5 +97,6 @@ First public release. A Go SDK for building agents on top of the Claude Code CLI
   `tools`). >90% unit coverage on every substantive package; 18 integration tests
   assert behavior against the real binary.
 
-[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/tggo/claude-agent-go/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tggo/claude-agent-go/releases/tag/v0.1.0
