@@ -241,18 +241,6 @@ func TestProcessErrorNoState(t *testing.T) {
 	}
 }
 
-func TestLineWriter(t *testing.T) {
-	var got []string
-	w := &lineWriter{fn: func(s string) { got = append(got, s) }}
-	w.Write([]byte("line one\nline "))
-	w.Write([]byte("two\nline three\n"))
-	w.Write([]byte("partial")) // no newline — buffered, not emitted
-	want := []string{"line one", "line two", "line three"}
-	if strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Errorf("lines = %v, want %v", got, want)
-	}
-}
-
 func TestWithMaxBufferSizeGuard(t *testing.T) {
 	// Non-positive values are ignored, keeping the default — no panic.
 	r := New(WithMaxBufferSize(-1))

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/tggo/claude-agent-go/claudecli"
+	"github.com/tggo/claude-agent-go/internal/cliout"
 	"github.com/tggo/claude-agent-go/internal/procgroup"
 	"github.com/tggo/claude-agent-go/transport"
 )
@@ -337,32 +338,12 @@ func (r *Runner) modelOf(in Input) string {
 	return r.cfg.DefaultModel
 }
 
-// lineWriter calls fn for each complete '\n'-terminated line written to it,
-// buffering any partial trailing line until the next write.
-type lineWriter struct {
-	fn  func(string)
-	buf []byte
-}
-
-func (w *lineWriter) Write(p []byte) (int, error) {
-	w.buf = append(w.buf, p...)
-	for {
-		i := bytes.IndexByte(w.buf, '\n')
-		if i < 0 {
-			break
-		}
-		w.fn(string(w.buf[:i]))
-		w.buf = w.buf[i+1:]
-	}
-	return len(p), nil
-}
-
 // maxSnippet bounds how much of a stream survives into an error message.
 const maxSnippet = 2000
 
 // sanitizeOutput redacts embedded tokens and truncates long output for logs/errors.
 func sanitizeOutput(output []byte) string {
-	s := redactTokens(string(output))
+	s := cliout.RedactTokens(string(output))
 	if len(s) > maxSnippet {
 		s = s[:maxSnippet] + "... (truncated)"
 	}
@@ -373,18 +354,9 @@ func sanitizeOutput(output []byte) string {
 // start. Used for stdout in errors: when a run dies, the last bytes written are
 // the diagnostic — the beginning is just the transcript up to that point.
 func sanitizeTail(output []byte) string {
-	s := redactTokens(string(output))
+	s := cliout.RedactTokens(string(output))
 	if len(s) > maxSnippet {
 		s = "(truncated) ..." + s[len(s)-maxSnippet:]
-	}
-	return s
-}
-
-func redactTokens(s string) string {
-	if idx := strings.Index(s, "x-access-token:"); idx != -1 {
-		if end := strings.Index(s[idx:], "@"); end != -1 {
-			s = s[:idx] + "x-access-token:***" + s[idx+end:]
-		}
 	}
 	return s
 }
@@ -397,7 +369,7 @@ func (r *Runner) stderrWriter(buf *bytes.Buffer) io.Writer {
 	if r.cfg.StderrFunc == nil {
 		return buf
 	}
-	return io.MultiWriter(buf, &lineWriter{fn: r.cfg.StderrFunc})
+	return io.MultiWriter(buf, &cliout.LineWriter{Fn: r.cfg.StderrFunc})
 }
 
 // processError builds the error for a non-zero exit, carrying every diagnostic

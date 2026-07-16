@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/tggo/claude-agent-go/claudecli"
+	"github.com/tggo/claude-agent-go/internal/cliout"
 	"github.com/tggo/claude-agent-go/internal/procgroup"
 	"github.com/tggo/claude-agent-go/transport"
 )
@@ -80,6 +81,15 @@ type Config struct {
 	// initialize. Nil means no restriction (all available skills).
 	Skills []string
 
+	// StderrFunc, when set, is called for each line the CLI writes to stderr, as
+	// it is written, and the SDK stops forwarding stderr to the parent process.
+	// This is the seam for capturing CLI diagnostics into a structured logger.
+	// When nil, stderr is forwarded to os.Stderr — which a caller that doesn't
+	// tail its own stderr will never see. It runs inline on the stderr reader —
+	// keep it quick. (The session's exit error carries a stderr snippet either
+	// way; see Close.)
+	StderrFunc func(line string)
+
 	Logger *slog.Logger
 }
 
@@ -103,10 +113,11 @@ type Turn struct {
 // Query calls — turns are sequential — but Interrupt and Close may be called
 // from other goroutines.
 type Client struct {
-	cfg    Config
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	events chan *claudecli.StreamEvent
+	cfg        Config
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	stderrTail *tailBuffer
+	events     chan *claudecli.StreamEvent
 
 	writeMu sync.Mutex // serializes writes to stdin
 	queryMu sync.Mutex // single-flight Query
@@ -158,7 +169,15 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
-	cmd.Stderr = os.Stderr
+	// Always retain the stderr tail so a dead session can say why it died; then
+	// either hand lines to the caller's callback or keep the historical
+	// passthrough to the parent's stderr.
+	stderrTail := &tailBuffer{}
+	if cfg.StderrFunc != nil {
+		cmd.Stderr = io.MultiWriter(stderrTail, &cliout.LineWriter{Fn: cfg.StderrFunc})
+	} else {
+		cmd.Stderr = io.MultiWriter(stderrTail, os.Stderr)
+	}
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start claude: %w", err)
@@ -168,6 +187,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		cfg:           cfg,
 		cmd:           cmd,
 		stdin:         stdin,
+		stderrTail:    stderrTail,
 		events:        make(chan *claudecli.StreamEvent, 64),
 		pending:       make(map[string]chan *controlResponse),
 		hookCallbacks: make(map[string]HookCallback),
@@ -378,6 +398,8 @@ func (c *Client) Query(ctx context.Context, prompt string, onEvent func(claudecl
 
 // Close shuts the session down: closes stdin (signalling EOF), waits briefly
 // for graceful exit, then kills the process group. Safe to call multiple times.
+// A non-nil error reports a non-zero exit, with the tail of the CLI's stderr
+// appended so the failure is diagnosable.
 func (c *Client) Close() error {
 	if c.closed.Swap(true) {
 		return nil
@@ -400,8 +422,17 @@ func (c *Client) Wait() error {
 	return c.exitErr()
 }
 
+// exitErr reports how the session ended, attaching the CLI's stderr tail. Bare,
+// cmd.Wait's error is just "exit status 1" — the process's own account of why it
+// died is the whole diagnostic, and it is otherwise discarded.
 func (c *Client) exitErr() error {
 	c.waitOnce.Do(func() {}) // ensure waitErr is settled if readLoop set it
+	if c.waitErr == nil {
+		return nil
+	}
+	if s := c.stderrTail.snippet(); s != "" {
+		return fmt.Errorf("%w: %s", c.waitErr, s)
+	}
 	return c.waitErr
 }
 

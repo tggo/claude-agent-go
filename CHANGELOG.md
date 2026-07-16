@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `client.Config.StderrFunc` — capture the CLI's stderr line-by-line from an
+  interactive session, instead of it going only to the parent's `os.Stderr`
+  where a caller with a structured logger never sees it (#2). Unset keeps the
+  `os.Stderr` passthrough, so existing callers are unaffected.
+
+### Fixed
+- A `client` session that exits non-zero now reports the tail of the CLI's
+  stderr in its `Close`/`Wait` error, rather than a bare "exit status 1" (#2) —
+  the interactive counterpart to the `runner` fix in 0.2.0.
+
 ## [0.2.0] - 2026-07-16
 
 ### Added
