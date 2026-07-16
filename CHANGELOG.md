@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cag` CLI (`cmd/cag`) — run agents without writing Go: `cag run` (with
   --transport local/ssh/docker/docker-run) and `cag fleet <config.yaml>` (a worker
   pool from YAML, with dependencies, worktrees, retry, and a spend cap).
-- goreleaser config + release workflow — cross-platform `cag` binaries and a
-  Homebrew formula on tagged releases.
+- goreleaser config + release workflow — cross-platform `cag` binaries on tagged
+  releases.
 - `budget.Tracker` — thread-safe cross-run/fleet spend tracker with a hard cap,
   warn/exceed callbacks, per-session totals, and a CanSpend gate.
 - Fuzz targets for the `claudecli` parsers (ParseOutput, ParseStreamLine, JSON extractors).

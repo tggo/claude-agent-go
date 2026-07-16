@@ -25,7 +25,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional: a PAT with write access to tggo/homebrew-tap. Without it,
-          # the Homebrew step is skipped (remove the brews block in
-          # .goreleaser.yaml if you don't want Homebrew at all).
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

@@ -36,27 +36,10 @@ changelog:
       - "^test:"
       - "^chore:"
 
-# Publishes a Homebrew formula to github.com/tggo/homebrew-tap on each release.
-# Requires: the tap repo to exist and a HOMEBREW_TAP_GITHUB_TOKEN secret with
-# write access to it. Remove this block to skip Homebrew.
-brews:
-  - name: cag
-    repository:
-      owner: tggo
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/tggo/claude-agent-go"
-    description: "A runner for Claude Code agents — local, docker, ssh, and fleet"
-    license: "MIT"
-    install: |
-      bin.install "cag"
-    test: |
-      system "#{bin}/cag", "version"
-
 release:
   footer: |
     Install the CLI:
     ```sh
-    brew install tggo/tap/cag        # once the tap is set up
     go install github.com/tggo/claude-agent-go/cmd/cag@latest
     ```
+    Or download a binary from the assets below.
