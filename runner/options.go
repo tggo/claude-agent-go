@@ -61,9 +61,10 @@ type Config struct {
 	// 64 MiB). Values <= 0 are ignored and the default is used.
 	MaxBufferSize int
 
-	// StderrFunc, when set, is called for each line the CLI writes to stderr,
-	// for live log capture during long runs (RunStream). It runs inline on the
-	// stderr reader — keep it quick.
+	// StderrFunc, when set, is called for each line the CLI writes to stderr, as
+	// it is written, in every run mode. Use it for live log capture during long
+	// runs, and to keep diagnostics from a run that dies before its output is
+	// collected. It runs inline on the stderr reader — keep it quick.
 	StderrFunc func(line string)
 
 	// Entrypoint sets CLAUDE_CODE_ENTRYPOINT for telemetry/attribution.
@@ -139,7 +140,8 @@ func WithMaxBufferSize(n int) Option {
 	}
 }
 
-// WithStderrCallback streams the CLI's stderr lines to fn during RunStream.
+// WithStderrCallback streams the CLI's stderr lines to fn as they are written,
+// in every run mode (Run, RunJSON, RunStream).
 func WithStderrCallback(fn func(line string)) Option {
 	return func(c *Config) { c.StderrFunc = fn }
 }

@@ -181,7 +181,7 @@ func (r *Runner) Run(ctx context.Context, in Input) (res *Result, err error) {
 	cmd := r.buildCmd(cmdCtx, in, modePlain)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = r.stderrWriter(&stderr)
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "plain", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
@@ -195,7 +195,7 @@ func (r *Runner) Run(ctx context.Context, in Input) (res *Result, err error) {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: err}
 		}
-		return nil, &ProcessError{ExitCode: exitCodeOf(err), Stderr: sanitizeOutput(stdout.Bytes()), Err: err}
+		return nil, processError(cmd, stdout.Bytes(), stderr.Bytes(), err)
 	}
 
 	return &Result{
@@ -217,7 +217,7 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (res *Result, err error)
 	cmd := r.buildCmd(cmdCtx, in, modeJSON)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = r.stderrWriter(&stderr)
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "json", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
@@ -231,7 +231,7 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (res *Result, err error)
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: err}
 		}
-		return nil, &ProcessError{ExitCode: exitCodeOf(err), Stderr: sanitizeOutput(stderr.Bytes()), Err: err}
+		return nil, processError(cmd, stdout.Bytes(), stderr.Bytes(), err)
 	}
 
 	resultText, meta, err := claudecli.ParseOutput(stdout.Bytes())
@@ -265,11 +265,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		return nil, fmt.Errorf("create stdout pipe: %w", err)
 	}
 	var stderr bytes.Buffer
-	if r.cfg.StderrFunc != nil {
-		cmd.Stderr = io.MultiWriter(&stderr, &lineWriter{fn: r.cfg.StderrFunc})
-	} else {
-		cmd.Stderr = &stderr
-	}
+	cmd.Stderr = r.stderrWriter(&stderr)
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "stream", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
@@ -314,7 +310,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		if cmdCtx.Err() != nil {
 			return nil, fmt.Errorf("claude cli cancelled: %w", cmdCtx.Err())
 		}
-		return nil, &ProcessError{ExitCode: exitCodeOf(waitErr), Stderr: sanitizeOutput(stderr.Bytes()), Err: waitErr}
+		return nil, processError(cmd, tailBytes(allLines, 20), stderr.Bytes(), waitErr)
 	}
 
 	resultText, finalEvent := claudecli.ExtractTextFromStream(allLines)
@@ -361,16 +357,68 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// maxSnippet bounds how much of a stream survives into an error message.
+const maxSnippet = 2000
+
 // sanitizeOutput redacts embedded tokens and truncates long output for logs/errors.
 func sanitizeOutput(output []byte) string {
-	s := string(output)
+	s := redactTokens(string(output))
+	if len(s) > maxSnippet {
+		s = s[:maxSnippet] + "... (truncated)"
+	}
+	return s
+}
+
+// sanitizeTail is sanitizeOutput keeping the END of the output instead of the
+// start. Used for stdout in errors: when a run dies, the last bytes written are
+// the diagnostic — the beginning is just the transcript up to that point.
+func sanitizeTail(output []byte) string {
+	s := redactTokens(string(output))
+	if len(s) > maxSnippet {
+		s = "(truncated) ..." + s[len(s)-maxSnippet:]
+	}
+	return s
+}
+
+func redactTokens(s string) string {
 	if idx := strings.Index(s, "x-access-token:"); idx != -1 {
 		if end := strings.Index(s[idx:], "@"); end != -1 {
 			s = s[:idx] + "x-access-token:***" + s[idx+end:]
 		}
 	}
-	if len(s) > 2000 {
-		s = s[:2000] + "... (truncated)"
-	}
 	return s
+}
+
+// stderrWriter wires the child's stderr: always into buf, and additionally
+// line-by-line to StderrFunc when the caller asked for it. Teeing it out as it
+// is written means a run that dies mid-flight has already delivered its
+// diagnostics, rather than depending on the final buffer surviving into an error.
+func (r *Runner) stderrWriter(buf *bytes.Buffer) io.Writer {
+	if r.cfg.StderrFunc == nil {
+		return buf
+	}
+	return io.MultiWriter(buf, &lineWriter{fn: r.cfg.StderrFunc})
+}
+
+// processError builds the error for a non-zero exit, carrying every diagnostic
+// available: both streams and the OS's record of the process. cmd must already
+// have been waited on, so cmd.ProcessState is populated.
+func processError(cmd *exec.Cmd, stdout, stderr []byte, err error) *ProcessError {
+	return &ProcessError{
+		ExitCode:     exitCodeOf(err),
+		Stderr:       sanitizeOutput(stderr),
+		Stdout:       sanitizeTail(stdout),
+		ProcessState: cmd.ProcessState,
+		Err:          err,
+	}
+}
+
+// tailBytes joins the last n lines, the stdout an aborted stream run got
+// through. Bounded by line count because a single stream-json line can be
+// megabytes; sanitizeTail then bounds the bytes.
+func tailBytes(lines [][]byte, n int) []byte {
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return bytes.Join(lines, []byte("\n"))
 }
