@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 )
 
 // quietLogger suppresses the SDK's info logs so the CLI prints only its own
@@ -30,7 +31,26 @@ usage:
 
 run 'cag run -h' or 'cag fleet -h' for flags.`
 
-var version = "dev" // overridden at build time via -ldflags
+var version = "dev" // stamped by goreleaser via -ldflags on release builds
+
+// resolveVersion reports the binary's version. Release builds carry it in
+// version; `go install`-built ones do not (no ldflags), so fall back to the
+// module version the go tool recorded — otherwise `go install ...@v0.2.0`, the
+// primary install path, reports "dev". A build from a working tree yields a
+// pseudo-version (suffixed "+dirty" for uncommitted changes), which is a
+// truthful answer to "what am I running". "(devel)" comes back instead when the
+// go tool has no VCS info to work from (e.g. -buildvcs=false).
+func resolveVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if v := bi.Main.Version; v != "" && v != "(devel)" {
+			return v
+		}
+	}
+	return version
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -43,7 +63,7 @@ func main() {
 	case "fleet":
 		fleetCmd(os.Args[2:])
 	case "version", "--version", "-v":
-		fmt.Printf("cag %s\n", version)
+		fmt.Printf("cag %s\n", resolveVersion())
 	case "help", "-h", "--help":
 		fmt.Println(usage)
 	default:
