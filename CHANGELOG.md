@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-16
+
 ### Added
 - `client.Config.StderrFunc` — capture the CLI's stderr line-by-line from an
   interactive session, instead of it going only to the parent's `os.Stderr`
@@ -17,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `client` session that exits non-zero now reports the tail of the CLI's
   stderr in its `Close`/`Wait` error, rather than a bare "exit status 1" (#2) —
   the interactive counterpart to the `runner` fix in 0.2.0.
+- `cag version` reported "dev" for `go install`-built binaries, which stamp no
+  ldflags — it now falls back to the module version recorded in build info.
+
+### Removed
+- The Homebrew tap. Publishing the formula needed a PAT that was never
+  configured, so goreleaser 401'd and failed every release *after* the binaries
+  had published. `go install` and the release binaries cover installation.
 
 ## [0.2.0] - 2026-07-16
 
@@ -108,6 +117,7 @@ First public release. A Go SDK for building agents on top of the Claude Code CLI
   `tools`). >90% unit coverage on every substantive package; 18 integration tests
   assert behavior against the real binary.
 
-[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/tggo/claude-agent-go/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tggo/claude-agent-go/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tggo/claude-agent-go/releases/tag/v0.1.0
