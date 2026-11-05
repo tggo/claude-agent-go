@@ -147,34 +147,69 @@
   .prose code,.sec-sub code,.card p code,td code,li code{font-family:var(--mono);font-size:.88em;color:var(--amber);background:rgba(242,193,78,.07);padding:1px 5px;border-radius:4px}
 
   /* diagrams */
-  .fig{background:linear-gradient(180deg,var(--ink-2),#0B1828);border:1px solid var(--line);border-radius:14px;padding:14px 14px 10px;margin:0}
+  .fig{background:linear-gradient(180deg,var(--ink-2),#0B1828);border:1px solid var(--line);border-radius:14px;padding:14px 14px 10px;margin:0;min-width:0}
   .fig figcaption{font-family:var(--mono);font-size:12px;color:var(--muted);padding:10px 4px 4px;line-height:1.6}
-  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;min-width:0;max-width:100%}
   .scroll svg{display:block;min-width:600px;width:100%;height:auto}
+  .scroll svg.gw{min-width:760px}
   .fig svg text{font-family:'IBM Plex Mono',ui-monospace,monospace}
-  .n-box{fill:#0F2236;stroke:#27506e;stroke-width:1.5}
-  .n-box.agent{stroke:var(--cyan-deep)}
-  .n-box.go{stroke:#4a6a85}
-  .n-t{fill:var(--text);font-size:14px;font-weight:500;text-anchor:middle}
-  .n-s{fill:var(--muted);font-size:10.5px;text-anchor:middle}
-  .e-line{stroke:#2d5a7a;stroke-width:1.8;fill:none}
-  .e-loop{stroke:var(--coral);stroke-width:1.8;fill:none;stroke-dasharray:5 4}
-  .e-ok{stroke:#3c9d7e;stroke-width:1.8;fill:none}
-  .lbl{font-size:11px;fill:var(--muted);text-anchor:middle}
-  .lbl.coral{fill:var(--coral)} .lbl.green{fill:#7fd6b4}
-  .packet{fill:var(--cyan);filter:drop-shadow(0 0 5px rgba(61,214,245,.9));
-    offset-path:path("M10,120 H375 V236 H435 V120 H640");offset-rotate:0deg;offset-distance:0%;
-    animation:travel 8s linear infinite}
-  .packet.p2{animation-delay:-4s}
-  @keyframes travel{0%{offset-distance:0%;opacity:0}4%{opacity:1}96%{opacity:1}100%{offset-distance:100%;opacity:0}}
-  .ctr{font-size:12px;fill:var(--amber);font-weight:600}
-  .ctr-a{animation:c0 8s steps(1) infinite}.ctr-b{animation:c1 8s steps(1) infinite}
-  @keyframes c0{0%{opacity:1}54%{opacity:0}100%{opacity:0}}
-  @keyframes c1{0%{opacity:0}54%{opacity:1}100%{opacity:1}}
-  .glow{animation:glow 8s linear infinite}
-  @keyframes glow{0%,45%{stroke:#27506e;filter:none}50%,60%{stroke:var(--coral);filter:drop-shadow(0 0 6px rgba(255,107,92,.7))}66%,100%{stroke:#27506e;filter:none}}
-  .crash{animation:pulse 2.4s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
-  @keyframes pulse{50%{opacity:.45}}
+  .lbl{font-size:11px;fill:var(--muted)}
+
+  /* graph diagrams: same look as the graphweb debugger */
+  .gstrip{display:flex;gap:10px 16px;align-items:center;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:0 0 10px;min-width:0;overflow:hidden;white-space:nowrap}
+  .gstrip .st{font-weight:600;letter-spacing:.08em;color:var(--cyan);flex:0 0 auto}
+  .gstrip .st::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:7px;vertical-align:1px}
+  .gstrip.done .st{color:#58D68D} .gstrip.dead .st{color:var(--coral)} .gstrip.rec .st{color:var(--amber)}
+  .gstrip b{color:var(--text);font-weight:500}
+  .gstrip .gp{min-width:0;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto}
+  .fig svg .gn .box{fill:#0f2233;stroke:#27506a;stroke-width:1.5}
+  .fig svg .gn .acc{fill:var(--cyan-deep);opacity:.9}
+  .fig svg .gn .nm{fill:var(--text);font-family:var(--disp);font-weight:600;font-size:14.5px}
+  .fig svg .gn .mt{font-size:10px;fill:var(--muted)}
+  .fig svg .gn{transition:opacity .3s}
+  .fig svg .gn.idle{opacity:.72}
+  .fig svg .gn.ghost{opacity:.28}
+  .fig svg .gn.running .box{stroke:var(--cyan);stroke-width:2.2;animation:gpulse 1.1s ease-in-out infinite}
+  @media (prefers-reduced-motion:reduce){.fig svg .gn.running .box{animation:none}.fig svg .gn{transition:none}}
+  .fig svg .gn.done .box{stroke:#2c7f8f}
+  .fig svg .gn.failed .box{stroke:var(--coral);stroke-width:2.2;fill:#2a1519}
+  .fig svg .gn.failed .acc{fill:var(--coral)}
+  .fig svg .gn.resume .acc{fill:var(--amber)}
+  .fig svg .gn.resume .box{stroke:var(--amber)}
+  .fig svg .gn.resume.running .box{stroke:var(--amber)}
+  .fig svg .gn.sc .box{fill:#13263A;stroke:var(--faint)}
+  .fig svg .gn.sc.running .box,.fig svg .gn.sc.done .box{stroke:var(--cyan)}
+  .fig svg .gn.sc.reached .box{stroke:#58D68D}
+  .fig svg .gn.sc .in{fill:var(--faint)} .fig svg .gn.sc.reached .in{fill:#58D68D}
+  .fig svg .gn.sc .tri{fill:var(--muted)}
+  .fig svg .ge .l{fill:none;stroke:#2c4258;stroke-width:1.6}
+  .fig svg .ge.cond .l{stroke-dasharray:6 5}
+  .fig svg .ge.taken .l{stroke:#3a8aa0}
+  .fig svg .ge.hot .l{stroke:var(--cyan);stroke-width:2.6}
+  .fig svg .ge.rec .l{stroke:var(--amber);stroke-dasharray:6 5}
+  .fig svg .ge.rec.taken .l,.fig svg .ge.rec.hot .l{stroke:var(--amber)}
+  .fig svg .ge text{font-size:11.5px;fill:var(--muted);text-anchor:middle}
+  .fig svg .ge .lbg{fill:var(--ink);opacity:.85}
+  .fig svg .ge.rec text{fill:var(--amber)}
+  .fig svg .bd{transition:opacity .25s}
+  .fig svg .bd rect{fill:var(--ink-3);stroke:var(--amber);stroke-width:1}
+  .fig svg .bd text{fill:var(--amber);font-weight:600;font-size:11.5px;text-anchor:middle}
+  .fig svg .gpk{fill:var(--cyan);filter:drop-shadow(0 0 5px rgba(61,214,245,.9));opacity:0}
+  .fig svg .gchip rect{fill:var(--ink-3);stroke:var(--cyan-deep);stroke-width:1}
+  .fig svg .gchip text{fill:var(--cyan);font-size:10.5px;font-weight:500;text-anchor:middle}
+  .fig svg .gchip{opacity:0}
+  .fig svg .lg{fill:none;stroke:var(--line);stroke-width:1}
+  .fig svg .cm{opacity:0;transition:opacity .3s}
+  .fig svg .cm.on{opacity:1}
+  .fig svg .cm rect{fill:#0F2236;stroke:#3c9d7e;stroke-width:1}
+  .fig svg .cm text{fill:#7fd6b4;font-size:11px;text-anchor:middle}
+  .fig svg .cm.sess rect{stroke:var(--amber);stroke-dasharray:4 3}
+  .fig svg .cm.sess text{fill:var(--amber)}
+  .fig svg .kill{opacity:0;transition:opacity .15s}
+  .fig svg .kill.on{opacity:1;filter:drop-shadow(0 0 6px rgba(255,107,92,.8))}
+  .fig svg .kill text{fill:var(--coral);font-size:11px;font-weight:600}
+  @keyframes gpulse{0%,100%{filter:drop-shadow(0 0 0 rgba(61,214,245,0))}50%{filter:drop-shadow(0 0 9px rgba(61,214,245,.8))}}
 
   /* code blocks with copy */
   .code{position:relative;background:#0A1623;border:1px solid var(--line);border-radius:10px;margin:0 0 16px;min-width:0}
@@ -216,12 +251,6 @@
     .get{max-width:100%;overflow-x:auto;white-space:nowrap}
     .stream{max-width:100%}
     .feed{font-size:11.5px}
-  }
-  @media (prefers-reduced-motion:reduce){
-    .packet,.glow,.crash,.ctr-a,.ctr-b{animation:none}
-    .packet.p2{display:none}
-    .packet{offset-distance:34%;opacity:1}
-    .ctr-a{opacity:0}.ctr-b{opacity:1}
   }
 </style>
 </head>
@@ -282,41 +311,17 @@
 
 <section id="graphs">
   <div class="sec-head"><span class="sec-num">02</span><div><h2>Graphs of agents, with a loop that stops</h2>
-    <p class="sec-sub">A review/fix loop is three edges and a counter. Packets below are work items; the dashed edge is the reviewer sending it back.</p></div>
+    <p class="sec-sub">A review/fix loop is three edges and a counter. The packet below is a work item following the real edges; the dashed edge is the reviewer sending it back.</p></div>
   </div>
   <figure class="fig">
+    <div class="gstrip" id="gs1"><span class="st">IDLE</span><span>cost <b class="gc">$0.0000</b></span><span class="gp">path</span></div>
     <div class="scroll">
-    <svg viewBox="0 0 760 300" role="img" aria-labelledby="gt gd">
+    <svg id="gv1" class="gw" viewBox="0 78 860 222" role="img" aria-labelledby="gt gd">
       <title id="gt">A graph with a review and fix loop</title>
-      <desc id="gd">Work flows from plan to code to review. If the reviewer rejects, it goes to fix and back to review, up to three rounds. If approved it goes to docs and ends.</desc>
-      <!-- edges -->
-      <path class="e-line" d="M10 120 H30"/>
-      <path class="e-line" d="M140 120 H190"/>
-      <path class="e-line" d="M300 120 H350"/>
-      <path class="e-ok" d="M460 120 H610"/>
-      <path class="e-loop" d="M375 142 V214"/>
-      <path class="e-loop" d="M435 214 V142"/>
-      <path class="e-line" d="M720 120 H748"/>
-      <path d="M744 115 l6 5 l-6 5" class="e-line"/>
-      <text class="lbl green" x="535" y="108">approved</text>
-      <text class="lbl coral" x="352" y="184" style="text-anchor:end">rejected</text>
-      <text class="lbl" x="468" y="184" style="text-anchor:start">fixed</text>
-      <!-- nodes -->
-      <g><rect class="n-box agent" x="30" y="98" width="110" height="44" rx="9"/><text class="n-t" x="85" y="118">plan</text><text class="n-s" x="85" y="133">agent</text></g>
-      <g><rect class="n-box agent" x="190" y="98" width="110" height="44" rx="9"/><text class="n-t" x="245" y="118">code</text><text class="n-s" x="245" y="133">agent</text></g>
-      <g><rect class="n-box agent glow" x="350" y="98" width="110" height="44" rx="9"/><text class="n-t" x="405" y="118">review</text><text class="n-s" x="405" y="133">agent · Go tool</text></g>
-      <g><rect class="n-box agent" x="350" y="214" width="110" height="44" rx="9"/><text class="n-t" x="405" y="234">fix</text><text class="n-s" x="405" y="249">agent</text></g>
-      <g><rect class="n-box agent" x="610" y="98" width="110" height="44" rx="9"/><text class="n-t" x="665" y="118">docs</text><text class="n-s" x="665" y="133">agent</text></g>
-      <!-- counter -->
-      <text class="lbl" x="560" y="236" style="text-anchor:start">loop counter</text>
-      <text class="ctr ctr-a" x="560" y="256">rounds 0 / 3</text>
-      <text class="ctr ctr-b" x="560" y="256">rounds 1 / 3</text>
-      <!-- packets -->
-      <circle class="packet" r="6" cx="0" cy="0"/>
-      <circle class="packet p2" r="6" cx="0" cy="0"/>
+      <desc id="gd">Work flows from plan to code to review. If the reviewer finds issues it goes to fix and back to review, up to three rounds; the loop edge carries a counter badge. If approved it goes to docs and ends.</desc>
     </svg>
     </div>
-    <figcaption>review → fix → review exits on approval or after three rounds, whichever comes first.</figcaption>
+    <figcaption>review → fix → review exits on approval or after three rounds, whichever comes first. The amber badge counts trips round the loop.</figcaption>
   </figure>
 
   <div class="split" style="margin-top:36px">
@@ -350,41 +355,11 @@ st, report, err := run.<span class="fn">Run</span>(ctx, State{Task: task})</code
     <p class="sec-sub">Attach a checkpoint store and every node commit is appended to a log before the run moves on. A killed process loses at most the node in flight.</p></div>
   </div>
   <figure class="fig">
+    <div class="gstrip" id="gs2"><span class="st">IDLE</span><span class="gp">process A</span></div>
     <div class="scroll">
-    <svg viewBox="0 0 760 270" role="img" aria-labelledby="tt td2">
+    <svg id="gv2" class="gw" viewBox="0 0 780 330" role="img" aria-labelledby="tt td2">
       <title id="tt">Crash and recover timeline</title>
-      <desc id="td2">Process A commits plan, code and review to the checkpoint log, then crashes during fix. Process B calls Recover, resumes the fix agent's CLI session, and finishes review and docs.</desc>
-      <text class="lbl" x="6" y="34" style="text-anchor:start">process A</text>
-      <text class="lbl" x="6" y="224" style="text-anchor:start">process B</text>
-      <text class="lbl" x="6" y="130" style="text-anchor:start">log</text>
-      <!-- lane A -->
-      <path class="e-line" d="M90 30 H430"/>
-      <g><rect class="n-box agent" x="100" y="14" width="80" height="32" rx="7"/><text class="n-t" x="140" y="35" style="font-size:12.5px">plan</text></g>
-      <g><rect class="n-box agent" x="196" y="14" width="80" height="32" rx="7"/><text class="n-t" x="236" y="35" style="font-size:12.5px">code</text></g>
-      <g><rect class="n-box agent" x="292" y="14" width="80" height="32" rx="7"/><text class="n-t" x="332" y="35" style="font-size:12.5px">review</text></g>
-      <g><rect class="n-box" x="388" y="14" width="80" height="32" rx="7" style="stroke:var(--coral)"/><text class="n-t" x="428" y="35" style="font-size:12.5px">fix</text></g>
-      <g class="crash"><circle cx="500" cy="30" r="13" fill="none" stroke="var(--coral)" stroke-width="2"/><path d="M494 24 L506 36 M506 24 L494 36" stroke="var(--coral)" stroke-width="2.2" fill="none"/></g>
-      <text class="lbl coral" x="500" y="64">SIGKILL</text>
-      <!-- log lane -->
-      <rect x="90" y="100" width="640" height="56" rx="9" fill="#0A1623" stroke="var(--line)"/>
-      <g font-size="11" fill="var(--muted)" text-anchor="middle">
-        <rect x="100" y="112" width="70" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="135" y="132" fill="#7fd6b4">commit 1</text>
-        <rect x="180" y="112" width="70" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="215" y="132" fill="#7fd6b4">commit 2</text>
-        <rect x="260" y="112" width="70" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="295" y="132" fill="#7fd6b4">commit 3</text>
-        <rect x="340" y="112" width="86" height="32" rx="6" fill="#0F2236" stroke="var(--amber)" stroke-dasharray="4 3"/><text x="383" y="132" fill="var(--amber)">fix: session</text>
-        <rect x="560" y="112" width="80" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="600" y="132" fill="#7fd6b4">commit 4</text>
-        <rect x="648" y="112" width="74" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="685" y="132" fill="#7fd6b4">run_end</text>
-      </g>
-      <text class="lbl" x="90" y="178" style="text-anchor:start;fill:var(--muted)">FileStore · MemStore · your own (Postgres example)</text>
-      <!-- recover arrow -->
-      <path class="e-loop" d="M500 156 V204" style="stroke:var(--amber)"/>
-      <text class="lbl" x="488" y="196" style="text-anchor:end;fill:var(--amber)">Recover(runID)</text>
-      <!-- lane B -->
-      <path class="e-line" d="M520 220 H730"/>
-      <g><rect class="n-box agent" x="500" y="204" width="116" height="32" rx="7" style="stroke:var(--amber)"/><text class="n-t" x="558" y="225" style="font-size:12px">fix · --resume</text></g>
-      <g><rect class="n-box agent" x="626" y="204" width="46" height="32" rx="7"/><text class="n-t" x="649" y="225" style="font-size:11px">rev</text></g>
-      <g><rect class="n-box agent" x="680" y="204" width="50" height="32" rx="7"/><text class="n-t" x="705" y="225" style="font-size:11px">docs</text></g>
-      <text class="lbl" x="90" y="256" style="text-anchor:start">plan, code and review are not paid for twice.</text>
+      <desc id="td2">Process A commits plan, code and review to the checkpoint log, then is killed during fix. Process B calls Recover, resumes the fix agent's CLI session, and finishes review and docs.</desc>
     </svg>
     </div>
     <figcaption>A crash costs only the node in flight; the agent's own CLI session is resumed, so spent tokens are not wasted.</figcaption>
@@ -682,6 +657,247 @@ t := c.<span class="fn">Query</span>(ctx, <span class="st">"Which number?"</span
       else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(a)}
     });
   });
+</script>
+<script>
+// Animated diagrams for sections 02 and 03. Packets are placed with
+// path.getPointAtLength() each frame, so they ride exactly on the edge paths.
+(function(){
+  var NS='http://www.w3.org/2000/svg';
+  var RM=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function S(t,a,k){var e=document.createElementNS(NS,t);for(var x in a){if(x==='text')e.textContent=a[x];else e.setAttribute(x,a[x]);}(k||[]).forEach(function(c){e.appendChild(c)});return e;}
+  function marker(id,c,s){return S('marker',{id:id,viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:s,markerHeight:s,orient:'auto'},[S('path',{d:'M0,0 L10,5 L0,10 z',fill:c})]);}
+  function defs(svg,p){svg.appendChild(S('defs',{},[marker(p+'a','#2c4258',7),marker(p+'t','#3a8aa0',7),marker(p+'h','#3DD6F5',8),marker(p+'r','#F2C14E',7)]));}
+  // node: rounded rect, left accent bar, title + meta line
+  function node(svg,cx,cy,w,h,name,meta,extra){
+    var g=S('g',{transform:'translate('+cx+','+cy+')'},[
+      S('rect',{class:'box',x:-w/2,y:-h/2,width:w,height:h,rx:10}),
+      S('rect',{class:'acc',x:-w/2+1,y:-h/2+8,width:3.5,height:h-16,rx:1.75}),
+      S('text',{class:'nm',x:-w/2+14,y:-3,text:name})]);
+    var mt=S('text',{class:'mt',x:-w/2+14,y:14,text:meta}); g.appendChild(mt);
+    svg.appendChild(g);
+    var n={g:g,mt:mt,x:cx,y:cy,extra:extra||'',st:function(s){g.setAttribute('class','gn '+n.extra+' '+s);}};
+    n.st('idle'); return n;
+  }
+  function term(svg,cx,cy,end){
+    var g=S('g',{transform:'translate('+cx+','+cy+')'},[S('circle',{class:'box',r:14,cx:0,cy:0})]);
+    g.appendChild(end?S('circle',{class:'in',r:5}):S('path',{class:'tri',d:'M-3.5,-5 L5,0 L-3.5,5 z'}));
+    svg.appendChild(g);
+    var n={g:g,st:function(s){g.setAttribute('class','gn sc '+s);}}; n.st('idle'); return n;
+  }
+  function edge(svg,p,d,o){
+    o=o||{};
+    var path=S('path',{class:'l',d:d}), g=S('g',{class:'ge'+(o.cond?' cond':'')+(o.rec?' rec':'')},[path]);
+    var e={g:g,p:path,len:path.getTotalLength(),set:function(s){
+      g.setAttribute('class','ge'+(o.cond?' cond':'')+(o.rec?' rec':'')+(s==='idle'?'':' '+s));
+      path.setAttribute('marker-end','url(#'+p+(o.rec?'r':s==='hot'?'h':s==='taken'?'t':'a')+')');}};
+    e.set('idle');
+    svg.appendChild(g);
+    if(o.label){var m=path.getPointAtLength(e.len/2), lx=o.lx!=null?o.lx:m.x, ly=o.ly!=null?o.ly:m.y, w=o.label.length*6.6+10;
+      g.appendChild(S('rect',{class:'lbg',x:lx-w/2,y:ly-9,width:w,height:17,rx:4}));
+      g.appendChild(S('text',{x:lx,y:ly+4,text:o.label}));}
+    return e;
+  }
+  function chip(svg){
+    var t=S('text',{x:0,y:12,text:''}), r=S('rect',{x:0,y:0,height:18,rx:9,width:40}), g=S('g',{class:'gchip'},[r,t]);
+    svg.appendChild(g); return {g:g,show:function(s){t.textContent=s;var w=s.length*6.3+16;r.setAttribute('width',w);t.setAttribute('x',w/2);this.w=w;g.style.opacity=1;},hide:function(){g.style.opacity=0;}};
+  }
+  function money(v){return '$'+v.toFixed(4);}
+
+  // generic player: steps = [{d,start,upd,end}], loops with a pause
+  function player(svg,steps,reset,pause){
+    var i=0,t=0,began=false,hold=0,vis=false,last=0,raf=0;
+    function restart(){hold=0;i=0;t=0;began=false;reset();}
+    function adv(dt){
+      for(;;){
+        if(i>=steps.length){hold+=dt;if(hold>=pause)restart();return;}
+        var s=steps[i];
+        if(!began){began=true;if(s.start)s.start();}
+        t+=dt;
+        if(t<s.d){if(s.upd)s.upd(t/s.d);return;}
+        dt=t-s.d;if(s.upd)s.upd(1);if(s.end)s.end();i++;t=0;began=false;
+      }
+    }
+    function loop(ts){raf=0;if(!vis)return;var dt=last?Math.min(100,ts-last):0;last=ts;adv(dt);raf=requestAnimationFrame(loop);}
+    reset();
+    if(RM){steps.forEach(function(s){if(s.start)s.start();if(s.upd)s.upd(1);if(s.end)s.end();});return;}
+    if('IntersectionObserver' in window){
+      new IntersectionObserver(function(en){vis=en[0].isIntersecting;if(vis&&!raf){last=0;raf=requestAnimationFrame(loop);}},{threshold:0.15}).observe(svg);
+    }else{vis=true;raf=requestAnimationFrame(loop);}
+  }
+
+  /* ---------------- section 02: graph with a loop ---------------- */
+  (function(){
+    var svg=document.getElementById('gv1'); if(!svg)return;
+    var strip=document.getElementById('gs1'), stEl=strip.querySelector('.st'), costEl=strip.querySelector('.gc'), pathEl=strip.querySelector('.gp');
+    defs(svg,'a');
+    var Y=140, W=148, H=52;
+    var E={
+      sp:edge(svg,'a','M38 '+Y+' H56'),
+      pc:edge(svg,'a','M204 '+Y+' H240'),
+      cr:edge(svg,'a','M388 '+Y+' H424'),
+      rf:edge(svg,'a','M468 166 V224',{cond:true,label:'issues',lx:436,ly:195}),
+      fr:edge(svg,'a','M572 250 C650 250 528 214 528 166'),
+      rd:edge(svg,'a','M572 '+Y+' H640',{cond:true,label:'approved',ly:Y-14}),
+      de:edge(svg,'a','M788 '+Y+' H822')
+    };
+    var bm=E.fr.p.getPointAtLength(E.fr.len/2);
+    var badgeT=S('text',{x:bm.x+6,y:bm.y+22,text:'×0'});
+    var badge=S('g',{class:'bd'},[S('rect',{x:bm.x-12,y:bm.y+9,width:36,height:19,rx:9.5}),badgeT]);
+    badge.style.opacity=0; E.fr.g.appendChild(badge);
+    var N={
+      start:term(svg,24,Y,false),
+      plan:node(svg,130,Y,W,H,'plan','agent'),
+      code:node(svg,314,Y,W,H,'code','agent'),
+      review:node(svg,498,Y,W,H,'review','agent'),
+      fix:node(svg,498,250,W,H,'fix','agent'),
+      docs:node(svg,714,Y,W,H,'docs','agent'),
+      end:term(svg,836,Y,true)
+    };
+    var STAT={plan:[14,.0099],code:[31,.0310],review:[9,.0087],fix:[22,.0152],docs:[11,.0104]};
+    var pk=S('circle',{class:'gpk',r:5.5,cx:0,cy:0}); svg.appendChild(pk);
+    var ch=chip(svg);
+    var cost,visits,acc,rounds,order,cur;
+    function hdr(state,cls){
+      strip.className='gstrip'+(cls?' '+cls:'');stEl.textContent=state;costEl.textContent=money(cost);
+      var p=order.slice(-6).join(' → ');pathEl.textContent='path '+(order.length>6?'… → ':'')+p;
+    }
+    function leave(id){
+      var s=STAT[id]; if(!s||!N[id])return;
+      visits[id]=(visits[id]||0)+1; acc[id]=acc[id]||[0,0];
+      acc[id][0]+=s[0]; acc[id][1]+=s[1]; cost+=s[1];
+      N[id].mt.textContent='agent · '+acc[id][0]+'s · '+money(acc[id][1]);
+      N[id].st('done');
+    }
+    function reset(){
+      cost=0;visits={};acc={};rounds=0;order=[];cur=null;
+      Object.keys(N).forEach(function(k){N[k].st('idle');if(N[k].mt)N[k].mt.textContent='agent';});
+      Object.keys(E).forEach(function(k){E[k].set('idle');});
+      badgeT.textContent='×0';badge.style.opacity=0;pk.style.opacity=0;ch.hide();hdr('IDLE','');
+    }
+    function mv(key,to,delta,dur){
+      var e=E[key];
+      return {d:dur||Math.max(420,e.len/0.32),
+        start:function(){
+          if(cur==='start')N.start.st('done'); else leave(cur);
+          e.set('hot');ch.show(delta);hdr('RUNNING','');},
+        upd:function(p){
+          var pt=e.p.getPointAtLength(e.len*p);
+          pk.setAttribute('cx',pt.x);pk.setAttribute('cy',pt.y);pk.style.opacity=1;svg.__seg=e.p;
+          ch.g.setAttribute('transform','translate('+Math.min(pt.x+12,858-ch.w)+','+(pt.y-26)+')');},
+        end:function(){
+          e.set('taken');ch.hide();cur=to;
+          if(key==='fr'){rounds++;badgeT.textContent='×'+rounds;badge.style.opacity=1;}
+          if(to==='end'){N.end.st('reached');pk.style.opacity=0;order.push('end');hdr('DONE','done');return;}
+          N[to].st('running');order.push(to);hdr('RUNNING','');}};
+    }
+    function dwell(ms){return {d:ms};}
+    var steps=[
+      {d:500,start:function(){svg.__seg=null;N.start.st('running');cur='start';pk.setAttribute('cx',24);pk.setAttribute('cy',Y);pk.style.opacity=1;hdr('RUNNING','');}},
+      mv('sp','plan','Δ task'),dwell(800),
+      mv('pc','code','Δ plan'),dwell(800),
+      mv('cr','review','Δ code'),dwell(800),
+      mv('rf','fix','Δ review'),dwell(800),
+      mv('fr','review','Δ rounds'),dwell(800),
+      mv('rf','fix','Δ review'),dwell(800),
+      mv('fr','review','Δ rounds'),dwell(800),
+      mv('rd','docs','Δ approved'),dwell(800),
+      mv('de','end','Δ docs'),dwell(600)
+    ];
+    player(svg,steps,reset,2800);
+  })();
+
+  /* ---------------- section 03: crash and recover ---------------- */
+  (function(){
+    var svg=document.getElementById('gv2'); if(!svg)return;
+    var strip=document.getElementById('gs2'), stEl=strip.querySelector('.st'), txtEl=strip.querySelector('.gp');
+    defs(svg,'b');
+    function lab(x,y,t,c){svg.appendChild(S('text',{class:'lbl',x:x,y:y,text:t,style:c?'fill:'+c:''}));}
+    lab(80,18,'process A (pid 4121)');
+    lab(80,112,'checkpoint log (FileStore)');
+    lab(80,236,'process B (new pid, same run)');
+    svg.appendChild(S('rect',{class:'lg',x:80,y:120,width:664,height:56,rx:9,fill:'#0A1623'}));
+    var AY=50,BY=262,BH=44;
+    // process A
+    var ge={
+      s:edge(svg,'b','M65 50 H80'),
+      a1:edge(svg,'b','M176 50 H196'),a2:edge(svg,'b','M292 50 H312'),a3:edge(svg,'b','M408 50 H428'),
+      a4:edge(svg,'b','M524 50 H546'),
+      rec:edge(svg,'b','M560 70 V238',{rec:true}),
+      b1:edge(svg,'b','M620 262 H634'),b2:edge(svg,'b','M700 262 H712')
+    };
+    svg.appendChild(S('text',{class:'lbl',x:574,y:104,style:'fill:var(--amber);text-anchor:start',text:'Recover(runID)'}));
+    var st0=term(svg,56,AY,false);
+    var A={
+      plan:node(svg,128,AY,96,BH,'plan','agent'),
+      code:node(svg,244,AY,96,BH,'code','agent'),
+      review:node(svg,360,AY,96,BH,'review','agent'),
+      fix:node(svg,476,AY,96,BH,'fix','agent')
+    };
+    var B={
+      fix:node(svg,560,BY,120,BH,'fix','--resume','resume'),
+      review:node(svg,667,BY,66,BH,'review','agent'),
+      docs:node(svg,742,BY,60,BH,'docs','agent')
+    };
+    Object.keys(B).forEach(function(k){B[k].st('ghost');});
+    var kill=S('g',{class:'kill'},[S('circle',{cx:560,cy:AY,r:13,fill:'#2a1519',stroke:'#FF6B5C','stroke-width':2}),
+      S('path',{d:'M554 44 L566 56 M566 44 L554 56',stroke:'#FF6B5C','stroke-width':2.2,fill:'none'}),
+      S('text',{x:580,y:AY+4,text:'SIGKILL'})]);
+    svg.appendChild(kill);
+    // log chips
+    function cm(x,w,t,cls){var g=S('g',{class:'cm'+(cls?' '+cls:'')},[S('rect',{x:x,y:132,width:w,height:32,rx:6}),S('text',{x:x+w/2,y:152,text:t})]);svg.appendChild(g);return g;}
+    var C={c1:cm(90,70,'commit 1'),c2:cm(170,70,'commit 2'),c3:cm(250,70,'commit 3'),ss:cm(330,100,'fix: session','sess'),
+      c4:cm(590,70,'commit 4'),end:cm(670,66,'run_end')};
+    lab(80,314,'plan, code and review are not paid for twice.');
+    // packet guide paths (invisible), coinciding with the rows
+    var pA=S('path',{d:'M56 50 H560',fill:'none',stroke:'none'}),
+        pR=S('path',{d:'M560 50 V262',fill:'none',stroke:'none'}),
+        pB=S('path',{d:'M560 262 H772',fill:'none',stroke:'none'});
+    svg.appendChild(pA);svg.appendChild(pR);svg.appendChild(pB);
+    var pk=S('circle',{class:'gpk',r:5.5,cx:0,cy:0}); svg.appendChild(pk);
+    var tick=S('text',{x:0,y:0,text:''});
+    function set(state,cls,txt){strip.className='gstrip'+(cls?' '+cls:'');stEl.textContent=state;txtEl.textContent=txt;}
+    function reset(){
+      st0.st('idle');
+      Object.keys(A).forEach(function(k){A[k].st('idle');A[k].mt.textContent='agent';});
+      Object.keys(B).forEach(function(k){B[k].st('ghost');B[k].mt.textContent=k==='fix'?'--resume':'agent';});
+      Object.keys(ge).forEach(function(k){ge[k].set('idle');});
+      ge.rec.g.style.opacity=.25;
+      Object.keys(C).forEach(function(k){C[k].classList.remove('on');});
+      kill.classList.remove('on');pk.style.opacity=0;set('IDLE','','process A starts the run');
+    }
+    function go(path,a,b,dur,edgeEl,onS,onE){
+      return {d:dur,start:function(){if(edgeEl)edgeEl.set('hot');if(onS)onS();},
+        upd:function(p){var pt=path.getPointAtLength(a+(b-a)*p);pk.setAttribute('cx',pt.x);pk.setAttribute('cy',pt.y);pk.style.opacity=1;svg.__seg=path;},
+        end:function(){if(edgeEl)edgeEl.set('taken');if(onE)onE();}};
+    }
+    function run(n,ms,fn,txt){return {d:ms,start:function(){n.st('running');if(txt)set('RUNNING','',txt);},end:function(){if(fn)fn();}};}
+    function done(n,cost){n.st('done');n.mt.textContent=cost;}
+    var steps=[
+      {d:350,start:function(){svg.__seg=null;st0.st('running');pk.setAttribute('cx',56);pk.setAttribute('cy',AY);pk.style.opacity=1;set('RUNNING','','process A · committing to the log');}},
+      go(pA,0,72,500,ge.s,null,function(){st0.st('done');}),
+      run(A.plan,650,function(){done(A.plan,'14s · $0.0099');C.c1.classList.add('on');}),
+      go(pA,72,188,500,ge.a1),
+      run(A.code,650,function(){done(A.code,'31s · $0.0310');C.c2.classList.add('on');}),
+      go(pA,188,304,500,ge.a2),
+      run(A.review,650,function(){done(A.review,'9s · $0.0087');C.c3.classList.add('on');}),
+      go(pA,304,420,500,ge.a3),
+      run(A.fix,900,function(){C.ss.classList.add('on');},'process A · fix running, session id logged'),
+      go(pA,420,504,450,ge.a4),
+      {d:1100,start:function(){svg.__seg=null;pk.style.opacity=0;kill.classList.add('on');A.fix.st('failed');A.fix.mt.textContent='killed';set('SIGKILL','dead','process A died after commit 3, fix was in flight');}},
+      {d:600,start:function(){ge.rec.g.style.opacity=1;ge.rec.set('hot');set('RECOVER','rec','process B · Recover(runID) reads the log');
+          Object.keys(B).forEach(function(k){B[k].st('idle');B[k].extra=k==='fix'?'resume':'';B.fix.st('idle');});},
+        upd:function(p){var pt=pR.getPointAtLength(212*p);pk.setAttribute('cx',pt.x);pk.setAttribute('cy',pt.y);pk.style.opacity=1;svg.__seg=pR;},
+        end:function(){ge.rec.set('taken');}},
+      run(B.fix,900,function(){done(B.fix,'resume · $0.0061');C.c4.classList.add('on');},'process B · fix continues its session (--resume)'),
+      go(pB,0,107,450,ge.b1),
+      run(B.review,650,function(){done(B.review,'$0.0087');},'process B · review'),
+      go(pB,107,182,400,ge.b2),
+      run(B.docs,650,function(){done(B.docs,'$0.0104');C.end.classList.add('on');pk.style.opacity=0;set('DONE','done','run finished · plan, code, review were not re-run');},'process B · docs'),
+      {d:200}
+    ];
+    player(svg,steps,reset,3000);
+  })();
+})();
 </script>
 </body>
 </html>
