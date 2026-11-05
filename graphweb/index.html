@@ -104,14 +104,27 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 #lb .lc span{color:var(--muted)}
 #lb .nav{position:absolute;top:50%;transform:translateY(-50%);font-size:22px;padding:8px 14px}
 #lb .nav.l{left:16px} #lb .nav.r{right:16px} #lb .x{position:absolute;top:14px;right:16px}
+#ask.review{position:fixed;inset:10px;left:10px;bottom:10px;transform:none;max-width:none;width:auto;z-index:40;display:flex;flex-direction:column;gap:10px;border-color:var(--cyan-deep)}
+#ask.review .q{margin:0}
+.rgrid{overflow:auto;flex:1;min-height:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:12px;align-content:start}
+.rc{border:1px solid var(--line);border-radius:10px;background:var(--ink);padding:8px;display:flex;flex-direction:column;gap:6px}
+.rc img{display:block;width:100%;height:auto;border-radius:6px;background:var(--ink-3);cursor:zoom-in}
+.rc .rn{font-family:var(--mono);font-size:12.5px;color:var(--cyan)}
+.rc .ac{font-size:12.5px;color:var(--muted)}
+#ask textarea{width:100%;background:var(--ink-2);border:1px solid var(--line);border-radius:7px;padding:6px 10px;resize:vertical;font-family:var(--disp)}
+#ask textarea:focus-visible{border-color:var(--cyan)}
+.rfoot{display:flex;flex-direction:column;gap:8px}
+.rfoot .row2{display:flex;gap:8px;justify-content:flex-end}
+.rthumbs{display:flex;gap:8px;overflow-x:auto;margin:0 0 8px}
+.rthumbs img{height:64px;border-radius:5px;cursor:zoom-in}
 /* svg */
 .node rect.box{fill:var(--ink-2);stroke:var(--line);stroke-width:1.5}
 .node.agent rect.box{fill:#0f2233;stroke:#27506a}
 .node .accent{fill:var(--cyan-deep);opacity:.0}
 .node.agent .accent{opacity:.9}
 .node text{fill:var(--text);font-family:var(--disp)}
-.node text.name{font-weight:600;font-size:13.5px}
-.node text.meta{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+.node text.name{font-weight:600;font-size:14.5px}
+.node text.meta{font-family:var(--mono);font-size:12px;fill:var(--muted)}
 .node.idle{opacity:.72}
 .node.running rect.box{stroke:var(--cyan);stroke-width:2.2;animation:pulse 1.1s ease-in-out infinite}
 .node.done rect.box{stroke:#2c7f8f}
@@ -126,15 +139,15 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 .bp{fill:var(--ink);stroke:var(--faint);stroke-width:1.5;cursor:pointer}
 .bp.on{fill:var(--coral);stroke:var(--coral)}
 .node:hover .bp{stroke:var(--coral)}
-.vis{font-family:var(--mono);font-size:10.5px;fill:var(--amber)!important}
+.vis{font-family:var(--mono);font-size:11.5px;fill:var(--amber)!important}
 .lane{fill:rgba(61,214,245,.03);stroke:#1d3a50;stroke-dasharray:3 5;stroke-width:1}
-.lane-label{fill:var(--faint);font-family:var(--mono);font-size:10px}
+.lane-label{fill:var(--faint);font-family:var(--mono);font-size:11px}
 .edge path{fill:none;stroke:#2c4258;stroke-width:1.6;marker-end:url(#arrow)}
 .edge.cond path{stroke-dasharray:6 5}
 .edge.branch path{stroke-dasharray:2 4}
 .edge.taken path{stroke:#3a8aa0;marker-end:url(#arrow-taken)}
 .edge.hot path{stroke:var(--cyan);stroke-width:2.6;marker-end:url(#arrow-hot)}
-.edge text{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+.edge text{font-family:var(--mono);font-size:11.5px;fill:var(--muted)}
 .edge .lbg{fill:var(--ink);opacity:.85}
 .edge .badge rect{fill:var(--ink-3);stroke:var(--amber);stroke-width:1}
 .edge .badge text{fill:var(--amber);font-weight:600}
@@ -145,11 +158,33 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 @media (prefers-reduced-motion:reduce){.node.running rect.box{animation:none}}
 /* overlays */
 .overlay{position:absolute;left:50%;transform:translateX(-50%);background:var(--ink-2);border:1px solid var(--amber);border-radius:12px;padding:12px 16px;box-shadow:0 10px 40px rgba(0,0,0,.5);max-width:min(640px,92%);z-index:5}
-#ask{bottom:18px} #bpb{top:14px;display:flex;gap:12px;align-items:center}
+#ask{bottom:18px} #bpb{top:54px;display:flex;gap:12px;align-items:center}
 #ask .q{white-space:pre-wrap;margin:0 0 10px;font-size:14.5px}
 #ask .row2{display:flex;gap:8px}
 #ask input{flex:1;background:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 10px}
-.toolbar{position:absolute;right:12px;top:10px;display:flex;gap:6px;z-index:4}
+.toolbar{position:absolute;right:12px;top:10px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;z-index:4;max-width:calc(100% - 24px)}
+.toolbar .btn{padding:3px 9px;font-size:12px;background:rgba(14,27,42,.94)}
+.toolbar .btn[aria-pressed=true]{border-color:var(--cyan-deep);color:var(--cyan)}
+.seg{display:inline-flex;border-radius:7px;overflow:hidden}
+.seg .btn{border-radius:0;border-right-width:0}.seg .btn:first-child{border-radius:7px 0 0 7px}.seg .btn:last-child{border-radius:0 7px 7px 0;border-right-width:1px}
+#mini{position:absolute;right:12px;bottom:12px;z-index:3;background:rgba(10,19,32,.92);border:1px solid var(--line);border-radius:8px;cursor:pointer;touch-action:none;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+#mini .mg{fill:rgba(61,214,245,.06);stroke:#27506a;stroke-width:1;vector-effect:non-scaling-stroke}
+#mini .mn{fill:#2a3d52}#mini .mn.running{fill:var(--cyan)}#mini .mn.done{fill:#2c7f8f}#mini .mn.failed{fill:var(--coral)}#mini .mn.waiting,#mini .mn.paused{fill:var(--amber)}
+#mini .mv{fill:rgba(61,214,245,.1);stroke:var(--cyan);stroke-width:1.2;vector-effect:non-scaling-stroke}
+.gbox{fill:rgba(19,38,58,.4);stroke:#22405a;stroke-width:1.4}
+.ghead{cursor:pointer}
+.ghead .hbg{fill:rgba(30,52,76,.8)}.ghead:hover .hbg{fill:rgba(42,74,104,.9)}
+.ghead text{font-family:var(--disp)}
+.gname{font-weight:600;font-size:14.5px;fill:var(--text)}
+.gstat{font-family:var(--mono)!important;font-size:12px;fill:var(--muted)}
+.gchev{font-size:12px;fill:var(--muted)}
+.sdot{fill:var(--faint)}
+.group.running .sdot{fill:var(--cyan)}.group.running .gbox{stroke:var(--cyan-deep)}
+.group.done .sdot{fill:var(--green)}.group.done .gbox{stroke:#2c7f8f}
+.group.failed .sdot{fill:var(--coral)}.group.failed .gbox{stroke:var(--coral)}
+.group.paused .sdot{fill:var(--amber)}.group.paused .gbox{stroke:var(--amber)}
+.pd{fill:var(--faint)}.pd.running{fill:var(--cyan)}.pd.done{fill:var(--green)}.pd.failed{fill:var(--coral)}.pd.waiting{fill:var(--amber)}
+.node.cgroup rect.box{fill:#10253a;stroke:#2f5876}
 .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-family:var(--mono)}
 @media (max-width:900px){main{grid-template-columns:1fr;grid-template-rows:55vh 1fr}aside{border-left:0;border-top:1px solid var(--line)}}
 </style>
@@ -171,15 +206,23 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
   </header>
   <main>
     <section id="stage" aria-label="graph">
-      <div class="toolbar"><button class="btn" id="fit" title="fit graph to view">fit</button></div>
+      <div class="toolbar" id="toolbar">
+        <span class="seg" role="group" aria-label="layout"><button class="btn" data-l="auto" title="snake when the left-to-right layout would not fit the view">auto</button><button class="btn" data-l="lr" title="left to right">LR</button><button class="btn" data-l="tb" title="top to bottom">TB</button><button class="btn" data-l="snake" title="rows that wrap to the view width">snake</button></span>
+        <button class="btn" id="grpbtn" hidden title="group long chains into stages automatically">stages</button>
+        <button class="btn" id="collbtn" hidden>collapse all</button>
+        <button class="btn" id="afbtn" hidden title="expand the group that holds the running node">auto focus</button>
+        <button class="btn" id="camfollow" title="keep the running node in view (turns off when you pan)">follow</button>
+        <button class="btn" id="fit" title="fit graph to view (f)">fit</button>
+      </div>
       <svg id="svg" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2c4258"/></marker>
           <marker id="arrow-taken" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3a8aa0"/></marker>
           <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3DD6F5"/></marker>
         </defs>
-        <g id="vp"><g id="lanes"></g><g id="edges"></g><g id="nodes"></g><g id="packets"></g></g>
+        <g id="vp"><g id="lanes"></g><g id="groups"></g><g id="edges"></g><g id="nodes"></g><g id="packets"></g></g>
       </svg>
+      <svg id="mini" xmlns="http://www.w3.org/2000/svg" aria-label="minimap" hidden></svg>
       <div id="empty" class="empty">waiting for a run…</div>
       <div id="bpb" class="overlay" hidden></div>
       <div id="ask" class="overlay" hidden></div>
@@ -227,7 +270,7 @@ const nk = (n,s) => n+'#'+s;
 // ---------------- state ----------------
 const S = { events:[], cursor:0, follow:true, playing:false, speed:1, runs:[], topo:{}, curRun:null,
   sel:null, selAuto:true, tab:'timeline', bps:new Set(), drawn:null, m:null, initial:true,
-  showAgent:false, gal:true, lb:null, open:new Set(), txt:{}, lastSeq:0, view:{x:0,y:0,k:1}, layout:null };
+  showAgent:false, draft:{}, lbCustom:null, gal:true, lb:null, open:new Set(), txt:{}, lastSeq:0, view:{x:0,y:0,k:1}, layout:null };
 
 // ---------------- model (fold) ----------------
 function newModel(run){
@@ -276,7 +319,7 @@ function apply(m, ev, fx){
   case 'artifact':
     if (ev.artifact) m.arts.push(Object.assign({seq:ev.seq,node:ev.node,step:ev.step,parent:ev.parent}, ev.artifact)); break;
   case 'interrupt':
-    m.pending = {node:ev.node, step:ev.step, question:ev.question, seq:ev.seq}; break;
+    m.pending = {node:ev.node, step:ev.step, question:ev.question, seq:ev.seq, items:ev.items||null}; break;
   case 'resume':
     m.pending = null; m.answers[nk(ev.node,ev.step)] = ev.answer; m.lastAnswer = {node:ev.node, answer:ev.answer}; break;
   case 'breakpoint_hit':
@@ -334,113 +377,474 @@ function connect(){
   es.onopen = () => { $('mode').textContent = BOOT.readOnly ? 'replay (read-only)' : 'live'; };
 }
 
-// ---------------- layout + graph build ----------------
-function nodeSize(n){
-  const w = Math.max(n.kind==='agent'?170:140, n.id.length*8+46);
-  if (n.kind==='start'||n.kind==='end') return {w:34,h:34};
-  return {w, h:n.kind==='agent'?62:58};
+// ---------------- prefs ----------------
+const MINK = 0.9, MAXK = 3, MINZ = 0.12, PADX = 16, HEADH = 30;
+const CAM = { follow:false, touched:false, anim:null, lastKey:null, noForce:new Set(), lastAg:null };
+let P = { layout:'auto', collapsed:{}, follow:null, autoFocus:true, autoGroups:true }, prefsFor = null;
+function prefKey(name){ return 'graphweb:ui:'+(name||'graph'); }
+function loadPrefs(name){
+  if (prefsFor===name) return; prefsFor=name;
+  P = { layout:'auto', collapsed:{}, follow:null, autoFocus:true, autoGroups:true };
+  try {
+    const raw = localStorage.getItem(prefKey(name)); const j = raw && JSON.parse(raw);
+    if (j && typeof j==='object') {
+      if (['auto','lr','tb','snake'].includes(j.layout)) P.layout = j.layout;
+      if (j.collapsed && typeof j.collapsed==='object') P.collapsed = j.collapsed;
+      if (typeof j.follow==='boolean') P.follow = j.follow;
+      if (typeof j.autoFocus==='boolean') P.autoFocus = j.autoFocus;
+      if (typeof j.autoGroups==='boolean') P.autoGroups = j.autoGroups;
+    }
+  } catch(e) {}
+  CAM.follow = P.follow==null ? !BOOT.readOnly : P.follow;
 }
-function layoutGraph(topo){
-  const back = topo.edges.filter(e=>e.back), fwd = topo.edges.filter(e=>!e.back);
-  const sizes = {}; topo.nodes.forEach(n=>sizes[n.id]=nodeSize(n));
-  const pos = {}, epts = {};
-  if (window.dagre) {
-    const g = new dagre.graphlib.Graph({multigraph:false}); g.setGraph({rankdir:'LR', nodesep:46, ranksep:96, marginx:40, marginy:40});
-    g.setDefaultEdgeLabel(()=>({}));
-    topo.nodes.forEach(n=>g.setNode(n.id,{width:sizes[n.id].w,height:sizes[n.id].h}));
-    fwd.forEach(e=>g.setEdge(e.from,e.to));
-    // lanes: let branches sit between their parallel node and its successors
-    topo.nodes.filter(n=>n.kind==='parallel').forEach(p=>{
-      topo.edges.filter(e=>e.from===p.id&&!e.back&&!(p.branches||[]).includes(e.to)).forEach(e=>(p.branches||[]).forEach(b=>g.setEdge(b,e.to)));
-    });
-    dagre.layout(g);
-    topo.nodes.forEach(n=>{ const v=g.node(n.id); pos[n.id]={x:v.x,y:v.y}; });
-    fwd.forEach(e=>{ const x=g.edge(e.from,e.to); epts[ekey(e.from,e.to)] = x.points; });
-  } else {
-    const rank={}; topo.nodes.forEach(n=>rank[n.id]=0);
-    for (let i=0;i<topo.nodes.length;i++) fwd.forEach(e=>{ rank[e.to]=Math.max(rank[e.to],rank[e.from]+1); });
-    const cols={}; topo.nodes.forEach(n=>{ (cols[rank[n.id]]||(cols[rank[n.id]]=[])).push(n.id); });
-    Object.entries(cols).forEach(([r,ids])=>ids.forEach((id,i)=>pos[id]={x:60+r*230, y:80+i*100}));
-    fwd.forEach(e=>{ const a=pos[e.from],b=pos[e.to]; epts[ekey(e.from,e.to)]=[{x:a.x+sizes[e.from].w/2,y:a.y},{x:b.x-sizes[e.to].w/2,y:b.y}]; });
+function savePrefs(){ try { localStorage.setItem(prefKey(prefsFor), JSON.stringify(P)); } catch(e) {} }
+
+// ---------------- groups ----------------
+function autoGroups(topo){
+  const real = topo.nodes.filter(n=>n.kind!=='start'&&n.kind!=='end'&&!n.parent);
+  const ids = real.map(n=>n.id), idx = {}; ids.forEach((id,i)=>idx[id]=i);
+  const out = {}; ids.forEach(i=>out[i]=[]);
+  topo.edges.forEach(e=>{ if (e.from in idx && e.to in idx && e.from!==e.to) out[e.from].push(e.to); });
+  // Tarjan SCC: a loop cluster is an SCC of size > 1
+  let counter=0; const low={}, num={}, onst={}, st=[], comp={}, comps=[];
+  (function(){ function go(v){
+    num[v]=low[v]=++counter; st.push(v); onst[v]=true;
+    for (const w of out[v]) { if (!(w in num)) { go(w); low[v]=Math.min(low[v],low[w]); } else if (onst[w]) low[v]=Math.min(low[v],num[w]); }
+    if (low[v]===num[v]) { const c=[]; let w; do { w=st.pop(); onst[w]=false; comp[w]=comps.length; c.push(w); } while (w!==v); c.sort((a,b)=>idx[a]-idx[b]); comps.push(c); }
+  } ids.forEach(v=>{ if (!(v in num)) go(v); }); })();
+  const succ = comps.map(()=>new Set()), pred = comps.map(()=>new Set());
+  ids.forEach(v=>out[v].forEach(w=>{ if (comp[v]!==comp[w]) { succ[comp[v]].add(comp[w]); pred[comp[w]].add(comp[v]); } }));
+  // topological order of the condensation, ties by declaration order
+  const indeg = comps.map((_,i)=>pred[i].size), ready=[], order=[];
+  const first = comps.map(c=>idx[c[0]]);
+  comps.forEach((_,i)=>{ if (!indeg[i]) ready.push(i); });
+  while (ready.length) { ready.sort((a,b)=>first[a]-first[b]); const c=ready.shift(); order.push(c); succ[c].forEach(s=>{ if (--indeg[s]===0) ready.push(s); }); }
+  const MAXG = 4, groups = []; let cur=null, prev=null;
+  order.forEach(c=>{
+    const size = comps[c].length;
+    const linear = prev!==null && succ[prev].size===1 && succ[prev].has(c) && pred[c].size===1;
+    if (cur && linear && cur.size+size<=MAXG) { cur.size+=size; cur.nodes.push(...comps[c]); }
+    else { cur={size, nodes:comps[c].slice()}; groups.push(cur); }
+    prev=c;
+  });
+  const res = groups.filter(g=>g.nodes.length>1).map(g=>{
+    const set=new Set(g.nodes); const nodes=topo.nodes.filter(n=>set.has(n.id)||set.has(n.parent)).map(n=>n.id);
+    const f=g.nodes[0], l=g.nodes[g.nodes.length-1];
+    return {id:'auto:'+f, label:f===l?f:f+' – '+l, nodes, collapsed:false, auto:true};
+  });
+  return res.length>=2 ? res : [];
+}
+const gcache = {};
+function groupsFor(topo){
+  const key = S.curRun+'|'+P.autoGroups; if (gcache.key===key) return gcache.v;
+  const real = topo.nodes.filter(n=>n.kind!=='start'&&n.kind!=='end');
+  const declared = !!(topo.groups&&topo.groups.length);
+  let list = [];
+  if (declared) list = topo.groups.map(g=>({id:g.id,label:g.label||g.id,nodes:(g.nodes||[]).slice(),collapsed:!!g.collapsed,auto:false}));
+  else if (P.autoGroups && real.length>8) list = autoGroups(topo);
+  list = list.filter(g=>g.nodes.length>0);
+  const of = {}; list.forEach(g=>g.nodes.forEach(id=>{ if (!(id in of)) of[id]=g.id; }));
+  const v = {list, of, declared, canAuto:!declared && real.length>8};
+  gcache.key=key; gcache.v=v; return v;
+}
+function isCollapsed(g, force){ if (force.has(g.id)) return false; const v=P.collapsed[g.id]; return v==null ? !!g.collapsed : !!v; }
+function activeNode(m){
+  if (!m) return null; let best=null, last=null;
+  for (const n of Object.values(m.nodes)) for (const v of n.visits) {
+    if (v.status==='running' && (!best||v.startSeq>best.seq)) best={id:n.id,seq:v.startSeq};
+    if (!last||v.startSeq>last.seq) last={id:n.id,seq:v.startSeq};
   }
-  return {sizes,pos,epts,back};
+  if (best) return best.id; if (m.paused) return m.paused.node; if (m.pending) return m.pending.node;
+  return last?last.id:null;
 }
-function smooth(pts){
-  if (pts.length<2) return '';
-  let d='M'+pts[0].x+','+pts[0].y;
-  if (pts.length===2){ const [a,b]=pts, mx=(a.x+b.x)/2; return d+' C'+mx+','+a.y+' '+mx+','+b.y+' '+b.x+','+b.y; }
-  for (let i=1;i<pts.length-1;i++){ const p=pts[i], q=pts[i+1]; d+=' Q'+p.x+','+p.y+' '+((p.x+q.x)/2)+','+((p.y+q.y)/2); }
-  const l=pts[pts.length-1]; return d+' L'+l.x+','+l.y;
+function forcedSet(m, G){
+  const s = new Set(); if (!m) return s;
+  const a = activeNode(m), ag = a?G.of[a]:null;
+  if (ag!==CAM.lastAg) { CAM.noForce.clear(); CAM.lastAg=ag; }
+  if (P.autoFocus && ag && !CAM.noForce.has(ag) && m.status==='running') s.add(ag);
+  return s;
 }
-function backPath(e, L, idx){
-  const a=L.pos[e.from], b=L.pos[e.to], sa=L.sizes[e.from], sb=L.sizes[e.to];
-  if (e.from===e.to){ const y=a.y-sa.h/2; return `M${a.x-22},${y} C${a.x-34},${y-52} ${a.x+34},${y-52} ${a.x+22},${y}`; }
-  const lift = 54 + idx*28 + Math.min(70, Math.abs(a.x-b.x)/7);
-  const ay=a.y-sa.h/2, by=b.y-sb.h/2;
-  return `M${a.x},${ay} C${a.x},${ay-lift} ${b.x},${by-lift} ${b.x},${by}`;
+
+// ---------------- layout ----------------
+function nodeSize(n){
+  if (n.kind==='start'||n.kind==='end') return {w:34,h:34};
+  return {w:Math.max(148, Math.round(n.id.length*8.6+34)), h:56};
 }
-function buildGraph(){
+function rankLayout(units, edges, dir, o){
+  const pos = {}; if (!units.length) return pos;
+  const ids = new Set(units.map(u=>u.id)); edges = edges.filter(e=>ids.has(e[0])&&ids.has(e[1]));
+  if (window.dagre) {
+    const g = new dagre.graphlib.Graph(); g.setGraph({rankdir:dir, nodesep:o.nodesep, ranksep:o.ranksep, marginx:0, marginy:0});
+    g.setDefaultEdgeLabel(()=>({}));
+    units.forEach(u=>g.setNode(u.id,{width:u.w,height:u.h})); edges.forEach(e=>g.setEdge(e[0],e[1]));
+    dagre.layout(g); units.forEach(u=>{ const v=g.node(u.id); pos[u.id]={x:v.x,y:v.y}; }); return pos;
+  }
+  const rank={}; units.forEach(u=>rank[u.id]=0);
+  for (let i=0;i<units.length;i++) edges.forEach(e=>{ rank[e[1]]=Math.max(rank[e[1]],Math.min(units.length,rank[e[0]]+1)); });
+  const cols={}; units.forEach(u=>(cols[rank[u.id]]||(cols[rank[u.id]]=[])).push(u));
+  let x=0; Object.keys(cols).sort((a,b)=>a-b).forEach(r=>{ const c=cols[r]; const w=Math.max(...c.map(u=>dir==='LR'?u.w:u.h)); let y=0;
+    c.forEach(u=>{ const s=dir==='LR'?u.h:u.w; pos[u.id]=dir==='LR'?{x:x+w/2,y:y+s/2}:{x:y+s/2,y:x+w/2}; y+=s+o.nodesep; }); x+=w+o.ranksep; });
+  return pos;
+}
+// layoutBlock places units (boxes with w,h) and returns top-left-origin centres plus row/direction
+// for snake folding. mode: lr | tb | snake (rows of at most o.avail, alternating direction).
+function layoutBlock(units, edges, o){
+  const raw = rankLayout(units, edges, o.mode==='tb'?'TB':'LR', o);
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  units.forEach(u=>{ const p=raw[u.id]; x0=Math.min(x0,p.x-u.w/2); y0=Math.min(y0,p.y-u.h/2); x1=Math.max(x1,p.x+u.w/2); y1=Math.max(y1,p.y+u.h/2); });
+  if (!units.length) return {w:0,h:0,pos:{},rows:1};
+  const pos = {}; units.forEach(u=>{ pos[u.id]={x:raw[u.id].x-x0,y:raw[u.id].y-y0,row:0,dir:1}; });
+  const res = {w:x1-x0,h:y1-y0,pos,rows:1};
+  if (o.mode!=='snake' || !(res.w>o.avail)) return res;
+  const cols = [];
+  units.slice().sort((a,b)=>pos[a.id].x-pos[b.id].x||pos[a.id].y-pos[b.id].y).forEach(u=>{
+    const c=cols[cols.length-1]; if (c && Math.abs(pos[u.id].x-c.x)<1) c.us.push(u); else cols.push({x:pos[u.id].x,us:[u]}); });
+  cols.forEach(c=>{ c.us.sort((a,b)=>pos[a.id].y-pos[b.id].y); c.w=Math.max(...c.us.map(u=>u.w));
+    c.top=Math.min(...c.us.map(u=>pos[u.id].y-u.h/2)); c.h=Math.max(...c.us.map(u=>pos[u.id].y+u.h/2))-c.top; });
+  const rows = []; let r=null;
+  cols.forEach(c=>{ if (r && r.w+o.ranksep+c.w>o.avail) { rows.push(r); r=null; } if (!r) r={cols:[],w:0,h:0};
+    r.w+=(r.cols.length?o.ranksep:0)+c.w; r.h=Math.max(r.h,c.h); r.cols.push(c); });
+  rows.push(r);
+  const W = Math.max(...rows.map(r=>r.w)); let y=0; const np={};
+  rows.forEach((r,ri)=>{ const dir=ri%2?-1:1; let cur=dir>0?0:W;
+    r.cols.forEach(c=>{ const left=dir>0?cur:cur-c.w;
+      c.us.forEach(u=>{ np[u.id]={x:left+c.w/2, y:y+(r.h-c.h)/2+(pos[u.id].y-u.h/2-c.top)+u.h/2, row:ri, dir}; });
+      cur+=dir*(c.w+o.ranksep); });
+    y+=r.h+o.rowgap; });
+  return {w:W,h:y-o.rowgap,pos:np,rows:rows.length};
+}
+function computeLayout(topo, G, mode, avail, force){
+  const gOf=G.of, byGroup={}; G.list.forEach(g=>byGroup[g.id]=g);
+  const collapsed={}; G.list.forEach(g=>collapsed[g.id]=isCollapsed(g,force));
+  const ro = {nodesep:mode==='tb'?40:30, ranksep:mode==='tb'?60:52, rowgap:76, avail, mode};
+  const lane=[]; topo.nodes.filter(n=>n.kind==='parallel').forEach(p=>{ const br=p.branches||[];
+    topo.edges.filter(e=>e.from===p.id&&!e.back&&!br.includes(e.to)).forEach(e=>br.forEach(b=>lane.push({from:b,to:e.to}))); });
+  const allE = topo.edges.filter(e=>!e.back).concat(lane);
+  const members={}; G.list.forEach(g=>members[g.id]=topo.nodes.filter(n=>gOf[n.id]===g.id));
+  const inner={};
+  G.list.forEach(g=>{ if (collapsed[g.id]) return;
+    const mem=members[g.id], set=new Set(mem.map(n=>n.id));
+    const b=layoutBlock(mem.map(n=>Object.assign({id:n.id},nodeSize(n))), allE.filter(e=>set.has(e.from)&&set.has(e.to)).map(e=>[e.from,e.to]), Object.assign({},ro,{avail:avail-2*PADX}));
+    const top=HEADH+(topo.edges.some(e=>e.back&&set.has(e.from)&&set.has(e.to))?58:14);
+    inner[g.id]={b,top,w:b.w+2*PADX,h:b.h+top+PADX}; });
+  const items=[], itemOf={}, seen=new Set();
+  topo.nodes.forEach(n=>{ const gid=gOf[n.id];
+    if (!gid) { items.push(Object.assign({id:n.id},nodeSize(n))); itemOf[n.id]=n.id; return; }
+    if (seen.has(gid)) return; seen.add(gid);
+    const sz = collapsed[gid] ? {w:208,h:84} : {w:inner[gid].w,h:inner[gid].h};
+    items.push(Object.assign({id:'g:'+gid},sz)); byGroup[gid].nodes.forEach(id=>itemOf[id]='g:'+gid); });
+  const ie=[], iseen=new Set();
+  allE.forEach(e=>{ const a=itemOf[e.from], b=itemOf[e.to]; if (a&&b&&a!==b&&!iseen.has(a+'|'+b)) { iseen.add(a+'|'+b); ie.push([a,b]); } });
+  const outer = layoutBlock(items, ie, ro);
+  const recs={}, boxes=[];
+  items.forEach(it=>{ const p=outer.pos[it.id], x0=p.x-it.w/2, y0=p.y-it.h/2;
+    if (!it.id.startsWith('g:')) { recs[it.id]={id:it.id,kind:'node',x:p.x,y:p.y,w:it.w,h:it.h,row:''+p.row,dir:p.dir}; return; }
+    const gid=it.id.slice(2);
+    if (collapsed[gid]) { recs[it.id]={id:it.id,kind:'cgroup',gid,x:p.x,y:p.y,w:it.w,h:it.h,row:''+p.row,dir:p.dir}; boxes.push({gid,collapsed:true,x:x0,y:y0,w:it.w,h:it.h}); return; }
+    const I=inner[gid], mir=mode==='snake'&&p.dir<0; boxes.push({gid,collapsed:false,x:x0,y:y0,w:it.w,h:it.h});
+    members[gid].forEach(n=>{ const q=I.b.pos[n.id], s=nodeSize(n);
+      recs[n.id]={id:n.id,kind:'node',gid,x:x0+PADX+(mir?I.b.w-q.x:q.x),y:y0+I.top+q.y,w:s.w,h:s.h,row:I.b.rows>1?p.row+'.'+q.row:''+p.row,dir:q.dir*(mir?-1:1)}; }); });
+  const all=Object.values(recs).map(r=>[r.x-r.w/2,r.y-r.h/2,r.x+r.w/2,r.y+r.h/2]).concat(boxes.map(b=>[b.x,b.y,b.x+b.w,b.y+b.h]));
+  const bb={x:Math.min(...all.map(a=>a[0])),y:Math.min(...all.map(a=>a[1])),x2:Math.max(...all.map(a=>a[2])),y2:Math.max(...all.map(a=>a[3]))};
+  return {mode, orient:mode==='tb'?'V':'H', recs, boxes, collapsed, itemOf, bb:{x:bb.x-40,y:bb.y-40,w:bb.x2-bb.x+80,h:bb.y2-bb.y+80}, inner, members};
+}
+function recFor(L,G,id){ return L.recs[id] || (G.of[id] ? L.recs['g:'+G.of[id]] : null); }
+
+// ---------------- edge routing ----------------
+function roundedPath(pts, r){
+  let d='M'+pts[0][0]+','+pts[0][1];
+  for (let i=1;i<pts.length-1;i++){ const p=pts[i], a=pts[i-1], b=pts[i+1];
+    const l1=Math.hypot(p[0]-a[0],p[1]-a[1]), l2=Math.hypot(b[0]-p[0],b[1]-p[1]), rr=Math.min(r,l1/2,l2/2);
+    const p1=[p[0]+(a[0]-p[0])*rr/l1,p[1]+(a[1]-p[1])*rr/l1], p2=[p[0]+(b[0]-p[0])*rr/l2,p[1]+(b[1]-p[1])*rr/l2];
+    d+=` L${p1[0]},${p1[1]} Q${p[0]},${p[1]} ${p2[0]},${p2[1]}`; }
+  const l=pts[pts.length-1]; return d+` L${l[0]},${l[1]}`;
+}
+function blocked(a,b,C){
+  for (const r of C.list){ if (r===a||r===b||r.row!==a.row) continue;
+    if ((r.x-a.x)*(r.x-b.x)<0 && (Math.abs(r.y-a.y)<r.h/2+8||Math.abs(r.y-b.y)<r.h/2+8)) return true; }
+  return false;
+}
+function arcPath(a,b,C){
+  const at=a.y-a.h/2, bt=b.y-b.h/2, lift=34+(C.bi++%5)*18+Math.min(56,Math.abs(a.x-b.x)/9);
+  return `M${a.x},${at} C${a.x},${at-lift} ${b.x},${bt-lift} ${b.x},${bt}`;
+}
+function routeEdge(e,a,b,C){
+  if (a===b) { const y=a.y-a.h/2; return `M${a.x-22},${y} C${a.x-34},${y-48} ${a.x+34},${y-48} ${a.x+22},${y}`; }
+  if (C.orient==='V') {
+    if (!e.back) { const ay=a.y+a.h/2, by=b.y-b.h/2, my=(ay+by)/2; return `M${a.x},${ay} C${a.x},${my} ${b.x},${my} ${b.x},${by}`; }
+    const lift=44+(C.bi++%5)*20, ax=a.x+a.w/2, bx=b.x+b.w/2, mx=Math.max(ax,bx)+lift;
+    return `M${ax},${a.y} C${mx},${a.y} ${mx},${b.y} ${bx},${b.y}`;
+  }
+  const same=a.row===b.row;
+  if (same && !e.back && a.dir===b.dir && (b.x-a.x)*a.dir>0 && !blocked(a,b,C)) {
+    const sx=a.x+a.dir*a.w/2, tx=b.x-a.dir*b.w/2, k=Math.max(22,Math.abs(tx-sx)/2);
+    return `M${sx},${a.y} C${sx+a.dir*k},${a.y} ${tx-a.dir*k},${b.y} ${tx},${b.y}`;
+  }
+  if (same) return arcPath(a,b,C);
+  if (e.back) { // loop spanning rows: swing out sideways between the two nodes
+    const up=b.y<a.y, sgn=-a.dir, off=70+(C.bi++%4)*18;
+    const ay=up?a.y-a.h/2:a.y+a.h/2, by=up?b.y+b.h/2:b.y-b.h/2;
+    return `M${a.x},${ay} C${a.x+sgn*off},${ay+(up?-50:50)} ${b.x+sgn*off},${by+(up?50:-50)} ${b.x},${by}`;
+  }
+  const sd=a.dir, sx=a.x+sd*a.w/2, sy=a.y, tx=b.x-b.dir*b.w/2, ty=b.y, vy=Math.sign(ty-sy)||1;
+  C.lane[sd]=(C.lane[sd]||0)+1;
+  const gx=(sd>0?C.right:C.left)+sd*(24+(C.lane[sd]%4)*12);
+  if (sd===-b.dir && Math.abs(ty-sy)>40) return roundedPath([[sx,sy],[gx,sy],[gx,ty],[tx,ty]],14);
+  const top=b.y-b.h/2-22;
+  return roundedPath([[sx,sy],[gx,sy],[gx,top],[b.x,top],[b.x,b.y-b.h/2]],14);
+}
+
+// ---------------- graph build ----------------
+const stageW = () => $('svg').clientWidth||800, stageH = () => $('svg').clientHeight||500;
+function layoutKeyOf(topo){
+  const G=groupsFor(topo), force=forcedSet(S.m,G);
+  return [S.curRun, P.layout, Math.round(stageW()/40), G.list.map(g=>g.id+(isCollapsed(g,force)?'1':'0')).join(',')].join('|');
+}
+function buildGraph(keepView){
   const topo = S.topo[S.curRun]; S.drawn = S.curRun;
-  ['lanes','edges','nodes','packets'].forEach(i=>$(i).replaceChildren());
-  $('empty').hidden = !!topo; if (!topo) return;
-  const L = S.layout = layoutGraph(topo); L.nodeEls={}; L.edgeEls={};
-  // lanes
+  ['lanes','groups','edges','nodes','packets'].forEach(i=>$(i).replaceChildren());
+  $('empty').hidden = !!topo; if (!topo) { S.layout=null; return; }
+  loadPrefs(topo.name);
+  const G=groupsFor(topo), force=forcedSet(S.m,G); S.layoutKey=layoutKeyOf(topo); S.layoutSerial=(S.layoutSerial||0)+1;
+  const avail=Math.max(420, stageW()-70);
+  let mode=P.layout;
+  if (mode==='auto') { const lr=computeLayout(topo,G,'lr',avail,force); mode=(stageW()-60)/lr.bb.w<MINK?'snake':'lr'; }
+  const L = S.layout = computeLayout(topo,G,mode,avail,force); L.G=G; S.effMode=mode;
+  L.nodeEls={}; L.edgeEls={}; L.edgeList=[]; L.gEls={}; L.miniEls={};
+  const recs=Object.values(L.recs);
+  // groups
+  L.boxes.forEach(bx=>{
+    const g=G.list.find(x=>x.id===bx.gid); if (!g) return;
+    if (bx.collapsed) return; // drawn as a node below
+    const sdot=el('circle',{class:'sdot',cx:bx.x+34,cy:bx.y+15,r:4.5});
+    const gstat=el('text',{class:'gstat',x:bx.x+bx.w-12,y:bx.y+20,'text-anchor':'end',text:''});
+    const maxc=Math.max(6,Math.floor((bx.w-56-150)/8.4));
+    const head=el('g',{class:'ghead','data-g':g.id}, el('title',{text:'click to collapse · '+g.label}),
+      el('rect',{class:'hbg',x:bx.x+1,y:bx.y+1,width:bx.w-2,height:HEADH-2,rx:11}),
+      el('text',{class:'gchev',x:bx.x+10,y:bx.y+20,text:'▾'}), sdot,
+      el('text',{class:'gname',x:bx.x+46,y:bx.y+20,text:clip(g.label,maxc)}), gstat);
+    head.addEventListener('click',ev=>{ ev.stopPropagation(); toggleGroup(g.id); });
+    const ge=el('g',{class:'group idle','data-g':g.id}, el('rect',{class:'gbox',x:bx.x,y:bx.y,width:bx.w,height:bx.h,rx:14}), head);
+    L.gEls[g.id]={g:ge,gstat,box:bx}; $('groups').append(ge);
+  });
+  // routes
+  let right=-Infinity,left=Infinity;
+  recs.forEach(r=>{ right=Math.max(right,r.x+r.w/2); left=Math.min(left,r.x-r.w/2); }); L.boxes.forEach(b=>{ right=Math.max(right,b.x+b.w); left=Math.min(left,b.x); });
+  const C={orient:L.orient,right,left,lane:{},bi:0,list:recs}, merged={};
+  topo.edges.forEach(e=>{
+    const a=recFor(L,G,e.from), b=recFor(L,G,e.to); if (!a||!b) return;
+    if (a===b && a.kind==='cgroup') return;
+    const rk=a.id+'|'+b.id+(e.back?'|b':''); let x=merged[rk];
+    if (!x) { x=merged[rk]={a,b,e,keys:[],back:!!e.back}; L.edgeList.push(x); }
+    x.keys.push(ekey(e.from,e.to)); L.edgeEls[ekey(e.from,e.to)]=x;
+  });
+  L.edgeList.forEach(x=>{
+    const e=x.e, one=x.keys.length===1, isBranch=e.label==='branch';
+    const g=el('g',{class:'edge'}); x.g=g; x.d=routeEdge(e,x.a,x.b,C);
+    const p=el('path',{d:x.d}); g.append(p); x.p=p; x.len=safeLen(p); $('edges').append(g);
+    const mid=x.len?p.getPointAtLength(x.len/2):{x:0,y:0}; const lab=one&&e.label&&!isBranch?e.label:'';
+    if (lab){ const w=lab.length*6.6+10; g.append(el('rect',{class:'lbg',x:mid.x-w/2,y:mid.y-9,width:w,height:17,rx:4}), el('text',{x:mid.x,y:mid.y+4,'text-anchor':'middle',text:lab})); }
+    x.badge=el('g',{class:'badge',visibility:'hidden'}, el('rect',{x:mid.x-18,y:mid.y-10-(lab?19:0),width:36,height:19,rx:9.5}), el('text',{x:mid.x,y:mid.y+3.5-(lab?19:0),'text-anchor':'middle',text:'×0'}));
+    g.append(x.badge);
+  });
+  // lanes (parallel)
   topo.nodes.filter(n=>n.kind==='parallel').forEach(p=>{
-    const ids=[p.id,...(p.branches||[])]; const xs=ids.flatMap(i=>[L.pos[i].x-L.sizes[i].w/2,L.pos[i].x+L.sizes[i].w/2]), ys=ids.flatMap(i=>[L.pos[i].y-L.sizes[i].h/2,L.pos[i].y+L.sizes[i].h/2]);
-    const x0=Math.min(...xs)-14,x1=Math.max(...xs)+14,y0=Math.min(...ys)-22,y1=Math.max(...ys)+14;
+    const rs=[p.id,...(p.branches||[])].map(i=>L.recs[i]).filter(Boolean); if (rs.length<2) return;
+    const x0=Math.min(...rs.map(r=>r.x-r.w/2))-14,x1=Math.max(...rs.map(r=>r.x+r.w/2))+14,y0=Math.min(...rs.map(r=>r.y-r.h/2))-22,y1=Math.max(...rs.map(r=>r.y+r.h/2))+14;
     $('lanes').append(el('rect',{class:'lane',x:x0,y:y0,width:x1-x0,height:y1-y0,rx:14}), el('text',{class:'lane-label',x:x0+10,y:y0+14,text:'parallel · '+p.id}));
   });
-  // edges
-  let bi=0;
-  topo.edges.forEach(e=>{
-    const k=ekey(e.from,e.to); const isBranch = e.label==='branch';
-    const g = el('g',{class:'edge'+(e.conditional?' cond':'')+(isBranch?' branch':''), 'data-k':k});
-    const d = e.back ? backPath(e,L,bi++) : smooth(L.epts[k]||[]);
-    const p = el('path',{d}); g.append(p);
-    let lx, ly;
-    const len = p.getTotalLength ? safeLen(p) : 0;
-    L.edgeEls[k] = {g,p,len,e};
-    $('edges').append(g);
-    const mid = len? p.getPointAtLength(len/2) : {x:0,y:0}; lx=mid.x; ly=mid.y;
-    if (e.label && !isBranch){
-      const w=e.label.length*6.4+10;
-      g.append(el('rect',{class:'lbg',x:lx-w/2,y:ly-9,width:w,height:16,rx:4}), el('text',{x:lx,y:ly+3,'text-anchor':'middle',text:e.label}));
-    }
-    const bd = el('g',{class:'badge',visibility:'hidden'}, el('rect',{x:lx-17,y:ly-10-(e.label&&!isBranch?18:0),width:34,height:18,rx:9}), el('text',{x:lx,y:ly+3-(e.label&&!isBranch?18:0),'text-anchor':'middle',text:'×0'}));
-    g.append(bd); L.edgeEls[k].badge=bd;
-  });
   // nodes
-  topo.nodes.forEach(n=>{
-    const s=L.sizes[n.id], p=L.pos[n.id];
-    const g=el('g',{class:'node idle '+n.kind, transform:`translate(${p.x},${p.y})`, 'data-id':n.id});
+  const byId={}; topo.nodes.forEach(n=>byId[n.id]=n);
+  recs.forEach(r=>{
+    const p=r; let g;
+    if (r.kind==='cgroup') {
+      const gr=G.list.find(x=>x.id===r.gid), mem=L.members[r.gid]||G.list.find(x=>x.id===r.gid).nodes.map(id=>byId[id]);
+      g=el('g',{class:'node idle cgroup',transform:`translate(${p.x},${p.y})`,'data-g':r.gid},
+        el('title',{text:'click to expand · '+gr.label}),
+        el('rect',{class:'box',x:-r.w/2,y:-r.h/2,width:r.w,height:r.h,rx:14}),
+        el('text',{class:'name',x:0,y:-16,'text-anchor':'middle',text:'▸ '+clip(gr.label,22)}),
+        el('text',{class:'meta',x:0,y:3,'text-anchor':'middle',text:''}));
+      const ids=gr.nodes.filter(id=>byId[id]&&!byId[id].parent), n=ids.length, step=Math.min(14,(r.w-30)/Math.max(1,n)), x0=-(n-1)*step/2; L.gEls[r.gid]={g,dots:{}};
+      ids.slice(0,14).forEach((id,i)=>{ const d=el('circle',{class:'pd',cx:x0+i*step,cy:26,r:4.6}); L.gEls[r.gid].dots[id]=d; g.append(d); });
+      g.addEventListener('click',ev=>{ ev.stopPropagation(); toggleGroup(r.gid); });
+      L.nodeEls['g:'+r.gid]=g; $('nodes').append(g); return;
+    }
+    const n=byId[r.id];
+    g=el('g',{class:'node idle '+n.kind, transform:`translate(${p.x},${p.y})`, 'data-id':n.id});
     if (n.kind==='start'||n.kind==='end'){
-      g.append(el('circle',{r:15}), n.kind==='end'?el('circle',{class:'in',r:7}):el('path',{d:'M-4,-6 L7,0 L-4,6 z',fill:'#8499AB'}), el('text',{y:30,'text-anchor':'middle',text:n.kind}));
+      g.append(el('circle',{r:15}), n.kind==='end'?el('circle',{class:'in',r:7}):el('path',{d:'M-4,-6 L7,0 L-4,6 z',fill:'#8499AB'}), el('text',{y:31,'text-anchor':'middle',text:n.kind}));
     } else {
-      g.append(el('rect',{class:'box',x:-s.w/2,y:-s.h/2,width:s.w,height:s.h,rx:12}),
-        el('rect',{class:'accent',x:-s.w/2,y:-s.h/2+10,width:3.5,height:s.h-20,rx:2}),
+      g.append(el('rect',{class:'box',x:-r.w/2,y:-r.h/2,width:r.w,height:r.h,rx:12}),
+        el('rect',{class:'accent',x:-r.w/2,y:-r.h/2+10,width:3.5,height:r.h-20,rx:2}),
         el('text',{class:'name',x:0,y:-3,'text-anchor':'middle',text:n.id}),
         el('text',{class:'meta',x:0,y:15,'text-anchor':'middle',text:n.kind}),
-        el('text',{class:'vis',x:s.w/2-8,y:-s.h/2+14,'text-anchor':'end',text:''}));
-      if (!BOOT.readOnly) g.append(el('circle',{class:'bp',cx:-s.w/2+4,cy:-s.h/2+4,r:6,'data-bp':n.id}, ));
+        el('text',{class:'vis',x:r.w/2-8,y:-r.h/2+15,'text-anchor':'end',text:''}));
+      if (!BOOT.readOnly) g.append(el('circle',{class:'bp',cx:-r.w/2+4,cy:-r.h/2+4,r:6,'data-bp':n.id}));
     }
     g.addEventListener('click',ev=>{ if (ev.target.classList && ev.target.classList.contains('bp')) { toggleBp(n.id); return; } selectNode(n.id); ev.stopPropagation(); });
+    g.addEventListener('dblclick',ev=>{ ev.stopPropagation(); zoomTo(r); });
     L.nodeEls[n.id]=g; $('nodes').append(g);
   });
-  fit();
+  const bb=$('vp').getBBox(); L.bb={x:bb.x-30,y:bb.y-30,w:bb.width+60,h:bb.height+60};
+  buildMini(L);
+  if (!keepView) fit(false);
+  paintToolbar();
 }
 function safeLen(p){ try { return p.getTotalLength(); } catch(e){ return 0; } }
-function fit(){
-  const vp=$('vp'), svg=$('svg'); if (!S.layout) return;
-  const bb = vp.getBBox(); const W=svg.clientWidth||800, H=svg.clientHeight||500, pad=30;
-  const k = Math.min(1.4, (W-pad*2)/Math.max(1,bb.width), (H-pad*2)/Math.max(1,bb.height));
-  S.view = {k, x:(W-bb.width*k)/2-bb.x*k, y:(H-bb.height*k)/2-bb.y*k}; applyView();
+
+// ---------------- group aggregates ----------------
+function groupAgg(L,m,gid){
+  const G=L.G, g=G.list.find(x=>x.id===gid); const ids=g.nodes, set=new Set(ids);
+  let cost=0,dur=0,done=0,total=0,loops=0,anyRun=false,anyFail=false,anyWait=false,anyVisited=false; const st={};
+  ids.forEach(id=>{ const n=S.topo[S.curRun].nodes.find(x=>x.id===id); if (n&&n.parent) return;
+    total++; const nm=m.nodes[id]; const s=nm?nm.status:'idle'; st[id]=s;
+    if (nm){ cost+=nm.cost; nm.visits.forEach(v=>{ if (v.dur) dur+=v.dur; }); if (nm.visits.length) anyVisited=true; }
+    if (s==='running') anyRun=true; else if (s==='failed') anyFail=true; else if (s==='waiting') anyWait=true; else if (s==='done') done++; });
+  S.topo[S.curRun].edges.forEach(e=>{ if (e.back&&set.has(e.from)&&set.has(e.to)){ const x=m.edges[ekey(e.from,e.to)]; if (x) loops+=x.n; } });
+  let status='idle';
+  if (anyFail) status='failed'; else if (anyWait||(m.paused&&set.has(m.paused.node))) status='paused'; else if (anyRun) status='running';
+  else if (total&&done===total) status='done'; else if (anyVisited) status=m.end?'done':'running';
+  return {status,cost,dur,done,total,loops,st};
 }
-function applyView(){ $('vp').setAttribute('transform',`translate(${S.view.x},${S.view.y}) scale(${S.view.k})`); }
+function aggText(a, withCount){
+  return [withCount?a.done+'/'+a.total:'', a.cost>0?fmtCost(a.cost).replace(/0+$/,'').replace(/\.$/,''):'', a.dur?fmtDur(a.dur):'', a.loops?'↺ '+a.loops:''].filter(Boolean).join(' · ');
+}
+function paintGroups(m){
+  const L=S.layout; if (!L) return; const sel=S.sel;
+  L.G.list.forEach(g=>{ const x=L.gEls[g.id]; if (!x) return; const a=groupAgg(L,m,g.id);
+    if (x.dots){ // collapsed
+      const cls='node cgroup '+(a.status==='paused'?'waiting':a.status)+(L.recs['g:'+g.id]&&sel&&g.nodes.includes(sel.node)?' sel':''); x.g.setAttribute('class',cls);
+      x.g.querySelector('.meta').textContent=aggText(a,true)||('0/'+a.total);
+      Object.entries(x.dots).forEach(([id,d])=>d.setAttribute('class','pd '+(a.st[id]||'idle')));
+    } else { x.g.setAttribute('class','group '+a.status); x.gstat.textContent=aggText(a,false)||a.status; }
+  });
+  // minimap
+  Object.entries(L.miniEls).forEach(([id,e])=>{ const r=L.recs[id]; let s='idle';
+    if (r&&r.kind==='cgroup'){ const a=groupAgg(L,m,r.gid); s=a.status==='paused'?'waiting':a.status; }
+    else { const nm=m.nodes[id]; if (nm) s=nm.status; }
+    e.setAttribute('class','mn '+s); });
+}
+
+// ---------------- camera ----------------
+const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function applyView(){ $('vp').setAttribute('transform',`translate(${S.view.x},${S.view.y}) scale(${S.view.k})`); paintMiniVp(); }
+function cancelAnim(){ if (CAM.anim) { cancelAnimationFrame(CAM.anim); CAM.anim=null; } }
+function setView(v, smooth){
+  cancelAnim();
+  if (!smooth || reduced || document.hidden) { S.view=v; applyView(); return; }
+  const from=Object.assign({},S.view), t0=performance.now(), ms=380;
+  (function step(now){ const t=Math.min(1,(now-t0)/ms), e=1-Math.pow(1-t,3);
+    S.view={x:from.x+(v.x-from.x)*e,y:from.y+(v.y-from.y)*e,k:from.k+(v.k-from.k)*e}; applyView();
+    CAM.anim = t<1 ? requestAnimationFrame(step) : null; })(t0+1);
+}
+function fit(smooth){
+  const L=S.layout; if (!L) return; const bb=L.bb, W=stageW(), H=stageH();
+  const k=Math.max(MINK, Math.min(1.4,(W-30)/bb.w,(H-30)/bb.h));
+  const x = bb.w*k<=W-30 ? (W-bb.w*k)/2-bb.x*k : 15-bb.x*k;
+  const y = bb.h*k<=H-30 ? (H-bb.h*k)/2-bb.y*k : 15-bb.y*k;
+  CAM.touched=false; setView({k,x,y},smooth);
+  CAM.lastKey=null; followCam();
+}
+function zoomAt(px,py,f){ const k0=S.view.k, k1=Math.max(MINZ,Math.min(MAXK,k0*f));
+  setView({k:k1,x:px-(px-S.view.x)*(k1/k0),y:py-(py-S.view.y)*(k1/k0)},false); CAM.touched=true; }
+function zoomTo(rec){ const W=stageW(),H=stageH(),k=1.6; CAM.touched=true; setView({k,x:W/2-rec.x*k,y:H/2-rec.y*k},true); }
+function panBy(dx,dy){ CAM.touched=true; setFollow(false); setView({k:S.view.k,x:S.view.x+dx,y:S.view.y+dy},false); }
+function ensureVisible(rec, force){
+  if (!rec) return; const W=stageW(),H=stageH(),v=S.view,k=v.k;
+  const sx=rec.x*k+v.x, sy=rec.y*k+v.y, hw=rec.w*k/2, hh=rec.h*k/2, mx=W*.14, my=H*.16;
+  if (!force && sx-hw>=mx && sx+hw<=W-mx && sy-hh>=my && sy+hh<=H-my) return;
+  const nk=Math.max(k,MINK); setView({k:nk,x:W/2-rec.x*nk,y:H/2-rec.y*nk},true);
+}
+function followCam(){
+  const L=S.layout; if (!CAM.follow||!L||!S.m) return;
+  const a=activeNode(S.m); const rec=a&&recFor(L,L.G,a); if (!rec) return;
+  const key=rec.id+'@'+S.layoutSerial; if (key===CAM.lastKey) return; CAM.lastKey=key; ensureVisible(rec,false);
+}
+function setFollow(on){ if (CAM.follow===on) return; CAM.follow=on; P.follow=on; savePrefs(); CAM.lastKey=null; paintToolbar(); if (on){ const L=S.layout,a=L&&S.m&&activeNode(S.m),rec=a&&recFor(L,L.G,a); if (rec) ensureVisible(rec,true); } }
+function toggleGroup(gid){
+  const L=S.layout; if (!L) return; const g=L.G.list.find(x=>x.id===gid); if (!g) return;
+  const wasCollapsed=!!L.collapsed[gid];
+  const before=wasCollapsed?L.recs['g:'+gid]:L.boxes.find(b=>b.gid===gid), bx=before.kind?before.x-before.w/2:before.x, by=before.kind?before.y-before.h/2:before.y;
+  const sx=bx*S.view.k+S.view.x, sy=by*S.view.k+S.view.y;
+  P.collapsed[gid]=!wasCollapsed; savePrefs(); CAM.noForce.add(gid);
+  buildGraph(true);
+  const nb=S.layout.boxes.find(b=>b.gid===gid); if (nb) { S.view.x=sx-nb.x*S.view.k; S.view.y=sy-nb.y*S.view.k; applyView(); }
+  paint();
+}
+function setLayout(l){ P.layout=l; savePrefs(); CAM.touched=false; if (S.m) buildGraph(false); paint(); }
+function setAllCollapsed(on){ const L=S.layout; if (!L) return; L.G.list.forEach(g=>{ P.collapsed[g.id]=on; CAM.noForce.add(g.id); }); savePrefs(); buildGraph(true); fit(false); paint(); }
+function paintToolbar(){
+  const L=S.layout, G=L&&L.G; const tb=$('toolbar'); if (!tb) return;
+  tb.querySelectorAll('[data-l]').forEach(b=>{ const on=b.dataset.l===P.layout; b.setAttribute('aria-pressed',on); if (b.dataset.l==='auto') b.textContent='auto'+(P.layout==='auto'&&S.effMode?' · '+S.effMode:''); });
+  $('grpbtn').hidden=!G||!G.canAuto; $('grpbtn').setAttribute('aria-pressed',P.autoGroups); $('grpbtn').textContent='stages';
+  const has=!!(G&&G.list.length); $('collbtn').hidden=!has; $('afbtn').hidden=!has;
+  if (has){ const all=G.list.every(g=>L.collapsed[g.id]); $('collbtn').textContent=all?'expand all':'collapse all'; $('afbtn').setAttribute('aria-pressed',P.autoFocus); }
+  $('camfollow').setAttribute('aria-pressed',CAM.follow);
+}
+document.querySelectorAll('#toolbar [data-l]').forEach(b=>b.onclick=()=>setLayout(b.dataset.l));
+$('grpbtn').onclick=()=>{ P.autoGroups=!P.autoGroups; savePrefs(); CAM.touched=false; buildGraph(false); paint(); };
+$('collbtn').onclick=()=>{ const L=S.layout; if (L) setAllCollapsed(!L.G.list.every(g=>L.collapsed[g.id])); };
+$('afbtn').onclick=()=>{ P.autoFocus=!P.autoFocus; savePrefs(); paint(); paintToolbar(); };
+$('camfollow').onclick=()=>setFollow(!CAM.follow);
+$('fit').onclick=()=>fit(true);
+
+// pan / zoom / keyboard
+(function(){
+  const svg=$('svg'); let drag=null;
+  svg.addEventListener('pointerdown',e=>{ if (e.button!==0||e.target.closest('.node,.ghead')) return; cancelAnim(); drag={x:e.clientX,y:e.clientY,vx:S.view.x,vy:S.view.y,moved:false}; svg.classList.add('panning'); svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+    if (!drag.moved && Math.hypot(dx,dy)<4) return; if (!drag.moved){ drag.moved=true; CAM.touched=true; setFollow(false); }
+    S.view.x=drag.vx+dx; S.view.y=drag.vy+dy; applyView(); });
+  const end=()=>{ drag=null; svg.classList.remove('panning'); };
+  svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
+  svg.addEventListener('wheel',e=>{ e.preventDefault(); cancelAnim(); const r=svg.getBoundingClientRect(); zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*0.0015)); },{passive:false});
+  document.addEventListener('keydown',e=>{
+    if (S.lb!=null||e.metaKey||e.ctrlKey||e.altKey) return; const t=e.target;
+    if (t&&(/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)||t.isContentEditable)) return;
+    const st=e.shiftKey?260:90, W=stageW(), H=stageH();
+    switch(e.key){
+    case 'f': fit(true); break;
+    case '0': { const k0=S.view.k; zoomAt(W/2,H/2,1/k0); break; }
+    case 'ArrowLeft': panBy(st,0); break; case 'ArrowRight': panBy(-st,0); break;
+    case 'ArrowUp': panBy(0,st); break; case 'ArrowDown': panBy(0,-st); break;
+    case '+': case '=': zoomAt(W/2,H/2,1.2); break;
+    case '-': case '_': zoomAt(W/2,H/2,1/1.2); break;
+    default: return; }
+    e.preventDefault(); });
+  let rt=null;
+  window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ const s=S.layoutSerial; if (S.m) paint(); if (S.layout&&s===S.layoutSerial&&!CAM.touched) fit(false); else paintMiniVp(); },150); });
+})();
+
+// ---------------- minimap ----------------
+function buildMini(L){
+  const mini=$('mini'); mini.replaceChildren(); const n=Object.keys(L.recs).length;
+  if (n<=8) { mini.setAttribute('hidden',''); return; } mini.removeAttribute('hidden');
+  const bb=L.bb, sc=Math.min(200/bb.w,130/bb.h), w=Math.max(60,bb.w*sc), h=Math.max(40,bb.h*sc);
+  mini.setAttribute('viewBox',`${bb.x} ${bb.y} ${bb.w} ${bb.h}`); mini.setAttribute('width',w); mini.setAttribute('height',h);
+  L.boxes.forEach(b=>mini.append(el('rect',{class:'mg',x:b.x,y:b.y,width:b.w,height:b.h,rx:14})));
+  Object.values(L.recs).forEach(r=>{ const e=el('rect',{class:'mn idle',x:r.x-r.w/2,y:r.y-r.h/2,width:r.w,height:r.h,rx:10}); L.miniEls[r.id]=e; mini.append(e); });
+  L.miniVp=el('rect',{class:'mv',x:0,y:0,width:10,height:10}); mini.append(L.miniVp); paintMiniVp();
+}
+function paintMiniVp(){
+  const L=S.layout; if (!L||!L.miniVp) return; const k=S.view.k;
+  L.miniVp.setAttribute('x',-S.view.x/k); L.miniVp.setAttribute('y',-S.view.y/k); L.miniVp.setAttribute('width',stageW()/k); L.miniVp.setAttribute('height',stageH()/k);
+}
+(function(){
+  const mini=$('mini'); let down=false;
+  const jump=e=>{ const L=S.layout; if (!L) return; const pt=mini.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY; const w=pt.matrixTransform(mini.getScreenCTM().inverse());
+    CAM.touched=true; setFollow(false); setView({k:S.view.k,x:stageW()/2-w.x*S.view.k,y:stageH()/2-w.y*S.view.k},false); };
+  mini.addEventListener('pointerdown',e=>{ e.stopPropagation(); down=true; mini.setPointerCapture(e.pointerId); cancelAnim(); jump(e); });
+  mini.addEventListener('pointermove',e=>{ if (down) jump(e); });
+  mini.addEventListener('pointerup',()=>down=false); mini.addEventListener('pointercancel',()=>down=false);
+})();
 
 // ---------------- paint ----------------
 function paint(){
   const m=S.m; if (!m) return;
-  if (S.drawn!==S.curRun || (!S.layout && S.topo[S.curRun])) buildGraph();
+  const tp0=S.topo[S.curRun];
+  if (tp0) loadPrefs(tp0.name);
+  if (S.drawn!==S.curRun || (!S.layout && tp0)) buildGraph(false);
+  else if (tp0 && S.layoutKey!==layoutKeyOf(tp0)) buildGraph(CAM.touched);
   const L=S.layout;
   // header
   const st = derivedStatus(m);
@@ -454,13 +858,13 @@ function paint(){
   const sel = S.sel;
   if (L && topo){
     topo.nodes.forEach(n=>{
-      const g=L.nodeEls[n.id]; const nm=m.nodes[n.id]; const status = nm?nm.status:'idle';
+      const g=L.nodeEls[n.id]; if (!g) return; const nm=m.nodes[n.id]; const status = nm?nm.status:'idle';
       let cls='node '+status+' '+n.kind+(sel&&sel.node===n.id?' sel':'');
       if (n.kind==='end'){ const r=(m.edges&&Object.keys(m.edges).some(k=>k.endsWith('|__end__')&&m.edges[k].n>0)); if (r) cls+=' reached'; if (r&&(m.status==='failed'||m.status==='error')) cls+=' bad'; }
       g.setAttribute('class',cls);
       if (nm && (n.kind!=='start'&&n.kind!=='end')){
         const last=nm.visits[nm.visits.length-1];
-        const bits=[n.kind]; if (last && last.dur!=null) bits.push(fmtDur(last.dur)); if (nm.cost>0) bits.push(fmtCost(nm.cost));
+        const bits=last&&last.dur!=null?[]:[n.kind]; if (last && last.dur!=null) bits.push(fmtDur(last.dur)); if (nm.cost>0) bits.push(fmtCost(nm.cost));
         g.querySelector('.meta').textContent = bits.join(' · ');
         g.querySelector('.vis').textContent = nm.visits.filter(v=>!v.parent).length>1 || nm.visits.length>1 ? '×'+nm.visits.length : '';
       } else if (n.kind!=='start'&&n.kind!=='end'){ g.querySelector('.meta').textContent=n.kind; g.querySelector('.vis').textContent=''; }
@@ -468,14 +872,17 @@ function paint(){
       // agent nodes detected at runtime when the topology did not tag them
       if (nm && n.kind==='func' && Object.keys(m.agents).some(k=>k.startsWith(n.id+'#'))) g.classList.add('agent');
     });
-    Object.entries(L.edgeEls).forEach(([k,x])=>{
-      const e=m.edges[k]; const n=e?e.n:0;
-      const hot = m.lastEdge && m.lastEdge.key===k && (S.live && S.m.nsteps>0 && S.cursor===S.events.length) && Date.now()-S.lastEdgeWall<1200;
-      x.g.setAttribute('class','edge'+(x.e.conditional?' cond':'')+(x.e.label==='branch'?' branch':'')+(n>0?' taken':'')+(hot?' hot':''));
-      const show = n>0 && (x.e.back || n>1); x.badge.setAttribute('visibility',show?'visible':'hidden');
+    L.edgeList.forEach(x=>{
+      let n=0; for (const k of x.keys){ const e=m.edges[k]; if (e) n+=e.n; }
+      const hot = m.lastEdge && x.keys.includes(m.lastEdge.key) && (S.live && S.m.nsteps>0 && S.cursor===S.events.length) && Date.now()-S.lastEdgeWall<1200;
+      const cond=x.keys.length===1&&x.e.conditional;
+      x.g.setAttribute('class','edge'+(cond?' cond':'')+(x.e.label==='branch'?' branch':'')+(n>0?' taken':'')+(hot?' hot':''));
+      const show = n>0 && (x.back || n>1); x.badge.setAttribute('visibility',show?'visible':'hidden');
       if (show) x.badge.lastChild.textContent='×'+n;
     });
+    paintGroups(m);
     $('empty').hidden=true;
+    followCam();
   }
   paintBanners(m,st);
   paintScrub();
@@ -503,8 +910,11 @@ function paintBanners(m,st){
   const key = p? p.seq : '';
   if (p){
     const live = !BOOT.readOnly && S.cursor===S.events.length;
+    const rev = !!(p.items&&p.items.length);
     if (ask.dataset.key!==String(key)+live){
-      ask.dataset.key=String(key)+live; ask.hidden=false;
+      ask.dataset.key=String(key)+live; ask.hidden=false; ask.className='overlay'+(rev&&live?' review':'');
+      if (rev) { ask.replaceChildren(...reviewView(p,live)); }
+      else {
       const input = el('input',{type:'text',placeholder:'your answer…','aria-label':'answer'});
       const send = v=>postJSON('/api/answer',{answer:v}).then(r=>{ if(!r.ok) r.text().then(t=>alert(t)); });
       input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&input.value) send(input.value); });
@@ -513,8 +923,27 @@ function paintBanners(m,st){
           ...['yes','no'].map(v=>el('button',{class:'btn',text:v,onclick:()=>send(v)})),
           el('button',{class:'btn primary',text:'send',onclick:()=>input.value&&send(input.value)})) : el('div',{class:'muted',text:'(read-only)'}));
       if (live) setTimeout(()=>input.focus(),0);
+      }
     }
   } else { ask.hidden=true; ask.dataset.key=''; }
+}
+
+// review: the interrupt carries files to look at; the answer is the JSON of a graph.Review
+function reviewList(p){ return p.items.map((it,i)=>({key:i,url:'/api/review/'+p.seq+'/'+i,title:it.name,caption:it.caption})); }
+function reviewView(p,live){
+  const list=reviewList(p), d=S.draft[p.seq]||(S.draft[p.seq]={c:{},g:''});
+  const head=el('div',{class:'ev k',text:`${p.node} asks for a review · ${p.items.length} items`}), q=el('p',{class:'q',text:p.question});
+  if (!live) return [head,q,el('div',{class:'rthumbs'},list.map(x=>el('img',{src:x.url,alt:x.title,title:x.title,onclick:()=>openLb(x.key,list)}))),el('div',{class:'muted',text:'(read-only)'})];
+  const cards=p.items.map((it,i)=>{
+    const ta=el('textarea',{rows:2,placeholder:'comment on '+it.name+'…','aria-label':'comment on '+it.name}); ta.value=d.c[it.name]||'';
+    ta.addEventListener('input',()=>{d.c[it.name]=ta.value;});
+    return el('div',{class:'rc'},el('img',{src:list[i].url,alt:it.name,loading:'lazy',onclick:()=>openLb(i,list)}),el('div',{class:'rn',text:it.name}),it.caption?el('div',{class:'ac',text:it.caption}):null,ta); });
+  const gen=el('textarea',{rows:2,placeholder:'general comment (optional)…','aria-label':'general comment'}); gen.value=d.g||''; gen.addEventListener('input',()=>{d.g=gen.value;});
+  const send=approved=>{ const comments={}; for (const k in d.c) if (d.c[k].trim()) comments[k]=d.c[k].trim();
+    const body={approved}; if (Object.keys(comments).length) body.comments=comments; if (d.g.trim()) body.general=d.g.trim();
+    postJSON('/api/answer',{answer:JSON.stringify(body)}).then(r=>{ if(!r.ok) r.text().then(t=>alert(t)); }); };
+  return [head,q,el('div',{class:'rgrid'},cards),el('div',{class:'rfoot'},gen,el('div',{class:'row2'},
+    el('button',{class:'btn primary',text:'Approve all',onclick:()=>send(true)}),el('button',{class:'btn warn',text:'Send comments',onclick:()=>send(false)})))];
 }
 
 // ---------------- selection + panel ----------------
@@ -699,20 +1128,20 @@ function paintGallery(){
   if (stick) gal.scrollLeft=gal.scrollWidth;
 }
 $('galbtn').onclick=()=>{ S.gal=!S.gal; paintGallery(); };
-// lightbox: arrows step through every image of the run (all versions)
-function lbImgs(){ return S.m ? S.m.arts.filter(isImg) : []; }
-function openLb(seq){ S.lb=seq; paintLb(); }
-function closeLb(){ S.lb=null; paintLb(); }
-function stepLb(d){ const l=lbImgs(); if(!l.length) return; const i=l.findIndex(a=>a.seq===S.lb); S.lb=l[(i+d+l.length)%l.length].seq; paintLb(); }
+// lightbox: arrows step through every image of the run (all versions), or through a custom list (review items)
+function lbList(){ return S.lbCustom || (S.m ? S.m.arts.filter(isImg).map(a=>({key:a.seq,url:artURL(a),title:a.node+' · '+a.name,caption:a.caption})) : []); }
+function openLb(key,custom){ S.lbCustom=custom||null; S.lb=key; paintLb(); }
+function closeLb(){ S.lb=null; S.lbCustom=null; paintLb(); }
+function stepLb(d){ const l=lbList(); if(!l.length) return; const i=l.findIndex(a=>a.key===S.lb); S.lb=l[(i+d+l.length)%l.length].key; paintLb(); }
 function paintLb(){
-  const lb=$('lb'); const l=lbImgs(); const i=l.findIndex(a=>a.seq===S.lb);
+  const lb=$('lb'); const l=lbList(); const i=l.findIndex(a=>a.key===S.lb);
   if (S.lb==null || i<0){ lb.hidden=true; lb.replaceChildren(); S.lb=null; return; }
   const a=l[i]; lb.hidden=false;
   lb.replaceChildren(el('button',{class:'btn x',text:'✕ esc','aria-label':'close',onclick:e=>{e.stopPropagation();closeLb();}}),
     l.length>1?el('button',{class:'btn nav l',text:'‹','aria-label':'previous',onclick:e=>{e.stopPropagation();stepLb(-1);}}):null,
-    el('img',{src:artURL(a),alt:a.name,onclick:e=>e.stopPropagation()}),
+    el('img',{src:a.url,alt:a.title,onclick:e=>e.stopPropagation()}),
     l.length>1?el('button',{class:'btn nav r',text:'›','aria-label':'next',onclick:e=>{e.stopPropagation();stepLb(1);}}):null,
-    el('div',{class:'lc',onclick:e=>e.stopPropagation()},a.node+' · '+a.name+' ',el('span',{text:(i+1)+' / '+l.length}),a.caption?el('div',{class:'muted',text:a.caption}):null));
+    el('div',{class:'lc',onclick:e=>e.stopPropagation()},a.title+' ',el('span',{text:(i+1)+' / '+l.length}),a.caption?el('div',{class:'muted',text:a.caption}):null));
 }
 $('lb').addEventListener('click',closeLb);
 document.addEventListener('keydown',e=>{ if (S.lb==null) return;
@@ -730,7 +1159,7 @@ function describe(e){
     if (st.type==='result') return `${e.node}: result ${fmtCost(st.total_cost_usd||st.cost_usd)}`; return `${e.node}: ${st.type}${st.subtype?'/'+st.subtype:''}`; }
   case 'agent_input': return `${e.node}: input · ${(e.input&&e.input.input&&e.input.input.model)||''} · prompt ${((e.input&&e.input.input&&e.input.input.prompt)||'').length} chars`;
   case 'artifact': { const a=e.artifact||{}; return `${e.node}: 🖼 ${a.name||''}${a.caption?' · '+clip(a.caption,80):''}  ${a.mime||''}`; }
-  case 'interrupt': return `${e.node}: ${clip((e.question||'').replace(/\s+/g,' '),140)}`;
+  case 'interrupt': return `${e.node}: ${e.items&&e.items.length?'['+e.items.length+' items to review] ':''}${clip((e.question||'').replace(/\s+/g,' '),140)}`;
   case 'resume': return `${e.node}: ${clip(e.answer,100)}`;
   case 'breakpoint_hit': return `before ${e.node} #${e.step}`;
   case 'graph_end': return `${e.status} ${fmtCost(e.total_cost_usd)} ${fmtDur(e.duration_ms)}${e.err?' '+clip(e.err,100):''}`;
@@ -813,22 +1242,9 @@ function postJSON(url,body){ return fetch(url,{method:'POST',headers:{'Content-T
 function control(a){ postJSON('/api/control',{action:a}); }
 function toggleBp(id){ if (S.bps.has(id)) S.bps.delete(id); else S.bps.add(id); paint(); postJSON('/api/breakpoints',{nodes:[...S.bps]}).then(r=>r.json()).then(j=>{ S.bps=new Set(j.nodes); paint(); }); }
 $('pausebtn').onclick=()=>control('pause');
-$('fit').onclick=fit;
-// pan / zoom
-(function(){
-  const svg=$('svg'); let drag=null;
-  svg.addEventListener('pointerdown',e=>{ if (e.target.closest('.node')) return; drag={x:e.clientX,y:e.clientY,vx:S.view.x,vy:S.view.y}; svg.classList.add('panning'); svg.setPointerCapture(e.pointerId); });
-  svg.addEventListener('pointermove',e=>{ if(!drag) return; S.view.x=drag.vx+e.clientX-drag.x; S.view.y=drag.vy+e.clientY-drag.y; applyView(); });
-  const end=()=>{ drag=null; svg.classList.remove('panning'); };
-  svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
-  svg.addEventListener('wheel',e=>{ e.preventDefault(); const r=svg.getBoundingClientRect(); const px=e.clientX-r.left, py=e.clientY-r.top;
-    const k0=S.view.k, k1=Math.max(.2,Math.min(3,k0*Math.exp(-e.deltaY*0.0015)));
-    S.view.x=px-(px-S.view.x)*(k1/k0); S.view.y=py-(py-S.view.y)*(k1/k0); S.view.k=k1; applyView(); },{passive:false});
-})();
 $('runsel').onchange=e=>{ S.curRun=e.target.value; S.follow=false; $('follow').checked=false; S.cursor=S.events.length; S.sel=null; S.selAuto=true; rebuild(); panelSig=''; paint(); };
 const _paint=paint; paint=function(){ _paint();
   const rs=$('runsel'); if (S.runs.length>1){ rs.hidden=false; if (rs.options.length!==S.runs.length){ rs.replaceChildren(...S.runs.map((r,i)=>el('option',{value:r,text:'run '+(i+1)+' · '+r.slice(4,10)}))); } rs.value=S.curRun; } };
-window.addEventListener('resize',()=>{ if (S.layout) fit(); });
 
 // ---------------- boot ----------------
 if (!BOOT.readOnly) fetch('/api/breakpoints').then(r=>r.json()).then(j=>{ S.bps=new Set(j.nodes||[]); paint(); }).catch(()=>{});
