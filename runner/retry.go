@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"regexp"
 	"strconv"
@@ -26,7 +27,21 @@ type RetryPolicy struct {
 	// cost reaches it, no further retry is made (the last result/error is
 	// returned). 0 disables the cap. This is the guard against retries quietly
 	// multiplying token spend.
+	//
+	// The CLI reports cost only in the result event, so an attempt cut off
+	// without one (a truncated stream, the usual reason to set Resume) has
+	// unknown cost. For the cap such an attempt is charged
+	// UnknownAttemptCostUSD, or, when that is 0, the Runner's per-invocation
+	// budget (Config.MaxBudgetUSD, default 5.00, the most --max-budget-usd lets
+	// one run spend): pessimistic, so a small cap stops resuming after the
+	// first truncation rather than never tripping. The estimate affects only
+	// this guard; Result.TotalCostUSD and RetryInfo.SpentUSD stay known spend.
 	MaxSpendUSD float64
+
+	// UnknownAttemptCostUSD is the cost assumed, for MaxSpendUSD only, for an
+	// attempt that ended with no result event. 0 means the Runner's
+	// per-invocation budget. See MaxSpendUSD.
+	UnknownAttemptCostUSD float64
 
 	// Retryable decides whether a failed attempt should be retried, given its
 	// result (may be nil) and error (may be nil for an error-result). nil uses
@@ -189,6 +204,17 @@ func (p RetryPolicy) backoff(attempt int, res *Result, err error) time.Duration 
 	return delay
 }
 
+// unknownAttemptCost is the spend assumed for an attempt with no result event.
+func (r *Runner) unknownAttemptCost(p RetryPolicy) float64 {
+	if p.UnknownAttemptCostUSD > 0 {
+		return p.UnknownAttemptCostUSD
+	}
+	if v, err := strconv.ParseFloat(r.cfg.MaxBudgetUSD, 64); err == nil && v > 0 {
+		return v
+	}
+	return math.MaxFloat64 / 4 // no per-run bound is configured: spend is unbounded
+}
+
 // RunJSONWithRetry runs RunJSON with retries on transient failures. It
 // accumulates the cost of EVERY attempt (successful, failed, or error-result)
 // into the returned Result.TotalCostUSD, sets Result.Attempts, and stops early
@@ -216,15 +242,21 @@ type attemptKey struct{}
 func (r *Runner) withRetry(ctx context.Context, in Input, p RetryPolicy, run func(context.Context, Input) (*Result, error)) (*Result, error) {
 	applyRetryDefaults(&p)
 
-	var spent float64
+	var spent, guard float64 // known spend; known spend plus estimates for unknown attempts
 	var last *Result
 	var lastErr error
+	attempts := 0
 
 	for attempt := 1; attempt <= p.MaxAttempts; attempt++ {
+		attempts = attempt
 		res, err := run(context.WithValue(ctx, attemptKey{}, attempt), in)
 		if res != nil {
 			spent += res.TotalCostUSD
+			guard += res.TotalCostUSD
 			last = res
+		}
+		if _, trunc := IsTruncatedStream(err); trunc && (res == nil || res.TotalCostUSD == 0) {
+			guard += r.unknownAttemptCost(p)
 		}
 		lastErr = err
 
@@ -239,7 +271,7 @@ func (r *Runner) withRetry(ctx context.Context, in Input, p RetryPolicy, run fun
 			break
 		}
 		// Cost guard: don't spend more once we've hit the cap.
-		if p.MaxSpendUSD > 0 && spent >= p.MaxSpendUSD {
+		if p.MaxSpendUSD > 0 && guard >= p.MaxSpendUSD {
 			break
 		}
 
@@ -268,7 +300,7 @@ func (r *Runner) withRetry(ctx context.Context, in Input, p RetryPolicy, run fun
 
 	if last != nil {
 		last.TotalCostUSD = spent
-		last.Attempts = p.MaxAttempts
+		last.Attempts = attempts
 	}
 	if lastErr != nil {
 		return last, fmt.Errorf("giving up after retries ($%.4f spent): %w", spent, lastErr)

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/tggo/claude-agent-go/graph"
-	"github.com/tggo/claude-agent-go/mcp"
 	"github.com/tggo/claude-agent-go/recording"
 	"github.com/tggo/claude-agent-go/runner"
 	"github.com/tggo/claude-agent-go/tools"
@@ -80,20 +79,11 @@ func Build(model, runsDir string) (*Pipeline, error) {
 			ap.mu.Unlock()
 			return approveOut{Approved: true}, nil
 		})
-	srv, err := reg.Serve()
+	mcpPath, closeSrv, err := reg.ServeMCP(runsDir)
 	if err != nil {
 		return nil, err
 	}
-	name, cfg := srv.Config()
-	if err := os.MkdirAll(runsDir, 0o755); err != nil {
-		srv.Close()
-		return nil, err
-	}
-	mcpPath := filepath.Join(runsDir, "mcp.json")
-	if err := mcp.WriteConfig(mcpPath, map[string]mcp.ServerConfig{name: cfg}); err != nil {
-		srv.Close()
-		return nil, err
-	}
+	name := "pipeline"
 	approveTool := "mcp__" + name + "__approve"
 
 	// One runner per role: each gets only the tools it needs.
@@ -212,13 +202,13 @@ public function (params, returns, raises), "## Edge cases". Reply "done".`}
 
 	r, err := g.Compile(graph.WithMaxSteps(20))
 	if err != nil {
-		srv.Close()
+		closeSrv()
 		return nil, err
 	}
 	// cag trace shows this diagram above the per-node timelines.
-	if err := os.WriteFile(filepath.Join(runsDir, "graph.mmd"), []byte(r.Mermaid()), 0o644); err != nil {
-		srv.Close()
+	if err := os.WriteFile(filepath.Join(runsDir, "graph.mmd"), []byte(r.Mermaid()), 0o600); err != nil {
+		closeSrv()
 		return nil, err
 	}
-	return &Pipeline{Graph: r, RunsDir: runsDir, close: func() { srv.Close() }}, nil
+	return &Pipeline{Graph: r, RunsDir: runsDir, close: func() { _ = closeSrv() }}, nil
 }

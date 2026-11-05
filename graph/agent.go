@@ -33,6 +33,41 @@ func WithProgress(fn runner.ProgressFunc) AgentOption {
 // repair step). The default is to fail the node with ErrAgentResult.
 func AllowErrorResult() AgentOption { return func(c *agentConfig) { c.allowErrRes = true } }
 
+// RunAgent runs in through r with the retry, progress and cost accounting that
+// Agent uses, for hand-written nodes that need more control (for example ones
+// that may Interrupt). The run's cost is added to the current node via AddCost
+// whether or not it succeeded, so a custom node cannot forget it. in.Label
+// defaults to the node name. Errors are returned as the runner gave them
+// (not wrapped), and an error result is returned as (res, nil) unless the
+// caller checks res.IsError; use AllowErrorResult-style handling at the call
+// site. Only WithRetry and WithProgress apply.
+func RunAgent(ctx context.Context, r *runner.Runner, in runner.Input, opts ...AgentOption) (*runner.Result, error) {
+	var cfg agentConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+	return runAgent(ctx, r, in, &cfg)
+}
+
+func runAgent(ctx context.Context, r *runner.Runner, in runner.Input, cfg *agentConfig) (*runner.Result, error) {
+	if in.Label == "" {
+		in.Label = NodeName(ctx)
+	}
+	var (
+		res *runner.Result
+		err error
+	)
+	if cfg.retry != nil {
+		res, err = r.RunStreamWithRetry(ctx, in, cfg.progress, *cfg.retry)
+	} else {
+		res, err = r.RunStream(ctx, in, cfg.progress)
+	}
+	if res != nil {
+		AddCost(ctx, res.TotalCostUSD)
+	}
+	return res, err
+}
+
 // Agent returns a node that runs Claude Code through r. build derives the
 // request from the state (Input.Label defaults to the node name); apply writes
 // the result back. apply may be nil when only the side effects matter.
@@ -48,22 +83,7 @@ func Agent[S any](r *runner.Runner, build func(s *S) runner.Input, apply func(s 
 	}
 	return func(ctx context.Context, s *S) error {
 		name := NodeName(ctx)
-		in := build(s)
-		if in.Label == "" {
-			in.Label = name
-		}
-		var (
-			res *runner.Result
-			err error
-		)
-		if cfg.retry != nil {
-			res, err = r.RunStreamWithRetry(ctx, in, cfg.progress, *cfg.retry)
-		} else {
-			res, err = r.RunStream(ctx, in, cfg.progress)
-		}
-		if res != nil {
-			AddCost(ctx, res.TotalCostUSD)
-		}
+		res, err := runAgent(ctx, r, build(s), &cfg)
 		if err != nil {
 			return fmt.Errorf("agent %q: %w", name, err)
 		}

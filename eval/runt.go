@@ -24,13 +24,13 @@ func (s stdT) Run(name string, f func(T)) bool {
 // RunT evaluates every case of set as a subtest of t. A failing case reports
 // its detailed report (expected vs actual tools, scores, metrics) via Errorf.
 // Cases run sequentially; only WithRepeats applies.
-func RunT(t *testing.T, set Set, agent AgentFunc, c Criteria, opts ...Option) {
+func RunT(t *testing.T, set Set, agent AgentFunc, c Criteria, opts ...EvalOption) {
 	t.Helper()
 	RunWith(stdT{t}, set, agent, c, opts...)
 }
 
 // RunWith is RunT over the minimal T interface.
-func RunWith(t T, set Set, agent AgentFunc, c Criteria, opts ...Option) {
+func RunWith(t T, set Set, agent AgentFunc, c Criteria, opts ...EvalOption) {
 	t.Helper()
 	if err := set.Validate(); err != nil {
 		t.Errorf("invalid eval set: %v", err)
@@ -40,7 +40,7 @@ func RunWith(t T, set Set, agent AgentFunc, c Criteria, opts ...Option) {
 	for _, cs := range set.Cases {
 		t.Run(cs.ID, func(t T) {
 			t.Helper()
-			res := evalCase(context.Background(), cs, agent, c, cfg.repeats)
+			res := evalCase(context.Background(), cs, agent, c, cfg.repeats, cfg.minPassRate)
 			if res.Pass {
 				t.Logf("%s", res.Detail())
 				return

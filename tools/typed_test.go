@@ -58,7 +58,7 @@ func TestRegistryRoundTrip(t *testing.T) {
 	defer cancel()
 
 	cli := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "c", Version: "0"}, nil)
-	sess, err := cli.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: s.URL()}, nil)
+	sess, err := cli.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: s.URL(), HTTPClient: authClient(s.Token())}, nil)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

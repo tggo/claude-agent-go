@@ -53,6 +53,9 @@ type Case struct {
 
 	ExpectedResponse string `json:"expected_response,omitempty"`
 	Rubric           string `json:"rubric,omitempty"`
+	// Rubrics are yes/no criteria, each judged separately (see RubricJudge
+	// and Criteria.Rubrics); the score is the fraction satisfied.
+	Rubrics []string `json:"rubrics,omitempty"`
 
 	// ResponseContains lists substrings (case-insensitive) the response must
 	// contain; ResponseRegex is a regexp it must match.

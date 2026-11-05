@@ -77,7 +77,7 @@ func traceRun(args []string, stdout, stderr io.Writer) error {
 	if err := trace.Render(&buf, models, graph); err != nil {
 		return err
 	}
-	if err := os.WriteFile(*out, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(*out, buf.Bytes(), 0o600); err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, *out)

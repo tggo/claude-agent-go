@@ -69,10 +69,12 @@ func TestAskUserPrecedenceOverCanUseTool(t *testing.T) {
 	}
 }
 
-func TestAskUserOnlyAllowsOtherTools(t *testing.T) {
-	c := &Client{cfg: Config{OnAskUser: func(context.Context, []Question) (map[string]string, error) { return nil, nil }}}
+func TestAskUserAloneDeniesOtherTools(t *testing.T) {
+	cfg := Config{OnAskUser: func(context.Context, []Question) (map[string]string, error) { return nil, nil }}
+	applyClientDefaults(&cfg)
+	c := &Client{cfg: cfg}
 	data, err := c.dispatchControl(askReq("Bash", `{"command":"ls"}`))
-	if err != nil || data["behavior"] != "allow" {
+	if err != nil || data["behavior"] != "deny" || !strings.Contains(data["message"].(string), "PermissionMode") {
 		t.Errorf("data=%v err=%v", data, err)
 	}
 }
@@ -180,7 +182,7 @@ func TestOnAskUserOtherToolsRule(t *testing.T) {
 		cfg  Config
 		want string
 	}{
-		{"unset mode allows", Config{}, "allow"},
+		{"unset mode denies", Config{}, "deny"},
 		{"skip permissions allows", Config{SkipPermissions: true, PermissionMode: "plan"}, "allow"},
 		{"bypass allows", Config{PermissionMode: "bypassPermissions"}, "allow"},
 		{"default denies", Config{PermissionMode: "default"}, "deny"},

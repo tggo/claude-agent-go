@@ -19,10 +19,10 @@
 // implementation. OnAskUser wins over CanUseTool for AskUserQuestion only.
 // An error from the callback denies the tool call with the error message.
 //
-// Other tools: OnAskUser alone does not restrict them. Unless CanUseTool is set,
-// they are allowed exactly as without OnAskUser (when no PermissionMode is
-// set), or denied (when an explicit restrictive PermissionMode such as
-// "default" or "plan" is set). Set CanUseTool to decide them yourself.
+// Other tools: OnAskUser alone does NOT approve them. Unless CanUseTool is set,
+// every other tool call that reaches the SDK is denied, unless
+// PermissionMode is "bypassPermissions" or SkipPermissions is set. Set
+// CanUseTool to decide them yourself, or pick a permissive mode explicitly.
 package client
 
 import (
@@ -92,17 +92,15 @@ type Config struct {
 	// precedence over CanUseTool for AskUserQuestion only; every other tool goes
 	// to CanUseTool. Setting it enables permission routing like CanUseTool.
 	//
-	// WITHOUT CanUseTool the SDK itself decides every other tool call that
-	// reaches it: with no PermissionMode set (or "bypassPermissions", or
-	// SkipPermissions true) other tools are ALLOWED, exactly as without
-	// OnAskUser; with an explicit PermissionMode such as "default" or "plan"
-	// they are DENIED with a message saying CanUseTool is required (the CLI
-	// still auto-approves what that mode permits without asking). Set CanUseTool
-	// to take control of other tools.
+	// WITHOUT CanUseTool the SDK denies every other tool call that reaches it
+	// (the deny message says to set CanUseTool or a permissive mode), unless
+	// PermissionMode is "bypassPermissions" or SkipPermissions is true, in which
+	// case they are allowed. The CLI still auto-approves what the mode itself
+	// permits without asking. Set CanUseTool to take control of other tools.
 	OnAskUser AskUserFunc
 
 	// denyOtherTools is set by applyClientDefaults: OnAskUser without CanUseTool
-	// under an explicit restrictive PermissionMode.
+	// and without a permissive mode (bypassPermissions / SkipPermissions).
 	denyOtherTools bool
 
 	// Hooks registers hook callbacks keyed by event name ("PreToolUse",
@@ -279,7 +277,7 @@ func applyClientDefaults(cfg *Config) {
 	// permission prompts, so never bypass them.
 	if cfg.routesPermissions() {
 		cfg.denyOtherTools = cfg.CanUseTool == nil && !cfg.SkipPermissions &&
-			cfg.PermissionMode != "" && cfg.PermissionMode != "bypassPermissions"
+			cfg.PermissionMode != "bypassPermissions"
 		cfg.SkipPermissions = false
 		if cfg.PermissionMode == "" {
 			cfg.PermissionMode = "default"

@@ -140,9 +140,37 @@ func IsTruncatedStream(err error) (*TruncatedStreamError, bool) {
 	return nil, false
 }
 
+// LineTooLongError is returned by RunStream when one stream-json line exceeds
+// the buffer limit. The CLI is killed immediately (it would otherwise keep
+// running and spending with nobody reading), and the partial Result (session
+// id, text so far) comes back with it. It is deterministic, so DefaultRetryable
+// does not retry it: raise WithMaxBufferSize.
+type LineTooLongError struct {
+	// Limit is the MaxBufferSize in force, in bytes.
+	Limit int
+	// SessionID is the session id seen before the oversized line, or "".
+	SessionID string
+	// PartialText is the assistant text received before it.
+	PartialText string
+	Err         error
+}
+
+func (e *LineTooLongError) Error() string {
+	return fmt.Sprintf("claude cli: a stream line exceeded %d bytes and the run was killed (raise WithMaxBufferSize): %v", e.Limit, e.Err)
+}
+func (e *LineTooLongError) Unwrap() error { return e.Err }
+
 // SessionIDOf returns the session id carried by a run error (ProcessError,
-// TimeoutError, TruncatedStreamError), or "".
+// TimeoutError, TruncatedStreamError, LineTooLongError, PluginAbortError), or "".
 func SessionIDOf(err error) string {
+	var lt *LineTooLongError
+	if errors.As(err, &lt) {
+		return lt.SessionID
+	}
+	var pa *PluginAbortError
+	if errors.As(err, &pa) {
+		return pa.SessionID
+	}
 	if e, ok := IsTruncatedStream(err); ok {
 		return e.SessionID
 	}

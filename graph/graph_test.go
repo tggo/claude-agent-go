@@ -28,7 +28,7 @@ func logNode(tag string) NodeFunc[st] {
 	}
 }
 
-func linear(t *testing.T, opts ...Option) *Runnable[st] {
+func linear(t *testing.T, opts ...CompileOption) *Runnable[st] {
 	t.Helper()
 	r, err := New[st]("lin").
 		AddNode("a", logNode("a")).
@@ -341,7 +341,7 @@ func TestFuncAdapter(t *testing.T) {
 
 // ---- parallel ----
 
-func parallelGraph(t *testing.T, opts ...Option) *Runnable[st] {
+func parallelGraph(t *testing.T, opts ...CompileOption) *Runnable[st] {
 	t.Helper()
 	branch := func(tag string, cost float64) NodeFunc[st] {
 		return func(ctx context.Context, s *st) error {
@@ -537,13 +537,57 @@ func TestInterruptResumeJSONRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	var cp Checkpoint[st]
 	require.NoError(t, json.Unmarshal(raw, &cp))
-	assert.Equal(t, in.Checkpoint, cp)
+	raw2, err := json.Marshal(cp)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(raw), string(raw2))
+	assert.Equal(t, in.Checkpoint.Node, cp.Node)
+	assert.Equal(t, in.Checkpoint.Path, cp.Path)
+	require.Len(t, cp.Prior.Steps, 2)
+	assert.True(t, cp.Prior.Steps[1].Paused)
 
 	out, rep2, err := r.Resume(context.Background(), cp, "postgres")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"plan", "asking", "answered", "code:postgres"}, out.Log)
 	assert.Equal(t, []string{"plan", "ask", "ask", "code"}, rep2.Path)
-	assert.Len(t, rep2.Steps, 2)
+	// Cumulative: the 2 steps before the pause plus the 2 after.
+	assert.Len(t, rep2.Steps, 4)
+	assert.GreaterOrEqual(t, rep2.Duration, rep.Duration)
+	assert.True(t, errors.Is(in, ErrInterrupt))
+	got, ok := AsInterrupt[st](fmt.Errorf("wrapped: %w", in))
+	require.True(t, ok)
+	assert.Equal(t, "ask", got.Node)
+	_, ok = AsInterrupt[st](errors.New("other"))
+	assert.False(t, ok)
+	assert.True(t, errors.Is(Interrupt("q"), ErrInterrupt))
+}
+
+func TestResumeReportAccumulatesCost(t *testing.T) {
+	r, err := New[st]("cost").
+		AddNode("a", func(ctx context.Context, s *st) error { AddCost(ctx, 1.5); return nil }).
+		AddNode("ask", func(ctx context.Context, s *st) error {
+			if _, ok := Answer(ctx); ok {
+				AddCost(ctx, 0.25)
+				return nil
+			}
+			AddCost(ctx, 0.5)
+			return Interrupt("q?")
+		}).
+		AddEdge(Start, "a").AddEdge("a", "ask").AddEdge("ask", End).Compile()
+	require.NoError(t, err)
+	_, rep, err := r.Run(context.Background(), st{})
+	in, ok := AsInterrupt[st](err)
+	require.True(t, ok)
+	assert.InDelta(t, 2.0, rep.TotalCostUSD, 1e-9)
+	_, rep2, err := r.Resume(context.Background(), in.Checkpoint, "x")
+	require.NoError(t, err)
+	assert.InDelta(t, 2.25, rep2.TotalCostUSD, 1e-9)
+	assert.Equal(t, []string{"a", "ask", "ask"}, rep2.Path)
+}
+
+func TestCompileErrorIsErrInvalidGraph(t *testing.T) {
+	_, err := New[st]("bad").AddEdge(Start, "missing").Compile()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidGraph)
 }
 
 func TestAnswerOnlyForResumedNodeOnce(t *testing.T) {
@@ -804,7 +848,9 @@ func TestInterruptIsPauseNotFailure(t *testing.T) {
 
 	_, rep2, err := r.Resume(context.Background(), in.Checkpoint, "yes")
 	require.NoError(t, err)
-	assert.False(t, rep2.Steps[0].Paused)
+	require.Len(t, rep2.Steps, 2)
+	assert.True(t, rep2.Steps[0].Paused) // carried over from before the pause
+	assert.False(t, rep2.Steps[1].Paused)
 	assert.False(t, o.ends[1].Paused)
 }
 

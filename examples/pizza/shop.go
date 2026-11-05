@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -52,6 +55,17 @@ type Draft struct {
 	TotalKop    int    `json:"total_kop"`
 	ETAMinutes  int    `json:"eta_minutes"`
 }
+
+// Hash is the sha256 (hex) of the draft's canonical JSON (struct field order is
+// fixed), used to bind a human confirmation to exactly this draft.
+func (d Draft) Hash() string {
+	b, _ := json.Marshal(d)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// ErrDraftChanged is returned when the stored draft is not the one confirmed.
+var ErrDraftChanged = errors.New("draft changed after confirmation")
 
 // Order is a placed and paid order.
 type Order struct {
@@ -188,13 +202,19 @@ func (s *Shop) Draft(cartID string) (Draft, bool) {
 
 // PlaceAndPay places the cart's draft and charges the (test) payment token.
 // The model never sees or chooses the payment method: placement is plain Go,
-// run only after a human confirmed the draft.
-func (s *Shop) PlaceAndPay(cartID, paymentToken string) (Order, error) {
+// run only after a human confirmed the draft. wantHash is the Draft.Hash the
+// human confirmed; if the stored draft differs (swapped after confirmation)
+// nothing is placed.
+func (s *Shop) PlaceAndPay(cartID, wantHash, paymentToken string) (Order, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	d, ok := s.drafts[cartID]
 	if !ok {
 		return Order{}, fmt.Errorf("no draft for cart %q", cartID)
+	}
+	if d.Hash() != wantHash {
+		s.log("place-refused")
+		return Order{}, ErrDraftChanged
 	}
 	s.log("place")
 	o := Order{ID: fmt.Sprintf("ORD-%04d", len(s.orders)+1), Draft: d}

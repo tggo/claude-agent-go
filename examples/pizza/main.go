@@ -10,7 +10,8 @@
 // confirmed the exact draft the mock stored.
 //
 // The model is reached through whatever ANTHROPIC_* variables are set; the
-// first .env up from the working directory is loaded (it is gitignored):
+// .env in the working directory (else the repo root's; override with -env) is
+// loaded, allowlisted keys only (it is gitignored):
 //
 //	ANTHROPIC_BASE_URL=https://cerber.ihatebot.com
 //	ANTHROPIC_API_KEY=...
@@ -47,6 +48,7 @@ func main() {
 	replay := flag.String("replay", "", "play back a runs dir instead of ordering")
 	speed := flag.Float64("speed", 1, "replay speed multiplier (0 = no pauses)")
 	outOfStock := flag.String("out-of-stock", "", "comma-separated menu ids to mark unavailable")
+	envFile := flag.String("env", "", "env file to load (default: .env in cwd, else the repo root)")
 	flag.Parse()
 
 	if *replay != "" {
@@ -56,7 +58,7 @@ func main() {
 		return
 	}
 
-	if path, err := LoadDotEnv(); err != nil {
+	if path, err := LoadDotEnv(*envFile); err != nil {
 		log.Fatal(err)
 	} else if path != "" {
 		fmt.Printf("env: %s\n", path)
@@ -142,7 +144,7 @@ func main() {
 }
 
 func newCartID() string {
-	var b [4]byte
+	var b [16]byte
 	_, _ = rand.Read(b[:])
 	return "cart-" + hex.EncodeToString(b[:])
 }

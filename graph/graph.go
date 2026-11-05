@@ -157,6 +157,10 @@ func (g *Graph[S]) WithClone(fn func(S) S) *Graph[S] {
 // routed to directly. The parallel node itself needs an outgoing route like
 // any other node.
 //
+// The default state copy is a shallow value copy: if S holds maps, slices or
+// pointers that branches mutate, WithClone is REQUIRED, otherwise branches
+// share and race on that data.
+//
 // If any branch fails, the others are cancelled and the first error is
 // returned; merge is not called. A branch (or merge) that calls Interrupt is
 // rejected with ErrInterruptInParallel: pausing a fan-out would mean
@@ -170,11 +174,12 @@ func (g *Graph[S]) AddParallel(name string, branches []string, merge MergeFunc[S
 	return g
 }
 
-var errNoCompile = errors.New("graph: invalid graph")
+// ErrInvalidGraph is wrapped by every Compile error (errors.Is).
+var ErrInvalidGraph = errors.New("graph: invalid graph")
 
 // Compile validates the wiring and returns a Runnable. All problems are
 // reported together (errors.Join); each names the offending node.
-func (g *Graph[S]) Compile(opts ...Option) (*Runnable[S], error) {
+func (g *Graph[S]) Compile(opts ...CompileOption) (*Runnable[S], error) {
 	cfg := options{maxSteps: 100}
 	for _, o := range opts {
 		o(&cfg)
@@ -315,7 +320,7 @@ func (g *Graph[S]) Compile(opts ...Option) (*Runnable[S], error) {
 	}
 
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("%w %q: %w", errNoCompile, g.name, errors.Join(errs...))
+		return nil, fmt.Errorf("%w %q: %w", ErrInvalidGraph, g.name, errors.Join(errs...))
 	}
 
 	r := &Runnable[S]{
@@ -340,8 +345,8 @@ func (g *Graph[S]) Compile(opts ...Option) (*Runnable[S], error) {
 	return r, nil
 }
 
-// Option configures Compile.
-type Option func(*options)
+// CompileOption configures Compile.
+type CompileOption func(*options)
 
 type options struct {
 	maxSteps    int
@@ -353,7 +358,7 @@ type options struct {
 // WithMaxSteps bounds the number of node executions in one run (default 100).
 // Exceeding it fails the run with ErrMaxSteps. Resumed runs continue counting
 // from the checkpoint.
-func WithMaxSteps(n int) Option {
+func WithMaxSteps(n int) CompileOption {
 	return func(o *options) {
 		if n <= 0 {
 			o.badMaxSteps = true
@@ -365,8 +370,8 @@ func WithMaxSteps(n int) Option {
 
 // WithObserver attaches an Observer. For parallel branches its methods are
 // called from several goroutines, so it must be goroutine-safe.
-func WithObserver(obs Observer) Option { return func(o *options) { o.obs = obs } }
+func WithObserver(obs Observer) CompileOption { return func(o *options) { o.obs = obs } }
 
 // WithNodeTimeout bounds every single node execution (each parallel branch
 // separately). Zero, the default, means no per-node limit.
-func WithNodeTimeout(d time.Duration) Option { return func(o *options) { o.nodeTimeout = d } }
+func WithNodeTimeout(d time.Duration) CompileOption { return func(o *options) { o.nodeTimeout = d } }

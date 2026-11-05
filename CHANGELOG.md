@@ -7,44 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- Cancel/timeout no longer hangs on a CLI that traps SIGTERM: the process group gets SIGTERM, then SIGKILL after 2s (`runner`, and `client.Close`). `RunStream` now returns the partial `Result` (text so far, session id) together with the cancel/`TimeoutError`; `TimeoutError` also matches `errors.Is(err, context.DeadlineExceeded)`, and `Run`/`RunJSON` report cancellation as `context.Canceled` (ADK #2425).
-- `runner.DefaultRetryable` retries a failed process whose stdout ends in a transient error result (429/529/overloaded). The CLI exits 1 after such a result and leaves stderr empty, so it was not retried (ADK #1214).
-- `client`: a panicking `OnAskUser`/`CanUseTool` callback now gets a deny reply (hook callbacks an error reply) instead of crashing the host (ADK #3645).
-- `claudecli.ExtractTextFromStream` and `eval` ignore sub-agent assistant text when building the answer (ADK #3984).
-
-### Added
-- `runner.Result.Subtype` and `runner.IsMaxTurns`: detect a run cut off by `--max-turns` (`error_max_turns`), also when the CLI reports `is_error=false` (ADK #5054).
-- `claudecli.StreamEvent.ParentToolUseID` / `IsSubagent`, and `eval.ToolCall.ParentToolUseID` (ADK #3984).
-- `eval.JudgeSamples(n)`: grade each response n times and take the median score, damping a flaky LLM judge (ADK #3593).
-
 ### Added
 - `graph`: typed execution graphs over runs and Go steps.
-  - Static and conditional edges (loops), and parallel fan-out with merge.
-  - `Compile`-time validation and a `MaxSteps` guard.
-  - `Interrupt` → JSON checkpoint → `Resume(answer)` for human-in-the-loop pauses.
-  - `Agent` nodes over `runner`, with optional retry/resume.
+  - Static and conditional edges (loops), and parallel fan-out with merge (`WithClone` is required for reference-typed state).
+  - `Compile`-time validation (`ErrInvalidGraph`) and a `MaxSteps` guard.
+  - `Interrupt` → JSON checkpoint → `Resume(answer)`, with `AsInterrupt[S]` / `ErrInterrupt`. `Resume` returns a cumulative `Report` (via `Checkpoint.Prior`).
+  - `Agent` nodes over `runner`, plus `RunAgent` for hand-written nodes (retry, progress and cost accounting).
   - A per-node cost/duration `Report`, `Observer` hooks and `Mermaid()` export.
 - `eval`: agent evaluation.
   - Tool-trajectory matching (`Exact`/`InOrder`/`AnyOrder`, `IgnoreArgs`, `ArgsSubset`, `MCPNames`).
-  - ROUGE-1/ROUGE-L, `Contains`/regex checks, and a `ClaudeJudge` LLM judge.
-  - Cost/tool-call/duration budgets and repeats with parallelism.
-  - JSON eval sets, `CaseFromRecording` golden cases and `RunT` for `go test`.
+  - ROUGE-1/ROUGE-L, `Contains`/regex checks, a `ClaudeJudge` LLM judge, and `JudgeSamples(n)` for a median over n runs (ADK #3593).
+  - Rubrics: `Case.Rubrics` / `Criteria.Rubrics`, each graded yes/no separately, with a per-rubric breakdown.
+  - Repeats with pass-rate semantics: `PassRate(f)` / `Criteria.MinPassRate`, `PassAtK`, and `4/5` in the report.
+  - Multi-turn user simulation: `UserSim`, `ScriptedUser`, `LLMUser`, `Session`, `ClientSession`, `Conversation`.
+  - Cost/tool-call/duration budgets, JSON eval sets, `CaseFromRecording` golden cases and `RunT` for `go test`.
   - Metrics: tool calls, inferences, tokens, cost, model vs tool time. `Combine`/`FromRecordingDir` evaluate a multi-node run.
-- `recording`: a JSONL format for stream runs (header + raw lines stamped with `_cag_t`).
-  - `Dir` writes one file per run.
-  - `ReplayTransport` replays a recording through a runner, offline and deterministic.
-- `runner.WithRecorder`, `Input.Label` (also in `RunRecord.Label`).
-- `runner.RunStreamWithRetry` and `RetryPolicy.Resume` / `ResumePrompt`: after a failure that carries a session ID, the retry continues the session via `--resume` instead of rerunning.
-- `runner.TruncatedStreamError`, `IsTruncatedStream` and `SessionIDOf`. `ProcessError.SessionID` and `TimeoutError.SessionID`.
-- `client.Config.OnAskUser` / `Question` / `AnswerFromStdin`: answer the CLI's `AskUserQuestion` tool from Go. Verified against CLI 2.1.318.
+- `recording`: a JSONL format for stream runs (a header, then raw lines stamped with `_cag_t`). `Dir` writes one 0600 file per run, `ReplayTransport` and `ReplayLines` replay it.
+- `runner`:
+  - `WithRecorder` and `Input.Label`.
+  - `RunStreamWithRetry` with `RetryPolicy.Resume` / `ResumePrompt` (continue a session via `--resume`) and `UnknownAttemptCostUSD`.
+  - `Plugin` with optional `BeforeRun`, `EventPlugin` and `AfterRun` hooks, `WithPlugins`, `PluginAbortError`, and a built-in `SpendCap`.
+  - `Result.Subtype` and `IsMaxTurns` (ADK #5054).
+  - `TruncatedStreamError`, `LineTooLongError` and `SessionIDOf`.
+- `client.Config.OnAskUser`: answer the CLI's `AskUserQuestion` tool from Go. Verified against CLI 2.1.318.
+- `permissions`: ordered `Allow`/`Deny`/`Ask` rules with Claude Code-style patterns (`Bash(git status*)`), compound-safe Bash matching, `Remember` and an audit callback. `Policy.CanUseTool()` plugs into `client`.
+- `otel`, a separate module: OpenTelemetry adapters for `runner.Observer` and `graph.Observer`. The core module gains no dependency.
+- `clitest`: fake `claude` binaries for your own tests (`FakeCLI`, `FromRecording`, stream builders, argv/stdin capture).
+- `claudecli`:
+  - `CheckInvariants` checks tool_use/tool_result pairing, a single final result and a consistent session id, and is fuzzed.
+  - `StreamEvent.ParentToolUseID` / `IsSubagent` (ADK #3984).
+- `tools`: `(*Registry).ServeMCP(dir)` serves and writes the MCP config in one call.
 - `cag trace <recording|dir>`: a self-contained HTML view of recorded runs.
-- `examples/pipeline`: a plan → code → review/fix → docs graph of real agents, with an eval integration test.
-- `examples/pizza`: an order-taking agent over mocked pizzeria/delivery/payment Go tools. A human confirms the priced draft before a plain Go step places it. It shows a live event view, can `-replay` recorded runs, loads `ANTHROPIC_*` from a gitignored `.env`, and has a 4-scenario eval integration test.
+- Examples:
+  - `examples/pipeline`: plan → code → review/fix → docs.
+  - `examples/pizza`: an order-taking agent over mocked services, with a human-confirmed draft bound by hash, a live view, `-replay`, and a 4-scenario eval.
+  - Both have golden replay tests built from real recorded runs.
 
 ### Changed
-- Minimum Go version is now 1.27 (was 1.25); CI and release build on 1.27.
-- **Behavior change:** `RunStream` used to return success with an empty result when the stream ended without a `result` event. It now returns the partial `Result` *and* a `*TruncatedStreamError`. `DefaultRetryable` treats it as retryable.
+- Minimum Go version is now 1.27 (was 1.25). CI and release build on 1.27.
+- **Behavior change:** `RunStream` returns the partial `Result` *and* a `*TruncatedStreamError` when the stream ends without a `result` event. It used to return an empty success.
+- **Behavior change (security):** the in-process MCP server from `tools` now requires a random 256-bit bearer token (401 otherwise). `Config()` carries it as a header, so callers using `Config()` are unaffected.
+- **Behavior change (security):** with `OnAskUser` set and no `CanUseTool`, other tools are now denied unless `PermissionMode` is `bypassPermissions` or `SkipPermissions` is set. They used to be allowed when the mode was unset.
+- `RetryPolicy.MaxSpendUSD` takes effect with `Resume`: a truncated attempt, whose cost the CLI never reports, is charged an estimate for the guard.
+- `cag trace` writes HTML with mode 0600.
+
+### Fixed
+- Cancel/timeout no longer hangs on a CLI that traps SIGTERM: the process group gets SIGTERM, then SIGKILL after 2s. `RunStream` returns the partial result together with the error, and `TimeoutError` matches `context.DeadlineExceeded` (ADK #2425).
+- A stream line over `MaxBufferSize` kills the CLI at once and returns the partial result with `LineTooLongError`. Before, the SDK drained stdout while the agent kept spending.
+- `DefaultRetryable` retries a transient (429/529/overloaded) error result that the CLI reports only on stdout (ADK #1214).
+- `Result.Attempts` is the real attempt count when retries stop early.
+- `client`: a panicking `OnAskUser`/`CanUseTool`/hook callback is answered instead of crashing the host (ADK #3645).
+- Sub-agent text no longer leaks into the final answer in `ExtractTextFromStream` and `eval` (ADK #3984).
 
 ## [0.2.1] - 2026-07-16
 

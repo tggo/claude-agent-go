@@ -24,7 +24,7 @@ func TestIntegrationPizza(t *testing.T) {
 	if _, err := exec.LookPath("claude"); err != nil {
 		t.Skip("claude binary not on PATH")
 	}
-	LoadDotEnv()
+	LoadDotEnv("")
 	model := os.Getenv("PIZZA_MODEL")
 	if model == "" {
 		model = "haiku"

@@ -83,6 +83,9 @@ type Config struct {
 	// Prometheus, or logs in a few lines (see docs). See WithObserver.
 	Observer Observer
 
+	// Plugins hook into every run (see Plugin). Applied in order.
+	Plugins []Plugin
+
 	// Recorder, if set, is called at the start of every RunStream to open a
 	// recording; every stream-json line is written to it. A Recorder error is
 	// logged and the run proceeds unrecorded. See recording.Dir and
@@ -163,6 +166,11 @@ func WithLogger(l *slog.Logger) Option { return func(c *Config) { c.Logger = l }
 
 // WithObserver sets the run observer for tracing/metrics.
 func WithObserver(o Observer) Option { return func(c *Config) { c.Observer = o } }
+
+// WithPlugins appends plugins that hook into every run. See Plugin.
+func WithPlugins(p ...Plugin) Option {
+	return func(c *Config) { c.Plugins = append(c.Plugins, p...) }
+}
 
 // WithRecorder records every RunStream to the writer the factory returns —
 // typically recording.Dir("runs/"). The recordings feed replay

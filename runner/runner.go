@@ -186,6 +186,9 @@ func (r *Runner) Run(ctx context.Context, in Input) (res *Result, err error) {
 	}
 	start := time.Now()
 	defer func() { r.observe("plain", in, start, res, err) }()
+	if in, err = r.beginRun(ctx, in); err != nil {
+		return nil, err
+	}
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
@@ -225,6 +228,9 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (res *Result, err error)
 	}
 	start := time.Now()
 	defer func() { r.observe("json", in, start, res, err) }()
+	if in, err = r.beginRun(ctx, in); err != nil {
+		return nil, err
+	}
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
@@ -274,6 +280,9 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	}
 	start := time.Now()
 	defer func() { r.observe("stream", in, start, res, err) }()
+	if in, err = r.beginRun(ctx, in); err != nil {
+		return nil, err
+	}
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
@@ -308,6 +317,15 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	var resultEvent *claudecli.StreamEvent
 	sessionID := ""
 	eventNum := 0
+	// abortErr is set when we stop the run ourselves (a line over the buffer
+	// limit, a plugin vetoing an event). The process group is killed at once so
+	// the agent stops spending; the partial result is returned with the error.
+	var abortErr error
+	abort := func(e error) {
+		abortErr = e
+		go procgroup.KillGraceful(cmd, killGrace, procDone)
+	}
+scan:
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		lineCopy := make([]byte, len(line))
@@ -331,6 +349,10 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		if ev.IsResult() {
 			resultEvent = ev
 		}
+		if perr := r.pluginEvent(ctx, *ev); perr != nil {
+			abort(perr)
+			break scan
+		}
 		if progress != nil {
 			progress(*ev, eventNum)
 		}
@@ -338,13 +360,32 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	scanErr := scanner.Err()
 	if scanErr != nil {
 		r.cfg.Logger.Warn("claude cli: scanner error", "err", scanErr)
-		// The scanner stopped reading; drain the pipe so the child is not
-		// left blocked on a write until ProcessTimeout.
-		_, _ = io.Copy(io.Discard, stdoutPipe)
+		if errors.Is(scanErr, bufio.ErrTooLong) && abortErr == nil {
+			// Deterministic, not a truncation. Stop the agent now instead of
+			// draining output we cannot parse while it keeps running.
+			abort(&LineTooLongError{Limit: r.cfg.MaxBufferSize, SessionID: sessionID, Err: scanErr})
+		} else {
+			// The scanner stopped reading; drain the pipe so the child is not
+			// left blocked on a write until ProcessTimeout.
+			_, _ = io.Copy(io.Discard, stdoutPipe)
+		}
 	}
 
 	waitErr := cmd.Wait()
 	close(procDone)
+	if abortErr != nil {
+		text, _ := claudecli.ExtractTextFromStream(allLines)
+		partial := &Result{ResultText: text, SessionID: sessionID, Duration: time.Since(start)}
+		var lt *LineTooLongError
+		if errors.As(abortErr, &lt) {
+			lt.PartialText = text
+		}
+		var pa *PluginAbortError
+		if errors.As(abortErr, &pa) {
+			pa.SessionID = sessionID
+		}
+		return partial, abortErr
+	}
 	if scanErr != nil && cmdCtx.Err() == nil {
 		// Deterministic (e.g. bufio.ErrTooLong): not a truncation, not retryable.
 		return nil, fmt.Errorf("claude cli: read stream (raise WithMaxBufferSize if a line is too long): %w", scanErr)

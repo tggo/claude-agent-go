@@ -3,6 +3,8 @@ package eval
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +18,7 @@ const (
 	MetricResponseContains = "response_contains"
 	MetricResponseRegex    = "response_regex"
 	MetricJudge            = "judge"
+	MetricRubrics          = "rubrics"
 	MetricMaxCost          = "max_cost_usd"
 	MetricMaxToolCalls     = "max_tool_calls"
 	MetricMaxDuration      = "max_duration"
@@ -59,6 +62,18 @@ type Criteria struct {
 	MaxCostUSD   float64
 	MaxToolCalls int
 	MaxDuration  time.Duration
+
+	// MinPassRate, when > 0, switches the case verdict to pass-rate
+	// semantics: a run passes when every metric passes for it, and the case
+	// passes when passes/runs >= MinPassRate (use with WithRepeats). Scores
+	// still report per-metric means. Overridden by the PassRate option.
+	MinPassRate float64
+
+	// Rubrics are extra yes/no criteria judged separately for every case (in
+	// addition to Case.Rubrics) by Judge; see RubricJudge. The score is the
+	// fraction satisfied and must reach RubricThreshold (default 1: all).
+	Rubrics         []string
+	RubricThreshold *float64
 }
 
 // Score is one metric's aggregated outcome for a case.
@@ -88,6 +103,37 @@ type CaseResult struct {
 	// JudgeCostUSD is the total judge cost over all runs (not part of Metrics
 	// or the MaxCostUSD budget).
 	JudgeCostUSD float64
+
+	// Passes counts runs on which every metric passed; PassRate is
+	// Passes/len(Runs); RunPass flags each run. MinPassRate is the pass-rate
+	// requirement in force (0 = mean-threshold semantics). Unset on error.
+	Passes      int
+	PassRate    float64
+	RunPass     []bool
+	MinPassRate float64
+
+	// Rubrics is the per-rubric breakdown over runs.
+	Rubrics []RubricResult
+}
+
+// PassAtK is the unbiased pass@k estimate (Chen et al., Codex): the chance
+// that at least one of k samples drawn from the case's runs passes. k is
+// clamped to the number of runs. Errored cases score 0.
+func (cr CaseResult) PassAtK(k int) float64 {
+	n := len(cr.RunPass)
+	if n == 0 || cr.Err != nil || k < 1 {
+		return 0
+	}
+	k = min(k, n)
+	c := cr.Passes
+	if n-c < k {
+		return 1
+	}
+	prod := 1.0
+	for i := n - c + 1; i <= n; i++ {
+		prod *= 1 - float64(k)/float64(i)
+	}
+	return 1 - prod
 }
 
 // Report is the outcome of Evaluate.
@@ -122,26 +168,45 @@ func (r *Report) Errored() int {
 // Failed counts cases that ran but missed a threshold.
 func (r *Report) Failed() int { return len(r.Cases) - r.Passed() - r.Errored() }
 
+// PassAtK is the mean CaseResult.PassAtK over all cases.
+func (r *Report) PassAtK(k int) float64 {
+	if len(r.Cases) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, c := range r.Cases {
+		sum += c.PassAtK(k)
+	}
+	return sum / float64(len(r.Cases))
+}
+
 // OK reports whether every case passed.
 func (r *Report) OK() bool { return r.Passed() == len(r.Cases) }
 
-// Option configures Evaluate and RunT.
-type Option func(*evalConfig)
+// EvalOption configures Evaluate and RunT.
+type EvalOption func(*evalConfig)
 
 type evalConfig struct {
-	parallel int
-	repeats  int
+	parallel    int
+	repeats     int
+	minPassRate float64
 }
 
 // WithParallelism runs up to n cases concurrently (default 1). The AgentFunc
 // must then be safe for concurrent use.
-func WithParallelism(n int) Option { return func(c *evalConfig) { c.parallel = n } }
+func WithParallelism(n int) EvalOption { return func(c *evalConfig) { c.parallel = n } }
 
 // WithRepeats runs each case n times (ADK's num_runs, default 1); each metric
 // is the mean over runs and passes when the mean meets its threshold.
-func WithRepeats(n int) Option { return func(c *evalConfig) { c.repeats = n } }
+func WithRepeats(n int) EvalOption { return func(c *evalConfig) { c.repeats = n } }
 
-func newConfig(opts []Option) evalConfig {
+// PassRate sets the minimum fraction of runs that must pass for a case to
+// pass (e.g. PassRate(0.8) with WithRepeats(5) tolerates one flaky run). It
+// overrides Criteria.MinPassRate. A run passes when every metric passes for
+// that run. 0 keeps the default mean-threshold semantics.
+func PassRate(f float64) EvalOption { return func(c *evalConfig) { c.minPassRate = f } }
+
+func newConfig(opts []EvalOption) evalConfig {
 	cfg := evalConfig{parallel: 1, repeats: 1}
 	for _, o := range opts {
 		o(&cfg)
@@ -154,7 +219,7 @@ func newConfig(opts []Option) evalConfig {
 // Evaluate runs every case of set through agent and scores it against c. It
 // returns an error only for an invalid set or a cancelled context (the report
 // then holds the cases finished so far); per-case failures are in the report.
-func Evaluate(ctx context.Context, set Set, agent AgentFunc, c Criteria, opts ...Option) (*Report, error) {
+func Evaluate(ctx context.Context, set Set, agent AgentFunc, c Criteria, opts ...EvalOption) (*Report, error) {
 	if err := set.Validate(); err != nil {
 		return nil, err
 	}
@@ -175,7 +240,7 @@ loop:
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			rep.Cases[i] = evalCase(ctx, set.Cases[i], agent, c, cfg.repeats)
+			rep.Cases[i] = evalCase(ctx, set.Cases[i], agent, c, cfg.repeats, cfg.minPassRate)
 			done[i] = true
 		}()
 	}
@@ -194,9 +259,13 @@ loop:
 	return rep, nil
 }
 
-func evalCase(ctx context.Context, cs Case, agent AgentFunc, crit Criteria, repeats int) CaseResult {
+func evalCase(ctx context.Context, cs Case, agent AgentFunc, crit Criteria, repeats int, minRate float64) CaseResult {
 	res := CaseResult{Case: cs}
+	if minRate <= 0 {
+		minRate = crit.MinPassRate
+	}
 	var perRun [][]Score
+	var rubricRuns [][]RubricResult
 	for n := 0; n < repeats; n++ {
 		run, err := agent(ctx, cs)
 		if err != nil {
@@ -205,19 +274,37 @@ func evalCase(ctx context.Context, cs Case, agent AgentFunc, crit Criteria, repe
 			break
 		}
 		res.Runs = append(res.Runs, run)
-		scores, jc, err := scoreRun(ctx, cs, run, crit)
+		scores, rubrics, jc, err := scoreRunDetail(ctx, cs, run, crit)
 		res.JudgeCostUSD += jc
 		if err != nil {
 			res.Err = fmt.Errorf("run %d/%d: %w", n+1, repeats, err)
 			break
 		}
 		perRun = append(perRun, scores)
+		rubricRuns = append(rubricRuns, rubrics)
 	}
 	res.Metrics = meanMetrics(res.Runs)
 	if res.Err != nil {
 		return res
 	}
 	res.Scores = aggregate(perRun)
+	res.Rubrics = aggregateRubrics(rubricRuns)
+	for _, scores := range perRun {
+		ok := true
+		for _, s := range scores {
+			ok = ok && s.Pass
+		}
+		res.RunPass = append(res.RunPass, ok)
+		if ok {
+			res.Passes++
+		}
+	}
+	res.PassRate = float64(res.Passes) / float64(len(perRun))
+	res.MinPassRate = minRate
+	if minRate > 0 {
+		res.Pass = res.PassRate >= minRate-1e-9
+		return res
+	}
 	res.Pass = true
 	for _, s := range res.Scores {
 		res.Pass = res.Pass && s.Pass
@@ -227,7 +314,14 @@ func evalCase(ctx context.Context, cs Case, agent AgentFunc, crit Criteria, repe
 
 // scoreRun scores one run; every Score has Value in 0..1 and its Threshold.
 func scoreRun(ctx context.Context, cs Case, run Run, c Criteria) ([]Score, float64, error) {
+	s, _, jc, err := scoreRunDetail(ctx, cs, run, c)
+	return s, jc, err
+}
+
+// scoreRunDetail is scoreRun plus the per-rubric verdicts of this run.
+func scoreRunDetail(ctx context.Context, cs Case, run Run, c Criteria) ([]Score, []RubricResult, float64, error) {
 	var judgeCost float64
+	var rubricOut []RubricResult
 	var out []Score
 	add := func(name string, v, th float64, detail string) {
 		out = append(out, Score{Name: name, Value: v, Threshold: th, Pass: v >= th, Detail: detail})
@@ -263,14 +357,14 @@ func scoreRun(ctx context.Context, cs Case, run Run, c Criteria) ([]Score, float
 	if cs.ResponseRegex != "" {
 		ok, err := Matches(run.Response, cs.ResponseRegex)
 		if err != nil {
-			return nil, 0, err
+			return nil, nil, 0, err
 		}
 		add(MetricResponseRegex, b2f(ok), 1, "pattern "+cs.ResponseRegex)
 	}
 	if c.Judge != nil && (cs.Rubric != "" || cs.ExpectedResponse != "") {
 		jr, err := c.Judge.Score(ctx, JudgeInput{Prompt: cs.Prompt, Response: run.Response, Reference: cs.ExpectedResponse, Rubric: cs.Rubric})
 		if err != nil {
-			return nil, 0, fmt.Errorf("judge: %w", err)
+			return nil, nil, 0, fmt.Errorf("judge: %w", err)
 		}
 		judgeCost = jr.CostUSD
 		if c.JudgeThreshold != nil {
@@ -278,6 +372,32 @@ func scoreRun(ctx context.Context, cs Case, run Run, c Criteria) ([]Score, float
 		} else {
 			out = append(out, Score{Name: MetricJudge, Value: jr.Score, Pass: jr.Pass, ByVerdict: true, Detail: jr.Reason})
 		}
+	}
+	if rubrics := slices.Concat(c.Rubrics, cs.Rubrics); c.Judge != nil && len(rubrics) > 0 {
+		res, cost, err := judgeRubrics(ctx, c.Judge, cs, run, rubrics)
+		judgeCost += cost
+		if err != nil {
+			return nil, nil, judgeCost, fmt.Errorf("rubric judge: %w", err)
+		}
+		rubricOut = res
+		passed := 0
+		var failed []string
+		for _, r := range res {
+			if r.Passes > 0 {
+				passed++
+			} else {
+				failed = append(failed, fmt.Sprintf("%q", r.Rubric))
+			}
+		}
+		th := 1.0
+		if c.RubricThreshold != nil {
+			th = *c.RubricThreshold
+		}
+		d := fmt.Sprintf("%d/%d rubrics", passed, len(res))
+		if len(failed) > 0 {
+			d += ", failed " + strings.Join(failed, ", ")
+		}
+		add(MetricRubrics, float64(passed)/float64(len(res)), th, d)
 	}
 	m := run.Metrics
 	if c.MaxCostUSD > 0 {
@@ -289,7 +409,7 @@ func scoreRun(ctx context.Context, cs Case, run Run, c Criteria) ([]Score, float
 	if c.MaxDuration > 0 {
 		add(MetricMaxDuration, b2f(m.Duration <= c.MaxDuration), 1, fmt.Sprintf("%s of %s", m.Duration.Round(time.Millisecond), c.MaxDuration))
 	}
-	return out, judgeCost, nil
+	return out, rubricOut, judgeCost, nil
 }
 
 // aggregate averages each metric over runs. Detail comes from the last run.

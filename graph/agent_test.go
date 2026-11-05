@@ -192,3 +192,24 @@ func TestAgentInParallel(t *testing.T) {
 	assert.Equal(t, "pong+pong", out.Out)
 	assert.InDelta(t, 0.10, rep.TotalCostUSD, 1e-9)
 }
+
+func TestRunAgentAddsCostInCustomNode(t *testing.T) {
+	lb := &labels{}
+	r := runner.New(quiet, runner.WithBinary(fakeClaude(t, streamScript("ok", false, "0.07"))), runner.WithObserver(lb))
+	g, err := New[astate]("ra").
+		AddNode("custom", func(ctx context.Context, s *astate) error {
+			res, err := RunAgent(ctx, r, runner.Input{Prompt: "p"})
+			if err != nil {
+				return err
+			}
+			s.Out = res.ResultText
+			return Interrupt("confirm?")
+		}).
+		AddEdge(Start, "custom").AddEdge("custom", End).Compile()
+	require.NoError(t, err)
+	out, rep, err := g.Run(context.Background(), astate{})
+	assert.ErrorIs(t, err, ErrInterrupt)
+	assert.Equal(t, "ok", out.Out)
+	assert.Equal(t, []string{"custom"}, lb.ls)
+	assert.InDelta(t, 0.07, rep.TotalCostUSD, 1e-9)
+}

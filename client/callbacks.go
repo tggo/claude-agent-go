@@ -134,7 +134,7 @@ func (c *Client) dispatchControl(req incomingControlRequest) (map[string]any, er
 		if c.cfg.CanUseTool == nil {
 			if c.cfg.OnAskUser != nil {
 				if c.cfg.denyOtherTools {
-					return Deny(`tool "` + req.Request.ToolName + `" needs approval: set Config.CanUseTool to handle tools other than AskUserQuestion`).toResponseData(req.Request.Input), nil
+					return Deny(`tool "` + req.Request.ToolName + `" denied: OnAskUser only answers AskUserQuestion; set Config.CanUseTool to approve other tools, or set PermissionMode to bypassPermissions (or SkipPermissions) to allow them`).toResponseData(req.Request.Input), nil
 				}
 				return Allow().toResponseData(req.Request.Input), nil
 			}

@@ -31,6 +31,9 @@ func (r *Report) WriteText(w io.Writer) error {
 		fmt.Fprintln(ew)
 	}
 	fmt.Fprintf(ew, "Summary: %d passed, %d failed, %d errored\n", r.Passed(), r.Failed(), r.Errored())
+	if n := max(r.Repeats, 1); n > 1 {
+		fmt.Fprintf(ew, "pass@1=%.2f pass@%d=%.2f\n", r.PassAtK(1), n, r.PassAtK(n))
+	}
 	return ew.err
 }
 
@@ -96,6 +99,24 @@ func (cr CaseResult) writeText(w io.Writer) {
 		fmt.Fprintf(w, "  %-18s %.2f (%s) %s", s.Name, s.Value, th, ternary(s.Pass, "pass", "FAIL"))
 		if s.Detail != "" {
 			fmt.Fprintf(w, "  %s", oneLine(s.Detail, 200))
+		}
+		fmt.Fprintln(w)
+	}
+	if len(cr.RunPass) > 1 || cr.MinPassRate > 0 {
+		req := ""
+		if cr.MinPassRate > 0 {
+			req = fmt.Sprintf(", min %.2f", cr.MinPassRate)
+		}
+		fmt.Fprintf(w, "  %-18s %d/%d (%.2f%s)", "pass rate", cr.Passes, len(cr.RunPass), cr.PassRate, req)
+		if cr.MinPassRate > 0 {
+			fmt.Fprintf(w, " %s", ternary(cr.Pass, "pass", "FAIL"))
+		}
+		fmt.Fprintln(w)
+	}
+	for _, rb := range cr.Rubrics {
+		fmt.Fprintf(w, "    rubric %d/%d %s: %s", rb.Passes, rb.Runs, ternary(rb.Passes == rb.Runs, "yes", "NO"), oneLine(rb.Rubric, 120))
+		if rb.Reason != "" {
+			fmt.Fprintf(w, "  (%s)", oneLine(rb.Reason, 120))
 		}
 		fmt.Fprintln(w)
 	}

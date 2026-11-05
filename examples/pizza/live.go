@@ -240,33 +240,79 @@ func Replay(w io.Writer, dir string, speed float64) error {
 	return nil
 }
 
-// LoadDotEnv sets variables from the first .env found walking up from the
-// working directory. Already-set variables win, so CI/env overrides work.
-func LoadDotEnv() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
+// dotEnvAllowed are the only keys LoadDotEnv will set: model routing and its
+// credentials, nothing else from a possibly shared .env.
+var dotEnvAllowed = map[string]bool{
+	"ANTHROPIC_BASE_URL":   true,
+	"ANTHROPIC_API_KEY":    true,
+	"ANTHROPIC_AUTH_TOKEN": true,
+	"ANTHROPIC_MODEL":      true,
+	"PIZZA_MODEL":          true,
+}
+
+// repoRootFrom walks up from dir to the directory whose go.mod declares
+// module github.com/tggo/claude-agent-go (this repo).
+func repoRootFrom(dir string) (string, bool) {
 	for {
-		path := filepath.Join(dir, ".env")
-		if b, err := os.ReadFile(path); err == nil {
+		if b, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil {
 			for _, ln := range strings.Split(string(b), "\n") {
-				ln = strings.TrimSpace(ln)
-				k, v, ok := strings.Cut(ln, "=")
-				if !ok || strings.HasPrefix(ln, "#") {
-					continue
-				}
-				k, v = strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`)
-				if _, set := os.LookupEnv(k); !set {
-					os.Setenv(k, v)
+				if strings.TrimSpace(ln) == "module github.com/tggo/claude-agent-go" {
+					return dir, true
 				}
 			}
-			return path, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", nil
+			return "", false
 		}
 		dir = parent
 	}
+}
+
+func repoRoot() (string, bool) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	return repoRootFrom(wd)
+}
+
+// LoadDotEnv sets allowlisted variables (dotEnvAllowed) from one explicit file.
+// With path == "" it tries ".env" in the working directory, then ".env" in this
+// repo's root (found via go.mod); it never walks other parent directories.
+// Already-set variables win, so CI/env overrides work. Returns the file used
+// ("" if none).
+func LoadDotEnv(path string) (string, error) {
+	candidates := []string{path}
+	if path == "" {
+		candidates = []string{".env"}
+		if root, ok := repoRoot(); ok {
+			candidates = append(candidates, filepath.Join(root, ".env"))
+		}
+	}
+	for _, c := range candidates {
+		b, err := os.ReadFile(c)
+		if err != nil {
+			if path != "" {
+				return "", err
+			}
+			continue
+		}
+		for _, ln := range strings.Split(string(b), "\n") {
+			ln = strings.TrimSpace(ln)
+			k, v, ok := strings.Cut(ln, "=")
+			if !ok || strings.HasPrefix(ln, "#") {
+				continue
+			}
+			k, v = strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`)
+			if !dotEnvAllowed[k] {
+				continue
+			}
+			if _, set := os.LookupEnv(k); !set {
+				os.Setenv(k, v)
+			}
+		}
+		return c, nil
+	}
+	return "", nil
 }

@@ -14,8 +14,11 @@ import (
 // runner.WithTransport to run code against a real recorded session — offline,
 // free and deterministic.
 //
-// It needs /bin/sh and sed (macOS, Linux, WSL). Args and WorkDir are ignored:
-// the recording, not the flags, decides the output.
+// It needs /bin/sh and sed (macOS, Linux, WSL); it does not work on native
+// Windows. clitest.FromRecording is the sed-free equivalent (the recording is
+// stripped in Go, the script only cats it) but also relies on /bin/sh, so
+// native Windows is unsupported either way. Args and WorkDir are ignored: the
+// recording, not the flags, decides the output.
 type ReplayTransport struct {
 	// Path is the recording file.
 	Path string

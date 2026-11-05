@@ -9,19 +9,24 @@ import (
 
 // Step is the record of one node execution.
 type Step struct {
-	Node     string
-	Parent   string // the parallel node, for a branch; empty otherwise
-	Started  time.Time
-	Duration time.Duration
-	Err      error
-	CostUSD  float64
+	Node     string        `json:"node"`
+	Parent   string        `json:"parent,omitempty"` // the parallel node, for a branch; empty otherwise
+	Started  time.Time     `json:"started"`
+	Duration time.Duration `json:"duration"`
+	// Err is the node's error. It is not serialized; ErrText carries its
+	// message, which is all that survives a Checkpoint round trip.
+	Err     error   `json:"-"`
+	ErrText string  `json:"err,omitempty"`
+	CostUSD float64 `json:"cost_usd"`
 	// Paused is true when the node called Interrupt. Err is nil then; the
 	// question is in Question.
-	Paused   bool
-	Question string
+	Paused   bool   `json:"paused,omitempty"`
+	Question string `json:"question,omitempty"`
 }
 
-// Report summarises a run (or the resumed part of one).
+// Report summarises a run. After Resume it is cumulative: it includes the
+// steps, cost and duration of every earlier segment recorded in the
+// Checkpoint (Checkpoint.Prior), so the final Report covers the whole run.
 type Report struct {
 	// Steps lists executions in completion order. Branches of a parallel node
 	// appear before the parallel node's own step.
@@ -29,7 +34,8 @@ type Report struct {
 	// TotalCostUSD sums the cost of every step. Branch costs are attributed to
 	// the branch steps only, so nothing is counted twice.
 	TotalCostUSD float64
-	// Duration is the wall-clock time of the call.
+	// Duration is the wall-clock time of the calls that make up the run
+	// (time spent paused, waiting for the human, is not counted).
 	Duration time.Duration
 	// Path is the top-level execution trace (parallel branches excluded). After
 	// Resume it continues the checkpoint's path, and an interrupted node
@@ -65,9 +71,13 @@ type recorder struct {
 	began time.Time
 	steps []Step
 	path  []string
+	prior Prior
 }
 
 func (r *recorder) add(s Step) {
+	if s.Err != nil {
+		s.ErrText = s.Err.Error()
+	}
 	r.mu.Lock()
 	r.steps = append(r.steps, s)
 	r.mu.Unlock()
@@ -76,8 +86,12 @@ func (r *recorder) add(s Step) {
 func (r *recorder) report() *Report {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	rep := &Report{Steps: slices.Clone(r.steps), Duration: time.Since(r.began), Path: slices.Clone(r.path)}
-	for _, s := range r.steps {
+	rep := &Report{
+		Steps:    append(slices.Clone(r.prior.Steps), r.steps...),
+		Duration: r.prior.Duration + time.Since(r.began),
+		Path:     slices.Clone(r.path),
+	}
+	for _, s := range rep.Steps {
 		rep.TotalCostUSD += s.CostUSD
 	}
 	return rep

@@ -3,6 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/tggo/claude-agent-go/mcp"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -66,4 +70,25 @@ func (r *Registry) Serve() (*Server, error) {
 	}
 	r.served = true
 	return startServer(r.name, r.srv)
+}
+
+// ServeMCP serves the registry, then writes an --mcp-config file into dir
+// (created 0700, file 0600 since it holds the bearer token) and returns its
+// path. closeFn stops the server. On any error everything started is torn down.
+func (r *Registry) ServeMCP(dir string) (configPath string, closeFn func() error, err error) {
+	srv, err := r.Serve()
+	if err != nil {
+		return "", nil, err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		_ = srv.Close()
+		return "", nil, err
+	}
+	name, cfg := srv.Config()
+	configPath = filepath.Join(dir, "mcp.json")
+	if err := mcp.WriteConfig(configPath, map[string]mcp.ServerConfig{name: cfg}); err != nil {
+		_ = srv.Close()
+		return "", nil, err
+	}
+	return configPath, srv.Close, nil
 }

@@ -13,6 +13,9 @@ package tools
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -48,6 +51,7 @@ type Server struct {
 	httpSrv *http.Server
 	lis     net.Listener
 	url     string
+	token   string
 
 	mu     sync.Mutex
 	closed bool
@@ -116,6 +120,12 @@ func startServer(serverName string, mcpSrv *mcpsdk.Server) (*Server, error) {
 		nil,
 	)
 
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return nil, fmt.Errorf("token: %w", err)
+	}
+	token := hex.EncodeToString(raw[:])
+
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("listen: %w", err)
@@ -124,8 +134,9 @@ func startServer(serverName string, mcpSrv *mcpsdk.Server) (*Server, error) {
 	s := &Server{
 		name:    serverName,
 		lis:     lis,
-		httpSrv: &http.Server{Handler: handler},
+		httpSrv: &http.Server{Handler: requireBearer(token, handler)},
 		url:     fmt.Sprintf("http://%s/", lis.Addr().String()),
+		token:   token,
 	}
 
 	go func() {
@@ -135,6 +146,25 @@ func startServer(serverName string, mcpSrv *mcpsdk.Server) (*Server, error) {
 
 	return s, nil
 }
+
+// requireBearer rejects any request without "Authorization: Bearer <token>"
+// (constant-time compare), so other local processes can't call the tools.
+func requireBearer(token string, next http.Handler) http.Handler {
+	want := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := []byte(r.Header.Get("Authorization"))
+		if subtle.ConstantTimeCompare(got, want) != 1 {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Token is the per-server random bearer token every request must present as
+// "Authorization: Bearer <token>". Config/ConfigForHost already include it.
+func (s *Server) Token() string { return s.token }
 
 // URL is the base URL the CLI connects to (on 127.0.0.1).
 func (s *Server) URL() string { return s.url }
@@ -146,9 +176,9 @@ func (s *Server) Name() string { return s.name }
 func (s *Server) Port() int { return s.lis.Addr().(*net.TCPAddr).Port }
 
 // Config returns the mcp.ServerConfig for this server (reachable on 127.0.0.1),
-// keyed by its name — for a local agent.
+// keyed by its name — for a local agent. It carries the bearer token as a header.
 func (s *Server) Config() (string, mcp.ServerConfig) {
-	return s.name, mcp.ServerConfig{Type: "http", URL: s.url}
+	return s.name, mcp.HTTPServer(s.url, s.token)
 }
 
 // ConfigForHost returns the mcp.ServerConfig with the URL rewritten to reach the
@@ -160,10 +190,7 @@ func (s *Server) Config() (string, mcp.ServerConfig) {
 //     the host (transport.SSH{Options: tools.SSHReverseTunnel(s.Port())}), then
 //     host = "127.0.0.1".
 func (s *Server) ConfigForHost(host string) (string, mcp.ServerConfig) {
-	return s.name, mcp.ServerConfig{
-		Type: "http",
-		URL:  fmt.Sprintf("http://%s:%d/", host, s.Port()),
-	}
+	return s.name, mcp.HTTPServer(fmt.Sprintf("http://%s:%d/", host, s.Port()), s.token)
 }
 
 // Close stops the HTTP server. Safe to call multiple times.

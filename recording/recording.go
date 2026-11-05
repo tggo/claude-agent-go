@@ -225,6 +225,17 @@ func ReadFile(path string) (*Recording, error) {
 	return Read(f)
 }
 
+// ReplayLines returns the stream-json body of the recording at path exactly as
+// the CLI emitted it: header dropped, _cag_t stripped. It is the portable
+// building block for replaying without sed (see clitest.FromRecording).
+func ReplayLines(path string) ([][]byte, error) {
+	rec, err := ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return rec.RawLines(), nil
+}
+
 // Dir returns a factory that writes each recording to its own file in dir,
 // named "<UTC timestamp>-<seq>-<label>.jsonl". Recordings hold prompts and raw
 // tool output, which can include secrets, so the directory is created 0700

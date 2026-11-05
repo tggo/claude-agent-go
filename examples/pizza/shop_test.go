@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,14 +41,14 @@ func TestShopPricingAndFailures(t *testing.T) {
 		t.Fatalf("stock: %v", err)
 	}
 
-	if _, err := s.PlaceAndPay("nope", "tok_test_visa"); err == nil {
+	if _, err := s.PlaceAndPay("nope", "", "tok_test_visa"); err == nil {
 		t.Fatal("no draft")
 	}
 	s.DeclineNextCharge()
-	if o, err := s.PlaceAndPay("c1", "tok_test_visa"); err == nil || o.Status != "payment_failed" {
+	if o, err := s.PlaceAndPay("c1", d.Hash(), "tok_test_visa"); err == nil || o.Status != "payment_failed" {
 		t.Fatalf("decline: %+v %v", o, err)
 	}
-	o, err := s.PlaceAndPay("c1", "tok_test_visa")
+	o, err := s.PlaceAndPay("c1", d.Hash(), "tok_test_visa")
 	if err != nil || o.Status != "paid" || o.ID != "ORD-0002" {
 		t.Fatalf("pay: %+v %v", o, err)
 	}
@@ -100,17 +101,81 @@ func TestPrinterAndReplay(t *testing.T) {
 
 func TestLoadDotEnv(t *testing.T) {
 	dir := t.TempDir()
-	sub := filepath.Join(dir, "a", "b")
-	os.MkdirAll(sub, 0o755)
-	os.WriteFile(filepath.Join(dir, ".env"), []byte("# c\nPIZZA_T1=\"x\"\nPIZZA_T2=keep\nbad\n"), 0o600)
-	t.Setenv("PIZZA_T2", "env")
-	t.Chdir(sub)
-	path, err := LoadDotEnv()
-	if err != nil || path != filepath.Join(dir, ".env") {
+	envf := filepath.Join(dir, "x.env")
+	os.WriteFile(envf, []byte("# c\nPIZZA_MODEL=\"m1\"\nANTHROPIC_MODEL=keep\nAWS_SECRET_ACCESS_KEY=evil\nbad\n"), 0o600)
+	t.Setenv("ANTHROPIC_MODEL", "env")
+	t.Setenv("PIZZA_MODEL", "")
+	os.Unsetenv("PIZZA_MODEL")
+	os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+	path, err := LoadDotEnv(envf)
+	if err != nil || path != envf {
 		t.Fatalf("%s %v", path, err)
 	}
-	if os.Getenv("PIZZA_T1") != "x" || os.Getenv("PIZZA_T2") != "env" {
+	if os.Getenv("PIZZA_MODEL") != "m1" || os.Getenv("ANTHROPIC_MODEL") != "env" {
 		t.Fatal("values")
 	}
-	os.Unsetenv("PIZZA_T1")
+	if _, set := os.LookupEnv("AWS_SECRET_ACCESS_KEY"); set {
+		t.Fatal("non-allowlisted key must not be loaded")
+	}
+	os.Unsetenv("PIZZA_MODEL")
+}
+
+func TestLoadDotEnvDoesNotWalkParents(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "a", "b")
+	os.MkdirAll(sub, 0o755)
+	os.WriteFile(filepath.Join(dir, ".env"), []byte("PIZZA_MODEL=parent\n"), 0o600)
+	os.Unsetenv("PIZZA_MODEL")
+	t.Chdir(sub)
+	// cwd .env absent; temp dir is outside the repo, so no root fallback either.
+	path, err := LoadDotEnv("")
+	if err != nil || path != "" {
+		t.Fatalf("%q %v", path, err)
+	}
+	if os.Getenv("PIZZA_MODEL") != "" {
+		t.Fatal("parent .env must not be read")
+	}
+}
+
+func TestLoadDotEnvRepoRootFallback(t *testing.T) {
+	// Run from the package dir: .env is absent in cwd, repo root has go.mod.
+	root, ok := repoRoot()
+	if !ok {
+		t.Fatal("repo root not found from package dir")
+	}
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := repoRootFrom(t.TempDir()); ok {
+		t.Fatal("temp dir is not inside the repo")
+	}
+}
+
+func TestPlaceRefusesSwappedDraft(t *testing.T) {
+	s := NewShop()
+	d, err := s.Propose("c1", []Line{{"margherita", Small, 1}}, "Kyiv", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	confirmed := d.Hash()
+	// Draft swapped after the human confirmed.
+	if _, err := s.Propose("c1", []Line{{"pepperoni", Large, 10}}, "Kyiv", ""); err != nil {
+		t.Fatal(err)
+	}
+	if o, err := s.PlaceAndPay("c1", confirmed, "tok_test_visa"); !errors.Is(err, ErrDraftChanged) || o.ID != "" {
+		t.Fatalf("swap must be refused: %+v %v", o, err)
+	}
+	if len(s.Orders()) != 0 {
+		t.Fatal("nothing may be placed")
+	}
+	if _, ok := s.Draft("c1"); !ok {
+		t.Fatal("draft must stay")
+	}
+}
+
+func TestNewCartID128Bit(t *testing.T) {
+	id := newCartID()
+	if len(id) != len("cart-")+32 || newCartID() == id {
+		t.Fatalf("cart id %q", id)
+	}
 }

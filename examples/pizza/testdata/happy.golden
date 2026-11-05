@@ -1,0 +1,9 @@
+run label="order-1" model="claude-haiku-5-5"
+call <call#1> mcp__pizza__get_menu {}
+return <call#1> ok: {"items":[{"base_price_kop":23000,"id":"diavola","in_stock":true,"ingredients":["tomato","mozzarella","spicy salami","chili"],"name":"Diavola","vegetarian":false},{"base_price_kop":18000,"id":"margherita","in_stock":true,"ingredients":["tomato","mozzarella","basil"],"name":"Margherita","vegetarian":true},{"base_price_kop":22000,"id":"pepperoni","in_stock":true,"ingredients":["tomato","mozzarella",…
+call <call#2> mcp__pizza__quote_delivery {"address":"Khreshchatyk 22, Kyiv"}
+return <call#2> ok: {"delivery_fee":"60.00 UAH","eta_minutes":35}
+call <call#3> mcp__pizza__propose_order {"address":"Khreshchatyk 22, Kyiv","cart_id":"cart-<id>","lines":[{"item_id":"pepperoni","qty":2,"size":"L"}]}
+return <call#3> ok: {"next":"Stop here. The customer will confirm; you cannot place the order.","summary":" 2 × Pepperoni (L)\n delivery to Khreshchatyk 22, Kyiv: 60.00 UAH, ~35 min\n TOTAL 632.00 UAH","total":"632.00 UAH"}
+say: Your order is saved for confirmation: 2 large Pepperoni pizzas to Khreshchatyk 22, Kyiv, for 632.00 UAH total (including 60.00 UAH delivery, about 35 minutes). Please confirm to place it.
+result subtype=success is_error=false turns=4 cost=<cost>: Your order is saved for confirmation: 2 large Pepperoni pizzas to Khreshchatyk 22, Kyiv, for 632.00 UAH total (including 60.00 UAH delivery, about 35 minutes). Please confirm to place it.

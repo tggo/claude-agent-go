@@ -46,7 +46,7 @@ type RunRecord struct {
 
 // observe builds and emits a RunRecord if an Observer is configured.
 func (r *Runner) observe(mode string, in Input, start time.Time, res *Result, err error) {
-	if r.cfg.Observer == nil {
+	if r.cfg.Observer == nil && len(r.cfg.Plugins) == 0 {
 		return
 	}
 	rec := RunRecord{
@@ -69,7 +69,10 @@ func (r *Runner) observe(mode string, in Input, start time.Time, res *Result, er
 			rec.OutputTokens = res.Metadata.TokenUsage.OutputTokens
 		}
 	}
-	r.cfg.Observer.ObserveRun(rec)
+	if r.cfg.Observer != nil {
+		r.cfg.Observer.ObserveRun(rec)
+	}
+	r.pluginEnd(&rec)
 }
 
 func max1(n int) int {

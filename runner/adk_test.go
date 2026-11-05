@@ -60,7 +60,7 @@ func TestADK2425CancelKillsSigtermTrapperWithPartial(t *testing.T) {
 }
 
 func TestADK2425TimeoutKillsSigtermTrapperWithPartial(t *testing.T) {
-	r := New(WithBinary(writeBin(t, stubborn)), WithTimeout(500*time.Millisecond))
+	r := New(WithBinary(writeBin(t, stubborn)), WithTimeout(2*time.Second))
 	res, err := r.RunStream(context.Background(), Input{Prompt: "x"}, nil)
 	if !IsTimeout(err) || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want TimeoutError wrapping DeadlineExceeded", err)

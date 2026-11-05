@@ -40,6 +40,9 @@ func TestTraceRunFile(t *testing.T) {
 	b, err := os.ReadFile(want)
 	require.NoError(t, err)
 	assert.Contains(t, string(b), "$0.5000")
+	fi, err := os.Stat(want)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), fi.Mode().Perm(), "trace html embeds run content")
 }
 
 func TestTraceRunDirOpenAndOutFlag(t *testing.T) {

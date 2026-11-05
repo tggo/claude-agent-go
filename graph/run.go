@@ -72,8 +72,9 @@ func (r *Runnable[S]) Run(ctx context.Context, init S) (S, *Report, error) {
 // answer available through Answer, then carries on. The node starts from the
 // top, with cp.State as left by the interrupted attempt, so a node that can be
 // interrupted should check Answer first and keep any partial work in the
-// state. The step budget and Report.Path continue from the checkpoint; Steps
-// and durations cover only this call.
+// state. The step budget continues from the checkpoint, and the returned
+// Report is cumulative: Steps, TotalCostUSD, Duration and Path include
+// everything recorded in cp.Prior.
 func (r *Runnable[S]) Resume(ctx context.Context, cp Checkpoint[S], answer string) (S, *Report, error) {
 	rec := &recorder{began: time.Now()}
 	n, ok := r.nodes[cp.Node]
@@ -83,6 +84,7 @@ func (r *Runnable[S]) Resume(ctx context.Context, cp Checkpoint[S], answer strin
 	if cp.Step < 0 {
 		return cp.State, rec.report(), fmt.Errorf("graph %q: resume: negative step in checkpoint", r.name)
 	}
+	rec.prior = Prior{Steps: slices.Clone(cp.Prior.Steps), Duration: cp.Prior.Duration}
 	return r.loop(ctx, cp.State, n.name, cp.Step, slices.Clone(cp.Path), answer, true, rec)
 }
 
@@ -112,10 +114,12 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 		if err != nil {
 			var ie *interruptError
 			if errors.As(err, &ie) {
-				cp := Checkpoint[S]{State: s, Node: n.name, Step: step - 1, Path: slices.Clone(rec.path)}
+				rep := rec.report()
+				cp := Checkpoint[S]{State: s, Node: n.name, Step: step - 1, Path: slices.Clone(rec.path),
+					Prior: Prior{Steps: rep.Steps, Duration: rep.Duration}}
 				// Step counts executions completed before this one, so the
 				// resumed attempt re-takes the same step number.
-				return s, rec.report(), &Interrupted[S]{Question: ie.Question, Node: n.name, Checkpoint: cp}
+				return s, rep, &Interrupted[S]{Question: ie.Question, Node: n.name, Checkpoint: cp}
 			}
 			return s, rec.report(), err
 		}

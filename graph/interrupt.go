@@ -2,12 +2,19 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 )
+
+// ErrInterrupt matches (errors.Is) every interrupt error: the one a node gets
+// from Interrupt and the *Interrupted[S] that Run and Resume return.
+var ErrInterrupt = errors.New("graph: interrupted")
 
 type interruptError struct{ Question string }
 
-func (e *interruptError) Error() string { return "graph: interrupted: " + e.Question }
+func (e *interruptError) Error() string        { return "graph: interrupted: " + e.Question }
+func (e *interruptError) Is(target error) bool { return target == ErrInterrupt }
 
 // Interrupt returns the error a node returns to pause the run and ask a human
 // question. Run then fails with *Interrupted; answer it through Resume.
@@ -24,6 +31,15 @@ type Checkpoint[S any] struct {
 	Step int `json:"step"`
 	// Path is the execution trace so far, including the interrupted attempt.
 	Path []string `json:"path"`
+	// Prior is what the run had accumulated before this checkpoint, so Resume
+	// can return a cumulative Report.
+	Prior Prior `json:"prior"`
+}
+
+// Prior is the report data carried across a pause.
+type Prior struct {
+	Steps    []Step        `json:"steps,omitempty"`
+	Duration time.Duration `json:"duration"`
 }
 
 // Interrupted is the error Run and Resume return when a node asks a question.
@@ -32,6 +48,18 @@ type Interrupted[S any] struct {
 	Question   string
 	Node       string
 	Checkpoint Checkpoint[S]
+}
+
+func (e *Interrupted[S]) Is(target error) bool { return target == ErrInterrupt }
+
+// AsInterrupt extracts the *Interrupted[S] from err (a Run or Resume error),
+// for callers that cannot name the unexported internals.
+func AsInterrupt[S any](err error) (*Interrupted[S], bool) {
+	var ie *Interrupted[S]
+	if errors.As(err, &ie) {
+		return ie, true
+	}
+	return nil, false
 }
 
 func (e *Interrupted[S]) Error() string {

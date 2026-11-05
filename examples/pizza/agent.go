@@ -4,13 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/tggo/claude-agent-go/graph"
-	"github.com/tggo/claude-agent-go/mcp"
 	"github.com/tggo/claude-agent-go/recording"
 	"github.com/tggo/claude-agent-go/runner"
 	"github.com/tggo/claude-agent-go/tools"
@@ -27,6 +24,9 @@ type State struct {
 	OrderID   string `json:"order_id"`
 	Status    string `json:"status"`
 	Rounds    int    `json:"rounds"`
+	// DraftHash is Draft.Hash of the draft the human confirmed; place refuses
+	// if the stored draft no longer matches.
+	DraftHash string `json:"draft_hash,omitempty"`
 }
 
 // MaxRounds bounds order → confirm → change loops.
@@ -105,20 +105,11 @@ func Build(o Options) (*Agent, error) {
 			return proposeOut{Total: UAH(d.TotalKop), Summary: d.Summary(shop),
 				Next: "Stop here. The customer will confirm; you cannot place the order."}, nil
 		})
-	srv, err := reg.Serve()
+	mcpPath, closeSrv, err := reg.ServeMCP(o.RunsDir)
 	if err != nil {
 		return nil, err
 	}
-	name, cfg := srv.Config()
-	if err := os.MkdirAll(o.RunsDir, 0o755); err != nil {
-		srv.Close()
-		return nil, err
-	}
-	mcpPath := filepath.Join(o.RunsDir, "mcp.json")
-	if err := mcp.WriteConfig(mcpPath, map[string]mcp.ServerConfig{name: cfg}); err != nil {
-		srv.Close()
-		return nil, err
-	}
+	name := "pizza"
 	tool := func(n string) string { return "mcp__" + name + "__" + n }
 
 	// The order-taker sees only the pizza tools: no shell, no files, no web.
@@ -168,7 +159,11 @@ Otherwise reply with a one-sentence summary for the customer.`
 		if a, ok := graph.Answer(ctx); ok {
 			switch strings.ToLower(strings.TrimSpace(a)) {
 			case "y", "yes", "так", "ok", "confirm":
-				s.Confirmed = true
+				d, ok := shop.Draft(s.CartID)
+				if !ok {
+					return graph.Interrupt("There is no draft to confirm. What should I change?")
+				}
+				s.Confirmed, s.DraftHash = true, d.Hash()
 			case "n", "no", "ні", "cancel":
 				s.Cancelled = true
 			default:
@@ -198,7 +193,7 @@ Otherwise reply with a one-sentence summary for the customer.`
 	}, "place", "order", graph.End)
 
 	g.AddNode("place", func(_ context.Context, s *State) error {
-		o, err := shop.PlaceAndPay(s.CartID, "tok_test_visa")
+		o, err := shop.PlaceAndPay(s.CartID, s.DraftHash, "tok_test_visa")
 		s.OrderID, s.Status = o.ID, o.Status
 		if err != nil {
 			s.Status = "payment_failed: " + err.Error()
@@ -212,8 +207,8 @@ Otherwise reply with a one-sentence summary for the customer.`
 
 	r, err := g.Compile(graph.WithMaxSteps(20))
 	if err != nil {
-		srv.Close()
+		closeSrv()
 		return nil, err
 	}
-	return &Agent{Graph: r, Shop: shop, RunsDir: o.RunsDir, close: func() { srv.Close() }}, nil
+	return &Agent{Graph: r, Shop: shop, RunsDir: o.RunsDir, close: func() { _ = closeSrv() }}, nil
 }

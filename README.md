@@ -168,18 +168,9 @@ transport, duration, error). It's dependency-free — bridge it to OpenTelemetry
 Prometheus, or logs without the SDK taking those deps:
 
 ```go
-r := runner.New(runner.WithObserver(otelObserver{tracer}))
-
-// the ~10-line bridge (RunRecord carries StartedAt+Duration for an exact span):
-func (o otelObserver) ObserveRun(rec runner.RunRecord) {
-    _, span := o.tracer.Start(context.Background(), "claude.run", trace.WithTimestamp(rec.StartedAt))
-    span.SetAttributes(
-        attribute.String("claude.transport", rec.Transport),
-        attribute.Float64("claude.cost_usd", rec.CostUSD),
-        attribute.Int("claude.turns", rec.NumTurns))
-    if rec.Err != nil { span.RecordError(rec.Err) }
-    span.End(trace.WithTimestamp(rec.StartedAt.Add(rec.Duration)))
-}
+// go get github.com/tggo/claude-agent-go/otel  (separate module; the core stays dependency-free)
+r := runner.New(runner.WithObserver(otel.NewObserver(tracer)))           // one span per run
+g.Compile(graph.WithObserver(otel.NewGraphObserver(tracer)))             // one span per node
 ```
 
 For a fleet-wide budget with warn/exceed callbacks, wrap runs with a
