@@ -274,6 +274,8 @@ c, _ := client.New(ctx, client.Config{
 `graph` composes Claude Code runs into any flow: here plan → code → review, with a
 review/fix loop that exits when the reviewer approves (through an in-process Go
 tool) or gives up after three rounds. Full version: [`examples/pipeline`](./examples/pipeline).
+A human-in-the-loop variant against mocked services (menu, delivery, payment), with a
+live event view and `-replay` of recorded runs: [`examples/pizza`](./examples/pizza).
 
 ```go
 g := graph.New[State]("coding")

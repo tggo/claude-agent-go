@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Cancel/timeout no longer hangs on a CLI that traps SIGTERM: the process group gets SIGTERM, then SIGKILL after 2s (`runner`, and `client.Close`). `RunStream` now returns the partial `Result` (text so far, session id) together with the cancel/`TimeoutError`; `TimeoutError` also matches `errors.Is(err, context.DeadlineExceeded)`, and `Run`/`RunJSON` report cancellation as `context.Canceled` (ADK #2425).
+- `runner.DefaultRetryable` retries a failed process whose stdout ends in a transient error result (429/529/overloaded). The CLI exits 1 after such a result and leaves stderr empty, so it was not retried (ADK #1214).
+- `client`: a panicking `OnAskUser`/`CanUseTool` callback now gets a deny reply (hook callbacks an error reply) instead of crashing the host (ADK #3645).
+- `claudecli.ExtractTextFromStream` and `eval` ignore sub-agent assistant text when building the answer (ADK #3984).
+
+### Added
+- `runner.Result.Subtype` and `runner.IsMaxTurns`: detect a run cut off by `--max-turns` (`error_max_turns`), also when the CLI reports `is_error=false` (ADK #5054).
+- `claudecli.StreamEvent.ParentToolUseID` / `IsSubagent`, and `eval.ToolCall.ParentToolUseID` (ADK #3984).
+- `eval.JudgeSamples(n)`: grade each response n times and take the median score, damping a flaky LLM judge (ADK #3593).
+
 ### Added
 - `graph`: typed execution graphs over runs and Go steps.
   - Static and conditional edges (loops), and parallel fan-out with merge.
@@ -29,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `client.Config.OnAskUser` / `Question` / `AnswerFromStdin`: answer the CLI's `AskUserQuestion` tool from Go. Verified against CLI 2.1.318.
 - `cag trace <recording|dir>`: a self-contained HTML view of recorded runs.
 - `examples/pipeline`: a plan → code → review/fix → docs graph of real agents, with an eval integration test.
+- `examples/pizza`: an order-taking agent over mocked pizzeria/delivery/payment Go tools. A human confirms the priced draft before a plain Go step places it. It shows a live event view, can `-replay` recorded runs, loads `ANTHROPIC_*` from a gitignored `.env`, and has a 4-scenario eval integration test.
 
 ### Changed
 - Minimum Go version is now 1.27 (was 1.25); CI and release build on 1.27.
