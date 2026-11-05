@@ -78,6 +78,14 @@ type Options struct {
 	RunsDir  string
 	Progress runner.ProgressFunc // live view of every agent run; nil = quiet
 	Observer graph.Observer      // e.g. a *graphweb.Server; nil = none
+	// Store makes the run durable: every node is committed to it, so a crash
+	// is continued with Agent.Graph.Recover(runID). nil = not durable.
+	Store graph.CheckpointStore
+	// Binary overrides the claude binary (tests use a fake CLI).
+	Binary string
+	// ShopFile, when set, keeps the mock shop's drafts and orders on disk, so
+	// a recovered run in a new process still finds the draft it confirmed.
+	ShopFile string
 }
 
 // Build wires the mocks as Go tools and the graph
@@ -87,6 +95,11 @@ type Options struct {
 //	  └─ QUESTION: pauses the graph (graph.Interrupt)
 func Build(o Options) (*Agent, error) {
 	shop := NewShop()
+	if o.ShopFile != "" {
+		if err := shop.Persist(o.ShopFile); err != nil {
+			return nil, err
+		}
+	}
 	reg := tools.NewRegistry("pizza")
 	tools.Register(reg, "get_menu", "List today's pizzas with ingredients, base price (size M, in kopecks) and stock.",
 		func(context.Context, empty) (menuOut, error) {
@@ -114,16 +127,21 @@ func Build(o Options) (*Agent, error) {
 	tool := func(n string) string { return "mcp__" + name + "__" + n }
 
 	// The order-taker sees only the pizza tools: no shell, no files, no web.
-	taker := runner.New(
+	takerOpts := []runner.Option{
 		runner.WithModel(o.Model),
-		runner.WithTimeout(3*time.Minute),
+		runner.WithTimeout(3 * time.Minute),
 		runner.WithMaxTurns(12),
 		runner.WithMaxBudgetUSD("0.50"),
 		runner.WithAllowedTools(tool("get_menu"), tool("quote_delivery"), tool("propose_order")),
 		runner.WithRecorder(recording.Dir(o.RunsDir)),
 		runner.WithEntrypoint("claude-agent-go-pizza"),
 		runner.WithLogger(slog.New(slog.DiscardHandler)),
-	)
+	}
+	taker := runner.New(takerOpts...)
+
+	if o.Binary != "" {
+		taker = runner.New(append(takerOpts, runner.WithBinary(o.Binary))...)
+	}
 
 	agentOpts := []graph.AgentOption{graph.WithRetry(runner.RetryPolicy{MaxAttempts: 2, Resume: true})}
 	if o.Progress != nil {
@@ -194,8 +212,11 @@ Otherwise reply with a one-sentence summary for the customer.`
 		}
 	}, "place", "order", graph.End)
 
-	g.AddNode("place", func(_ context.Context, s *State) error {
-		o, err := shop.PlaceAndPay(s.CartID, s.DraftHash, "tok_test_visa")
+	// place pays: the one node with a side effect nobody can take back. The
+	// idempotency key is the same on the re-run after a crash, so a node that
+	// died after the charge but before its commit does not charge twice.
+	g.AddNode("place", func(ctx context.Context, s *State) error {
+		o, err := shop.PlaceAndPay(s.CartID, s.DraftHash, "tok_test_visa", graph.IdempotencyKey(ctx))
 		s.OrderID, s.Status = o.ID, o.Status
 		if err != nil {
 			s.Status = "payment_failed: " + err.Error()
@@ -211,6 +232,9 @@ Otherwise reply with a one-sentence summary for the customer.`
 	copts := []graph.CompileOption{graph.WithMaxSteps(20)}
 	if o.Observer != nil {
 		copts = append(copts, graph.WithObserver(o.Observer))
+	}
+	if o.Store != nil {
+		copts = append(copts, graph.WithCheckpointStore(o.Store))
 	}
 	r, err := g.Compile(copts...)
 	if err != nil {

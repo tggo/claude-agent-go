@@ -41,14 +41,14 @@ func TestShopPricingAndFailures(t *testing.T) {
 		t.Fatalf("stock: %v", err)
 	}
 
-	if _, err := s.PlaceAndPay("nope", "", "tok_test_visa"); err == nil {
+	if _, err := s.PlaceAndPay("nope", "", "tok_test_visa", ""); err == nil {
 		t.Fatal("no draft")
 	}
 	s.DeclineNextCharge()
-	if o, err := s.PlaceAndPay("c1", d.Hash(), "tok_test_visa"); err == nil || o.Status != "payment_failed" {
+	if o, err := s.PlaceAndPay("c1", d.Hash(), "tok_test_visa", ""); err == nil || o.Status != "payment_failed" {
 		t.Fatalf("decline: %+v %v", o, err)
 	}
-	o, err := s.PlaceAndPay("c1", d.Hash(), "tok_test_visa")
+	o, err := s.PlaceAndPay("c1", d.Hash(), "tok_test_visa", "")
 	if err != nil || o.Status != "paid" || o.ID != "ORD-0002" {
 		t.Fatalf("pay: %+v %v", o, err)
 	}
@@ -162,7 +162,7 @@ func TestPlaceRefusesSwappedDraft(t *testing.T) {
 	if _, err := s.Propose("c1", []Line{{"pepperoni", Large, 10}}, "Kyiv", ""); err != nil {
 		t.Fatal(err)
 	}
-	if o, err := s.PlaceAndPay("c1", confirmed, "tok_test_visa"); !errors.Is(err, ErrDraftChanged) || o.ID != "" {
+	if o, err := s.PlaceAndPay("c1", confirmed, "tok_test_visa", ""); !errors.Is(err, ErrDraftChanged) || o.ID != "" {
 		t.Fatalf("swap must be refused: %+v %v", o, err)
 	}
 	if len(s.Orders()) != 0 {

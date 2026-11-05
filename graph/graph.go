@@ -61,6 +61,7 @@ type node[S any] struct {
 	par    *parallelSpec[S] // non-nil for AddParallel nodes
 	agent  bool             // tagged by AddAgentNode / MarkAgent (topology only)
 	runner *runner.Runner   // set by AgentRunner (topology only)
+	group  *groupDef        // set by Compile from Group (presentation only)
 }
 
 type parallelSpec[S any] struct {
@@ -85,6 +86,7 @@ type Graph[S any] struct {
 	labels  map[[2]string]string
 	agents  map[string]bool
 	runners map[string]*runner.Runner
+	groups  []*groupDef
 	errs    []error
 }
 
@@ -238,6 +240,8 @@ func (g *Graph[S]) Compile(opts ...CompileOption) (*Runnable[S], error) {
 	if cfg.nodeTimeout < 0 {
 		bad("WithNodeTimeout: must not be negative")
 	}
+
+	errs = append(errs, g.bindGroups()...)
 
 	exists := func(n string) bool { _, ok := g.nodes[n]; return ok }
 	branchSet := map[string]bool{}
@@ -401,6 +405,8 @@ type options struct {
 	badMaxSteps bool
 	obs         Observer
 	nodeTimeout time.Duration
+	store       CheckpointStore
+	allowTopo   bool
 }
 
 // WithMaxSteps bounds the number of node executions in one run (default 100).

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -83,11 +84,62 @@ type Shop struct {
 	orders   []Order
 	declined bool // next charge is declined
 	calls    []string
+	byKey    map[string]Order // paid orders by idempotency key
+	path     string           // when set, drafts and orders are saved here after every change
+}
+
+// shopFile is what Persist keeps: the shop's side of the world, which must
+// outlive the process for a crashed run to be recoverable (a real shop and
+// payment gateway are somebody else's database).
+type shopFile struct {
+	Drafts map[string]Draft `json:"drafts"`
+	Orders []Order          `json:"orders"`
+	ByKey  map[string]Order `json:"by_key"`
+}
+
+// Persist loads the shop's drafts and orders from path (if it exists) and
+// saves them there after every change, standing in for the external services
+// that keep state across our process dying.
+func (s *Shop) Persist(path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.path = path
+	b, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var f shopFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		return fmt.Errorf("shop file %s: %w", path, err)
+	}
+	if f.Drafts != nil {
+		s.drafts = f.Drafts
+	}
+	s.orders = f.Orders
+	if f.ByKey != nil {
+		s.byKey = f.ByKey
+	}
+	return nil
+}
+
+// save writes the snapshot; the caller holds s.mu.
+func (s *Shop) save() {
+	if s.path == "" {
+		return
+	}
+	b, _ := json.Marshal(shopFile{Drafts: s.drafts, Orders: s.orders, ByKey: s.byKey})
+	tmp := s.path + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil {
+		_ = os.Rename(tmp, s.path)
+	}
 }
 
 // NewShop returns a shop with the standard menu, everything in stock.
 func NewShop() *Shop {
-	s := &Shop{menu: map[string]*MenuItem{}, drafts: map[string]Draft{}}
+	s := &Shop{menu: map[string]*MenuItem{}, drafts: map[string]Draft{}, byKey: map[string]Order{}}
 	for _, m := range []MenuItem{
 		{ID: "margherita", Name: "Margherita", Ingredients: []string{"tomato", "mozzarella", "basil"}, Vegetarian: true, BasePrice: 18000},
 		{ID: "pepperoni", Name: "Pepperoni", Ingredients: []string{"tomato", "mozzarella", "pepperoni"}, BasePrice: 22000},
@@ -189,6 +241,7 @@ func (s *Shop) Propose(cartID string, lines []Line, address, notes string) (Draf
 	}
 	d.TotalKop = d.ItemsKop + d.DeliveryKop
 	s.drafts[cartID] = d
+	s.save()
 	return d, nil
 }
 
@@ -205,9 +258,19 @@ func (s *Shop) Draft(cartID string) (Draft, bool) {
 // run only after a human confirmed the draft. wantHash is the Draft.Hash the
 // human confirmed; if the stored draft differs (swapped after confirmation)
 // nothing is placed.
-func (s *Shop) PlaceAndPay(cartID, wantHash, paymentToken string) (Order, error) {
+//
+// key makes the call idempotent: a repeat with a key that already placed an
+// order returns that order and charges nothing, which is what lets a graph
+// node that crashed after paying but before it was committed run again
+// (graph.IdempotencyKey). An empty key disables the check.
+func (s *Shop) PlaceAndPay(cartID, wantHash, paymentToken, key string) (Order, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if o, ok := s.byKey[key]; ok && key != "" {
+		s.log("place-replayed")
+		return o, nil
+	}
+	defer s.save()
 	d, ok := s.drafts[cartID]
 	if !ok {
 		return Order{}, fmt.Errorf("no draft for cart %q", cartID)
@@ -228,6 +291,9 @@ func (s *Shop) PlaceAndPay(cartID, wantHash, paymentToken string) (Order, error)
 	o.Charge = fmt.Sprintf("ch_%s_%d", o.ID, d.TotalKop)
 	s.orders = append(s.orders, o)
 	delete(s.drafts, cartID)
+	if key != "" {
+		s.byKey[key] = o
+	}
 	return o, nil
 }
 

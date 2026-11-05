@@ -28,6 +28,8 @@ type Step struct {
 // steps, cost and duration of every earlier segment recorded in the
 // Checkpoint (Checkpoint.Prior), so the final Report covers the whole run.
 type Report struct {
+	// RunID is the id of the run (see RunID(ctx)), for Recover and Fork.
+	RunID string
 	// Steps lists executions in completion order. Branches of a parallel node
 	// appear before the parallel node's own step.
 	Steps []Step
@@ -81,6 +83,27 @@ type recorder struct {
 	prior  Prior
 	runID  string
 	visits map[string]int
+
+	ck         *ckWriter // nil unless WithCheckpointStore
+	recNode    string    // Recover: the node whose logged session is resumed
+	recSession string
+}
+
+// last is the most recently completed step (the node that just ran).
+func (r *recorder) last() Step {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.steps) == 0 {
+		return Step{}
+	}
+	return r.steps[len(r.steps)-1]
+}
+
+// peek returns how often name has run so far.
+func (r *recorder) peek(name string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.visits[name]
 }
 
 // seedVisits counts the executions already in path (a resumed run).
@@ -118,6 +141,7 @@ func (r *recorder) report() *Report {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rep := &Report{
+		RunID:    r.runID,
 		Steps:    append(slices.Clone(r.prior.Steps), r.steps...),
 		Duration: r.prior.Duration + time.Since(r.began),
 		Path:     slices.Clone(r.path),
@@ -139,8 +163,10 @@ type scope struct {
 	name string
 	info StepInfo
 	obs  Observer
+	ck   *ckWriter // log of the run; nil without a store or inside a parallel branch
 	mu   sync.Mutex
 	cost float64
+	sess string // last agent session id logged
 }
 
 func (s *scope) total() float64 {

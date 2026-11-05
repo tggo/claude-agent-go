@@ -62,6 +62,7 @@ type Runnable[S any] struct {
 // error; pass its Checkpoint to Resume.
 func (r *Runnable[S]) Run(ctx context.Context, init S) (S, *Report, error) {
 	rec := &recorder{began: time.Now(), runID: newRunID()}
+	rec.ck = r.writer(rec.runID, 0)
 	ctx = context.WithValue(ctx, runIDKey{}, rec.runID)
 	s := init
 	info := r.runInfo(rec, &s, false)
@@ -69,14 +70,17 @@ func (r *Runnable[S]) Run(ctx context.Context, init S) (S, *Report, error) {
 		ro.RunStart(ctx, info)
 	}
 	first, err := r.next(Start, &s)
+	if err == nil && rec.ck != nil {
+		err = r.logStart(ctx, rec, &s, first, 0)
+	}
 	if err != nil {
 		rep := rec.report()
-		r.runEnd(ctx, info, rep, err)
+		err = r.finish(ctx, info, rec, s, rep, err)
 		return s, rep, err
 	}
 	r.edge(ctx, Start, first, 0)
 	s, rep, err := r.loop(ctx, s, first, 0, nil, "", false, rec)
-	r.runEnd(ctx, info, rep, err)
+	err = r.finish(ctx, info, rec, s, rep, err)
 	return s, rep, err
 }
 
@@ -121,12 +125,17 @@ func (r *Runnable[S]) Resume(ctx context.Context, cp Checkpoint[S], answer strin
 	rec.prior = Prior{Steps: slices.Clone(cp.Prior.Steps), Duration: cp.Prior.Duration}
 	ctx = context.WithValue(ctx, runIDKey{}, rec.runID)
 	st := cp.State
+	if r.cfg.store != nil {
+		if err := r.logResume(ctx, rec, &st, cp, answer); err != nil {
+			return st, rec.report(), err
+		}
+	}
 	info := r.runInfo(rec, &st, true)
 	if ro, ok := r.cfg.obs.(RunObserver); ok {
 		ro.RunStart(ctx, info)
 	}
 	st, rep, err := r.loop(ctx, st, n.name, cp.Step, slices.Clone(cp.Path), answer, true, rec)
-	r.runEnd(ctx, info, rep, err)
+	err = r.finish(ctx, info, rec, st, rep, err)
 	return st, rep, err
 }
 
@@ -159,14 +168,30 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 				ro.Resumed(ctx, StepInfo{RunID: rec.runID, Graph: r.name, Node: cur, Step: step}, answer)
 			}
 		}
+		if rec.recSession != "" && cur == rec.recNode {
+			nctx = context.WithValue(nctx, recoveredKey{}, rec.recSession)
+			rec.recSession = ""
+		}
 		var fn NodeFunc[S] = n.fn
 		if n.par != nil {
 			fn = r.parallelFn(n, step, rec)
+		}
+		if rec.ck != nil {
+			if err := rec.ck.append(ctx, Record{Kind: KindNodeStart, Node: n.name, Step: step}); err != nil {
+				return s, rec.report(), err
+			}
 		}
 		err := r.exec(nctx, n.name, "", step, rec, fn, &s)
 		if err != nil {
 			var ie *interruptError
 			if errors.As(err, &ie) {
+				if rec.ck != nil {
+					last := rec.last()
+					if cerr := rec.ck.append(ctx, Record{Kind: KindInterrupt, Node: n.name, Step: step, Question: ie.Question,
+						State: snapshot(&s), CostUSD: last.CostUSD, DurationMS: last.Duration.Milliseconds()}); cerr != nil {
+						return s, rec.report(), cerr
+					}
+				}
 				rep := rec.report()
 				cp := Checkpoint[S]{RunID: rec.runID, State: s, Node: n.name, Step: step - 1, Path: slices.Clone(rec.path),
 					Prior: Prior{Steps: rep.Steps, Duration: rep.Duration}}
@@ -178,6 +203,11 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 		}
 		if cur, err = r.next(n.name, &s); err != nil {
 			return s, rec.report(), err
+		}
+		if rec.ck != nil {
+			if err := r.logCommit(ctx, rec, n, step, &s, cur); err != nil {
+				return s, rec.report(), err
+			}
 		}
 		r.edge(ctx, n.name, cur, step)
 	}
@@ -207,6 +237,9 @@ func (r *Runnable[S]) next(from string, s *S) (to string, err error) {
 func (r *Runnable[S]) exec(ctx context.Context, name, parent string, step int, rec *recorder, fn NodeFunc[S], s *S) (err error) {
 	info := StepInfo{RunID: rec.runID, Graph: r.name, Node: name, Step: step, Parent: parent, Attempt: rec.visit(name)}
 	sc := &scope{name: name, info: info, obs: r.cfg.obs}
+	if parent == "" {
+		sc.ck = rec.ck // branches are not individually recoverable: no session records
+	}
 	ctx = context.WithValue(ctx, scopeKey{}, sc)
 	if r.cfg.nodeTimeout > 0 {
 		var cancel context.CancelFunc

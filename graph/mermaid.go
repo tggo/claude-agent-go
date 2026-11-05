@@ -43,20 +43,41 @@ func (r *Runnable[S]) Mermaid() string {
 	b.WriteString("flowchart TD\n")
 	fmt.Fprintf(&b, "    %s([%s])\n", ids[Start], q("start"))
 	fmt.Fprintf(&b, "    %s([%s])\n", ids[End], q("end"))
-	for _, name := range r.order {
+	emit := func(name, ind string) {
 		n := r.nodes[name]
 		switch {
 		case n.par != nil:
-			fmt.Fprintf(&b, "    subgraph %s[%s]\n        direction LR\n", ids[name], q(name+" (parallel)"))
+			fmt.Fprintf(&b, "%ssubgraph %s[%s]\n%s    direction LR\n", ind, ids[name], q(name+" (parallel)"), ind)
 			for _, br := range n.par.branches {
-				fmt.Fprintf(&b, "        %s__%s[%s]\n", ids[name], ids[br], q(br))
+				fmt.Fprintf(&b, "%s    %s__%s[%s]\n", ind, ids[name], ids[br], q(br))
 			}
-			b.WriteString("    end\n")
+			fmt.Fprintf(&b, "%send\n", ind)
 		case r.branches[name]:
 			// drawn inside its parallel node(s)
 		default:
-			fmt.Fprintf(&b, "    %s[%s]\n", ids[name], q(name))
+			fmt.Fprintf(&b, "%s%s[%s]\n", ind, ids[name], q(name))
 		}
+	}
+	topo := r.Topology()
+	grouped := map[string]bool{}
+	for _, gr := range topo.Groups {
+		for _, n := range gr.Nodes {
+			grouped[n] = true
+		}
+	}
+	for _, name := range r.order {
+		if !grouped[name] {
+			emit(name, "    ")
+		}
+	}
+	for _, gr := range topo.Groups {
+		fmt.Fprintf(&b, "    subgraph %s[%s]\n", mk("grp_"+gr.ID), q(gr.Label))
+		for _, name := range gr.Nodes {
+			if !r.branches[name] {
+				emit(name, "        ")
+			}
+		}
+		b.WriteString("    end\n")
 	}
 	for _, from := range append([]string{Start}, r.order...) {
 		if t, ok := r.static[from]; ok {

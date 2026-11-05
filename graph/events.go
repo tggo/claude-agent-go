@@ -112,6 +112,8 @@ type Topology struct {
 	// MaxSteps and NodeTimeoutMS are the run limits (0 timeout = none).
 	MaxSteps      int   `json:"max_steps"`
 	NodeTimeoutMS int64 `json:"node_timeout_ms,omitempty"`
+	// Groups are the stages declared with Graph.Group, in declaration order.
+	Groups []TopologyGroup `json:"groups,omitempty"`
 }
 
 // TopoNode is one node of a Topology.
@@ -132,6 +134,8 @@ type TopoNode struct {
 	// Runner holds the effective defaults of the node's runner, when it was
 	// registered with AgentRunner.
 	Runner *runner.Effective `json:"runner,omitempty"`
+	// Group is the ID of the group the node belongs to (see Graph.Group).
+	Group string `json:"group,omitempty"`
 }
 
 // TopoEdge is one declared edge. A conditional edge is listed once per
@@ -180,6 +184,7 @@ func (r *Runnable[S]) Topology() Topology {
 		t.Nodes = append(t.Nodes, tn)
 	}
 	t.Nodes = append(t.Nodes, TopoNode{ID: End, Kind: KindEnd})
+	r.groupTopology(&t)
 
 	add := func(from, to string, cond bool) {
 		t.Edges = append(t.Edges, TopoEdge{From: from, To: to, Conditional: cond, Label: r.labels[[2]string{from, to}]})

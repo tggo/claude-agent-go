@@ -16,6 +16,7 @@ type agentConfig struct {
 	retry       *runner.RetryPolicy
 	progress    runner.ProgressFunc
 	allowErrRes bool
+	recoverMsg  string
 }
 
 // AgentOption configures Agent.
@@ -28,6 +29,11 @@ func WithRetry(p runner.RetryPolicy) AgentOption { return func(c *agentConfig) {
 func WithProgress(fn runner.ProgressFunc) AgentOption {
 	return func(c *agentConfig) { c.progress = fn }
 }
+
+// WithRecoverPrompt sets the prompt an agent node sends when Recover re-runs
+// it and resumes its logged CLI session (--resume). The default is the retry
+// policy's ResumePrompt when WithRetry sets one, else DefaultRecoverPrompt.
+func WithRecoverPrompt(p string) AgentOption { return func(c *agentConfig) { c.recoverMsg = p } }
 
 // AllowErrorResult hands results with IsError set to apply instead of failing
 // the node, so apply can inspect them and decide (for example to route to a
@@ -54,6 +60,19 @@ func runAgent(ctx context.Context, r *runner.Runner, in runner.Input, cfg *agent
 	if in.Label == "" {
 		in.Label = NodeName(ctx)
 	}
+	if sid, ok := RecoveredSession(ctx); ok && in.Resume == "" {
+		// The node crashed with this session running: continue it instead of
+		// starting over (the work done and the conversation are kept).
+		in.Resume, in.Continue, in.ForkSession = sid, false, false
+		switch {
+		case cfg.recoverMsg != "":
+			in.Prompt = cfg.recoverMsg
+		case cfg.retry != nil && cfg.retry.ResumePrompt != "":
+			in.Prompt = cfg.retry.ResumePrompt
+		default:
+			in.Prompt = DefaultRecoverPrompt
+		}
+	}
 	var (
 		res *runner.Result
 		err error
@@ -71,6 +90,15 @@ func runAgent(ctx context.Context, r *runner.Runner, in runner.Input, cfg *agent
 		}
 	}
 	progress := cfg.progress
+	if sc, ok := ctx.Value(scopeKey{}).(*scope); ok && sc.ck != nil {
+		user := progress
+		progress = func(ev claudecli.StreamEvent, n int) {
+			sc.noteSession(ctx, ev.SessionID) // logged before anyone reacts to the event
+			if user != nil {
+				user(ev, n)
+			}
+		}
+	}
 	if sc, ok := ctx.Value(scopeKey{}).(*scope); ok {
 		if ao, ok := sc.obs.(AgentObserver); ok {
 			user, info := cfg.progress, sc.info
