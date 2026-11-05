@@ -190,3 +190,35 @@ func TestConcurrentUse(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// Regression (found by fuzzing): ".." let a path escape an Allow glob.
+func TestFileRulesRejectDotDot(t *testing.T) {
+	p := &Policy{Rules: []Rule{Deny("Read(/etc/*)", "no"), Allow("Read(/work/*)")}}
+	read := func(path string) Decision {
+		b, _ := json.Marshal(map[string]string{"file_path": path})
+		return p.Decide(context.Background(), Request{Tool: "Read", Input: b})
+	}
+	assert.True(t, read("/work/a.go").Allowed())
+	assert.False(t, read("/work/../etc/passwd").Allowed())
+	assert.Equal(t, EffectDeny, read("/work/../etc/passwd").Effect, "deny sees the cleaned path")
+	assert.False(t, read(`/work/..\secret`).Allowed())
+}
+
+// Regression (found by fuzzing): a Deny on a command must see it nested in
+// substitutions, subshells and groups, not only in top-level segments.
+func TestBashDenySeesNestedCommands(t *testing.T) {
+	p := &Policy{Rules: []Rule{Deny("Bash(rm *)", "no"), Allow("Bash")}}
+	for _, cmd := range []string{"echo $(rm -rf x)", "echo `rm -rf x`", "(rm -rf x)", "{ rm -rf x; }", "ls; (rm x)"} {
+		assert.False(t, p.Decide(context.Background(), Request{Tool: "Bash", Input: bash(cmd)}).Allowed(), cmd)
+	}
+	assert.True(t, p.Decide(context.Background(), Request{Tool: "Bash", Input: bash("echo $(date)")}).Allowed())
+}
+
+// Regression (found by fuzzing): the Remember key must not collide when the
+// tool name contains the separator byte.
+func TestRememberKeyNoCollision(t *testing.T) {
+	ask := func(_ context.Context, r Request) (bool, string, error) { return r.Tool == "a\x00b", "", nil }
+	p := &Policy{Rules: []Rule{Ask("*", ask)}, Remember: true}
+	assert.True(t, p.Decide(context.Background(), Request{Tool: "a\x00b", Input: json.RawMessage("c")}).Allowed())
+	assert.False(t, p.Decide(context.Background(), Request{Tool: "a", Input: json.RawMessage("b\x00c")}).Allowed())
+}

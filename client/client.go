@@ -169,6 +169,7 @@ type Client struct {
 	waitErr  error
 	done     chan struct{}
 	closed   atomic.Bool
+	runID    string // remote-teardown tag; "" for transports without Terminator
 }
 
 const (
@@ -191,9 +192,14 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	}
 	env = append(env, cfg.Env...)
 
+	var runID string
+	if _, ok := cfg.Transport.(transport.Terminator); ok {
+		runID = transport.NewRunID()
+	}
 	cmd := cfg.Transport.Command(ctx, args, transport.CommandOpts{
 		WorkDir: cfg.WorkDir,
 		Env:     env,
+		RunID:   runID,
 	})
 	procgroup.Setup(cmd)
 
@@ -222,6 +228,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	c := &Client{
 		cfg:           cfg,
 		cmd:           cmd,
+		runID:         runID,
 		stdin:         stdin,
 		stderrTail:    stderrTail,
 		events:        make(chan *claudecli.StreamEvent, 64),
@@ -450,11 +457,38 @@ func (c *Client) Close() error {
 
 	select {
 	case <-c.done:
+		// A non-zero exit of the local proxy (ssh dropped, docker exec killed)
+		// can leave the remote claude running; sweep it. Clean exits removed
+		// their own bookkeeping.
+		if c.waitErr != nil {
+			c.terminateRemote()
+		}
 		return c.exitErr()
 	case <-time.After(5 * time.Second):
+		var rw sync.WaitGroup
+		rw.Add(1)
+		go func() { defer rw.Done(); c.terminateRemote() }()
 		procgroup.KillGraceful(c.cmd, 2*time.Second, c.done)
 		<-c.done
+		rw.Wait()
 		return c.exitErr()
+	}
+}
+
+// terminateTimeout bounds the best-effort remote cleanup in Close.
+var terminateTimeout = 15 * time.Second
+
+// terminateRemote stops the remote claude via the transport's Terminator, if it
+// has one. Best-effort: bounded by terminateTimeout, errors only logged.
+func (c *Client) terminateRemote() {
+	term, ok := c.cfg.Transport.(transport.Terminator)
+	if !ok || c.runID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), terminateTimeout)
+	defer cancel()
+	if err := term.Terminate(ctx, c.runID); err != nil {
+		c.cfg.Logger.Warn("claude client: remote teardown failed", "run_id", c.runID, "err", err)
 	}
 }
 

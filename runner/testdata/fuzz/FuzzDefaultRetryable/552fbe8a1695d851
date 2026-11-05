@@ -1,0 +1,4 @@
+go test fuzz v1
+string("\xa5\x9d\xe30\xcf")
+string("aaaaa000aaaaaa000aaaaaaaa00aaa")
+string("retrYAfter 9227000000")

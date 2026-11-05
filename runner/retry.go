@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -161,6 +162,8 @@ func stdoutResultTransient(stdout string) bool {
 	return apiStatusRe.MatchString(stdout)
 }
 
+const maxRetryAfterSecs = 24 * 60 * 60
+
 var retryAfterRe = regexp.MustCompile(`(?i)retry[- ]?after[:\s]+(\d+)`)
 
 // retryAfter extracts a server-suggested delay (seconds) from an attempt's
@@ -178,8 +181,12 @@ func retryAfter(res *Result, err error) time.Duration {
 	}
 	for _, t := range texts {
 		if m := retryAfterRe.FindStringSubmatch(t); m != nil {
+			// Atoi fails on overflow; a huge value must not wrap negative
+			// either, so anything over a day is clamped to a day.
 			if n, e := strconv.Atoi(m[1]); e == nil {
-				return time.Duration(n) * time.Second
+				return time.Duration(min(n, maxRetryAfterSecs)) * time.Second
+			} else if errors.Is(e, strconv.ErrRange) {
+				return maxRetryAfterSecs * time.Second
 			}
 		}
 	}

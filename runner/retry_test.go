@@ -158,3 +158,19 @@ func TestBackoffHonorsRetryAfter(t *testing.T) {
 		t.Errorf("backoff = %v, want >= 3s (retry-after)", d)
 	}
 }
+
+// Regression (found by fuzzing): an overflowing Retry-After wrapped negative.
+func TestRetryAfterClampsHugeValues(t *testing.T) {
+	pe := &ProcessError{Stderr: "retry-after: 99999999999999999999"}
+	if d := retryAfter(nil, pe); d != 24*time.Hour {
+		t.Errorf("overflow -> %v, want 24h", d)
+	}
+	pe = &ProcessError{Stderr: "retry-after: 9227000000"}
+	if d := retryAfter(nil, pe); d != 24*time.Hour {
+		t.Errorf("large -> %v, want 24h", d)
+	}
+	pe = &ProcessError{Stderr: "retry-after: 7"}
+	if d := retryAfter(nil, pe); d != 7*time.Second {
+		t.Errorf("7 -> %v", d)
+	}
+}

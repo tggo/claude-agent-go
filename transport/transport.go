@@ -8,9 +8,14 @@
 // directly, Docker prefixes `docker exec`, SSH prefixes `ssh`.
 //
 // Caveats for remote transports (Docker/SSH):
-//   - Teardown kills the LOCAL proxy process. The remote claude may linger;
-//     for guaranteed cleanup use `ssh -tt` (so SIGHUP propagates) or stop the
-//     container. Process-group teardown applies to the local side only.
+//   - Killing the LOCAL proxy (ssh / docker exec) does not stop the remote
+//     claude. Transports that implement Terminator close that gap: the runner
+//     and client give each run a unique ID (CommandOpts.RunID), the remote
+//     command records its PID under that ID, and on cancel/timeout/abort they
+//     call Terminate, which SIGTERMs then SIGKILLs the remote process tree
+//     (DockerRun: `docker stop` of the named container). We deliberately do not
+//     use `ssh -tt`: a PTY merges stderr into stdout and rewrites newlines,
+//     which corrupts stream-json.
 //   - In-process tools (the tools package) serve on the host's 127.0.0.1 and
 //     are unreachable from inside a container / across SSH without host
 //     networking or a reverse tunnel. Network-reachable MCP servers are fine.
@@ -31,6 +36,10 @@ import (
 type CommandOpts struct {
 	WorkDir string
 	Env     []string
+	// RunID, when non-empty, is a unique per-run tag (see NewRunID). Remote
+	// transports use it to make the remote process findable by Terminate and
+	// export it as CAG_RUN_ID. Empty = no remote bookkeeping (legacy argv).
+	RunID string
 }
 
 // Transport builds the command that runs claude with the given args. It must
@@ -86,11 +95,11 @@ func (d DockerExec) Command(ctx context.Context, args []string, opt CommandOpts)
 	if d.User != "" {
 		a = append(a, "-u", d.User)
 	}
-	for _, e := range opt.Env {
+	for _, e := range withRunEnv(opt) {
 		a = append(a, "-e", e)
 	}
-	a = append(a, d.Container, bin)
-	a = append(a, args...)
+	a = append(a, d.Container)
+	a = append(a, wrapArgv(opt.RunID, bin, args)...)
 	//nolint:gosec // container/args come from trusted config.
 	return exec.Command(docker, a...)
 }
@@ -130,8 +139,8 @@ func (d DockerRun) Command(ctx context.Context, args []string, opt CommandOpts) 
 	if !d.NoInit {
 		a = append(a, "--init")
 	}
-	if d.Name != "" {
-		a = append(a, "--name", d.Name)
+	if name := d.containerName(opt.RunID); name != "" {
+		a = append(a, "--name", name)
 	}
 	if d.Network != "" {
 		a = append(a, "--network", d.Network)
@@ -148,7 +157,7 @@ func (d DockerRun) Command(ctx context.Context, args []string, opt CommandOpts) 
 	if opt.WorkDir != "" {
 		a = append(a, "-w", opt.WorkDir)
 	}
-	for _, e := range opt.Env {
+	for _, e := range withRunEnv(opt) {
 		a = append(a, "-e", e)
 	}
 	a = append(a, d.Options...)
@@ -188,7 +197,7 @@ func (s SSH) Command(ctx context.Context, args []string, opt CommandOpts) *exec.
 		b.WriteString(shellQuote(opt.WorkDir))
 		b.WriteString(" && ")
 	}
-	for _, e := range opt.Env {
+	for _, e := range withRunEnv(opt) {
 		if k, v, ok := strings.Cut(e, "="); ok {
 			b.WriteString(k)
 			b.WriteString("=")
@@ -196,20 +205,25 @@ func (s SSH) Command(ctx context.Context, args []string, opt CommandOpts) *exec.
 			b.WriteString(" ")
 		}
 	}
-	b.WriteString(shellQuote(bin))
-	for _, arg := range args {
-		b.WriteString(" ")
+	for i, arg := range wrapArgv(opt.RunID, bin, args) {
+		if i > 0 {
+			b.WriteString(" ")
+		}
 		b.WriteString(shellQuote(arg))
 	}
 
+	//nolint:gosec // host/args come from trusted config; remote pieces are quoted.
+	return exec.Command(sshBin, s.sshArgs(b.String())...)
+}
+
+// sshArgs assembles `[-p port] [options…] host remote-command`.
+func (s SSH) sshArgs(remote string) []string {
 	a := []string{}
 	if s.Port != "" {
 		a = append(a, "-p", s.Port)
 	}
 	a = append(a, s.Options...)
-	a = append(a, s.Host, b.String())
-	//nolint:gosec // host/args come from trusted config; remote pieces are quoted.
-	return exec.Command(sshBin, a...)
+	return append(a, s.Host, remote)
 }
 
 // shellQuote wraps s in single quotes, escaping embedded single quotes, so it

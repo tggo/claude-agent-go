@@ -20,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -168,6 +170,10 @@ func stamp(raw []byte, ms int64) []byte {
 	return fmt.Appendf(nil, `{"_cag_t":%d%s%s`, ms, sep, rest)
 }
 
+// maxOffsetMS bounds a parsed offset so time.Duration(ms)*time.Millisecond
+// cannot overflow.
+const maxOffsetMS = int64(math.MaxInt64 / int64(time.Millisecond))
+
 var stampRe = regexp.MustCompile(`^\{"_cag_t":(\d+),?`)
 
 // unstamp removes the injected field, returning the original line and offset.
@@ -176,8 +182,11 @@ func unstamp(raw []byte) ([]byte, time.Duration) {
 	if m == nil {
 		return raw, 0
 	}
-	var ms int64
-	fmt.Sscanf(string(raw[m[2]:m[3]]), "%d", &ms)
+	// An absurd (overflowing) value must not wrap into a negative offset.
+	ms, err := strconv.ParseInt(string(raw[m[2]:m[3]]), 10, 64)
+	if err != nil || ms > maxOffsetMS {
+		ms = 0
+	}
 	out := append([]byte("{"), raw[m[1]:]...)
 	return out, time.Duration(ms) * time.Millisecond
 }

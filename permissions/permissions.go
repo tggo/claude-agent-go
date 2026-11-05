@@ -25,13 +25,18 @@
 // Shell commands are not trusted blindly: an Allow or Ask rule for Bash only
 // matches when every segment of a compound command ("a && b", "a | b", "a; b")
 // matches, and never when the command has command substitution, backticks or
-// redirections. Deny rules match when any segment matches.
+// redirections. Deny rules match when any segment matches, including commands
+// nested in substitutions, subshells and groups. For file tools (Read, Edit,
+// Write, ...) an Allow/Ask rule never matches a path containing "..", and a
+// Deny rule also sees the lexically cleaned path.
 package permissions
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -168,7 +173,8 @@ func (p *Policy) decide(ctx context.Context, req Request) Decision {
 }
 
 func (p *Policy) ask(ctx context.Context, r Rule, req Request) Decision {
-	key := req.Tool + "\x00" + string(req.Input)
+	// Length-prefixed so ("a\x00b","c") and ("a","b\x00c") cannot collide.
+	key := strconv.Itoa(len(req.Tool)) + ":" + req.Tool + string(req.Input)
 	if p.Remember {
 		p.mu.Lock()
 		m, ok := p.memo[key]
@@ -268,6 +274,9 @@ func primaryInput(tool string, raw json.RawMessage) string {
 
 func matchArg(pat, tool string, raw json.RawMessage, deny bool) bool {
 	in := primaryInput(tool, raw)
+	if fileTools[tool] {
+		return matchPath(pat, in, deny)
+	}
 	if tool != "Bash" {
 		return argGlob(pat, in)
 	}
@@ -275,7 +284,7 @@ func matchArg(pat, tool string, raw json.RawMessage, deny bool) bool {
 		if argGlob(pat, in) {
 			return true
 		}
-		for _, seg := range splitShell(in) {
+		for _, seg := range splitShellDeny(in) {
 			if argGlob(pat, seg) {
 				return true
 			}
@@ -295,6 +304,38 @@ func matchArg(pat, tool string, raw json.RawMessage, deny bool) bool {
 		}
 	}
 	return true
+}
+
+// fileTools are the tools whose argument is a filesystem path.
+var fileTools = map[string]bool{"Read": true, "Edit": true, "Write": true, "MultiEdit": true, "NotebookEdit": true}
+
+// matchPath matches a path argument. An Allow/Ask rule never matches a path
+// with a ".." element ("/work/../etc/passwd" must not satisfy "/work/*"); a
+// Deny rule matches the path as written or lexically resolved.
+func matchPath(pat, in string, deny bool) bool {
+	slashed := strings.ReplaceAll(in, "\\", "/")
+	if deny {
+		return argGlob(pat, in) || argGlob(pat, slashed) || argGlob(pat, path.Clean(slashed))
+	}
+	for _, el := range strings.Split(slashed, "/") {
+		if el == ".." {
+			return false
+		}
+	}
+	return argGlob(pat, in)
+}
+
+// splitShellDeny is splitShell for Deny rules: it additionally cuts at command
+// substitution, backticks, subshells and groups so a denied command nested in
+// one ("echo $(rm -rf x)", "(rm x)", "{ rm x; }") is still seen.
+func splitShellDeny(cmd string) []string {
+	return splitShell(strings.Map(func(r rune) rune {
+		switch r {
+		case '`', '(', ')', '{', '}':
+			return ';'
+		}
+		return r
+	}, cmd))
 }
 
 // splitShell splits a command on &&, ||, ;, |, & and newlines.

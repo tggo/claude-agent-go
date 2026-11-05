@@ -31,6 +31,7 @@ func TestLineWriterReportsFullWrite(t *testing.T) {
 func TestRedactTokens(t *testing.T) {
 	for _, tc := range []struct{ name, in, want string }{
 		{"tokenized url", "https://x-access-token:ghs_secret@github.com/o/r", "https://x-access-token:***@github.com/o/r"},
+		{"every occurrence", "a https://x-access-token:one@h/r b https://x-access-token:two@h/r", "a https://x-access-token:***@h/r b https://x-access-token:***@h/r"},
 		{"no token", "plain output", "plain output"},
 		{"token without terminator", "x-access-token:dangling", "x-access-token:dangling"},
 	} {

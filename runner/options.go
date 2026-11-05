@@ -91,6 +91,10 @@ type Config struct {
 	// logged and the run proceeds unrecorded. See recording.Dir and
 	// WithRecorder.
 	Recorder func(recording.Header) (*recording.Writer, error)
+
+	// Preflight, when true, runs Runner.Preflight once, lazily, before the first
+	// run; a failure is returned from every run instead of spending a launch.
+	Preflight bool
 }
 
 // Option mutates a Config. Use with New for ergonomic construction.
@@ -235,3 +239,8 @@ type Input struct {
 	// name). It is not sent to the CLI.
 	Label string
 }
+
+// WithPreflight makes the Runner verify the target (claude present, version >=
+// transport.MinCLIVersion, credentials) once before the first run. See
+// Runner.Preflight.
+func WithPreflight(on bool) Option { return func(c *Config) { c.Preflight = on } }

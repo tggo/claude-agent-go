@@ -10,7 +10,9 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tggo/claude-agent-go/claudecli"
 	"github.com/tggo/claude-agent-go/internal/cliout"
@@ -36,10 +38,18 @@ const (
 	killGrace = 2 * time.Second
 )
 
+// terminateTimeout bounds the best-effort remote cleanup (Terminator) after a
+// cancel/timeout/abort. A var so tests can shrink it.
+var terminateTimeout = 15 * time.Second
+
 // Runner executes the Claude CLI. It is safe for concurrent use: each call
 // builds its own subprocess and holds no per-invocation state.
 type Runner struct {
 	cfg Config
+
+	preflightOnce sync.Once
+	preflightInfo transport.PreflightInfo
+	preflightErr  error
 }
 
 // New constructs a Runner. A bare New() is valid; options and an explicit
@@ -140,7 +150,7 @@ type ProgressFunc func(ev claudecli.StreamEvent, eventNum int)
 // buildCmd assembles the *exec.Cmd via the configured transport: argv, working
 // dir, environment, and stdin prompt. The caller wires stdout/stderr and runs
 // it. The command is NOT context-bound — teardown is owned by startTeardown.
-func (r *Runner) buildCmd(ctx context.Context, in Input, mode outputMode) *exec.Cmd {
+func (r *Runner) buildCmd(ctx context.Context, in Input, mode outputMode) (*exec.Cmd, string) {
 	args := r.buildArgs(in, mode)
 
 	var env []string
@@ -150,33 +160,92 @@ func (r *Runner) buildCmd(ctx context.Context, in Input, mode outputMode) *exec.
 	env = append(env, r.cfg.Env...)
 	env = append(env, in.Env...)
 
+	// Remote transports get a per-run tag so teardown can find the remote
+	// process; Local has nothing to find and gets none.
+	var runID string
+	if _, ok := r.cfg.Transport.(transport.Terminator); ok {
+		runID = transport.NewRunID()
+	}
+
 	cmd := r.cfg.Transport.Command(ctx, args, transport.CommandOpts{
 		WorkDir: in.WorkDir,
 		Env:     env,
+		RunID:   runID,
 	})
 	cmd.Stdin = strings.NewReader(in.Prompt)
-	return cmd
+	return cmd, runID
 }
 
-// startTeardown puts cmd in its own process group, starts it, and kills the
-// group when cmdCtx is done (timeout/cancel). The returned channel must be
-// closed once cmd.Wait() returns, to stop the watcher. Works the same for any
-// transport — it tears down the local process (and its group); remote cleanup
-// is the transport's caveat.
-func startTeardown(cmdCtx context.Context, cmd *exec.Cmd) (chan struct{}, error) {
+// teardown owns stopping one run. kill stops the local process group
+// (SIGTERM, then SIGKILL after killGrace) AND, for transports implementing
+// transport.Terminator, the remote process — killing only the local ssh/docker
+// client would leave claude running on the far side.
+type teardown struct {
+	r        *Runner
+	cmd      *exec.Cmd
+	runID    string
+	procDone chan struct{}
+	wg       sync.WaitGroup
+	once     sync.Once
+}
+
+// startTeardown puts cmd in its own process group, starts it, and tears it down
+// when cmdCtx is done (timeout/cancel). Callers must call finish() once
+// cmd.Wait() returns.
+func (r *Runner) startTeardown(cmdCtx context.Context, cmd *exec.Cmd, runID string) (*teardown, error) {
 	procgroup.Setup(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	procDone := make(chan struct{})
+	t := &teardown{r: r, cmd: cmd, runID: runID, procDone: make(chan struct{})}
+	t.wg.Add(1)
 	go func() {
+		defer t.wg.Done()
 		select {
 		case <-cmdCtx.Done():
-			procgroup.KillGraceful(cmd, killGrace, procDone)
-		case <-procDone:
+			t.kill()
+		case <-t.procDone:
 		}
 	}()
-	return procDone, nil
+	return t, nil
+}
+
+// finish stops the watcher and waits for any teardown in flight (bounded by
+// terminateTimeout), so no remote cleanup outlives the run call.
+func (t *teardown) finish() {
+	close(t.procDone)
+	t.wg.Wait()
+}
+
+// killAsync starts kill in the background (used when the read loop must go on).
+func (t *teardown) killAsync() {
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		t.kill()
+	}()
+}
+
+// kill is idempotent; the local and remote kills run concurrently.
+func (t *teardown) kill() {
+	t.once.Do(func() {
+		var rw sync.WaitGroup
+		if term, ok := t.r.cfg.Transport.(transport.Terminator); ok && t.runID != "" {
+			rw.Add(1)
+			go func() {
+				defer rw.Done()
+				ctx, cancel := context.WithTimeout(context.Background(), terminateTimeout)
+				defer cancel()
+				if err := term.Terminate(ctx, t.runID); err != nil {
+					t.r.cfg.Logger.Warn("claude cli: remote teardown failed", "run_id", t.runID, "err", err)
+				} else {
+					t.r.cfg.Logger.Debug("claude cli: remote teardown done", "run_id", t.runID)
+				}
+			}()
+		}
+		procgroup.KillGraceful(t.cmd, killGrace, t.procDone)
+		rw.Wait()
+	})
 }
 
 // Run executes the CLI in plain-text mode (--print) and returns stdout.
@@ -192,19 +261,19 @@ func (r *Runner) Run(ctx context.Context, in Input) (res *Result, err error) {
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
-	cmd := r.buildCmd(cmdCtx, in, modePlain)
+	cmd, runID := r.buildCmd(cmdCtx, in, modePlain)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = r.stderrWriter(&stderr)
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "plain", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
-	procDone, err := startTeardown(cmdCtx, cmd)
+	td, err := r.startTeardown(cmdCtx, cmd, runID)
 	if err != nil {
 		return nil, &CLINotFoundError{Binary: r.cfg.Binary, Err: err}
 	}
 	err = cmd.Wait()
-	close(procDone)
+	td.finish()
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: errors.Join(cmdCtx.Err(), err)}
@@ -234,19 +303,19 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (res *Result, err error)
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
-	cmd := r.buildCmd(cmdCtx, in, modeJSON)
+	cmd, runID := r.buildCmd(cmdCtx, in, modeJSON)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = r.stderrWriter(&stderr)
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "json", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
-	procDone, err := startTeardown(cmdCtx, cmd)
+	td, err := r.startTeardown(cmdCtx, cmd, runID)
 	if err != nil {
 		return nil, &CLINotFoundError{Binary: r.cfg.Binary, Err: err}
 	}
 	err = cmd.Wait()
-	close(procDone)
+	td.finish()
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: errors.Join(cmdCtx.Err(), err)}
@@ -286,7 +355,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	cmdCtx, cancel := context.WithTimeout(ctx, r.cfg.ProcessTimeout)
 	defer cancel()
 
-	cmd := r.buildCmd(cmdCtx, in, modeStream)
+	cmd, runID := r.buildCmd(cmdCtx, in, modeStream)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("create stdout pipe: %w", err)
@@ -296,7 +365,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 
 	r.cfg.Logger.Info("claude cli: run", "mode", "stream", "model", r.modelOf(in), "work_dir", in.WorkDir, "prompt_len", len(in.Prompt))
 
-	procDone, err := startTeardown(cmdCtx, cmd)
+	td, err := r.startTeardown(cmdCtx, cmd, runID)
 	if err != nil {
 		return nil, &CLINotFoundError{Binary: r.cfg.Binary, Err: err}
 	}
@@ -323,7 +392,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	var abortErr error
 	abort := func(e error) {
 		abortErr = e
-		go procgroup.KillGraceful(cmd, killGrace, procDone)
+		td.killAsync()
 	}
 scan:
 	for scanner.Scan() {
@@ -372,7 +441,7 @@ scan:
 	}
 
 	waitErr := cmd.Wait()
-	close(procDone)
+	td.finish()
 	if abortErr != nil {
 		text, _ := claudecli.ExtractTextFromStream(allLines)
 		partial := &Result{ResultText: text, SessionID: sessionID, Duration: time.Since(start)}
@@ -468,9 +537,26 @@ const maxSnippet = 2000
 func sanitizeOutput(output []byte) string {
 	s := cliout.RedactTokens(string(output))
 	if len(s) > maxSnippet {
-		s = s[:maxSnippet] + "... (truncated)"
+		s = s[:runeStart(s, maxSnippet)] + "... (truncated)"
 	}
 	return s
+}
+
+// runeStart moves i back to the start of the rune containing byte i so a cut
+// never splits a UTF-8 sequence.
+func runeStart(s string, i int) int {
+	for i > 0 && !utf8.RuneStart(s[i]) {
+		i--
+	}
+	return i
+}
+
+// runeBoundaryAfter moves i forward to the next rune start.
+func runeBoundaryAfter(s string, i int) int {
+	for i < len(s) && !utf8.RuneStart(s[i]) {
+		i++
+	}
+	return i
 }
 
 // sanitizeTail is sanitizeOutput keeping the END of the output instead of the
@@ -479,7 +565,7 @@ func sanitizeOutput(output []byte) string {
 func sanitizeTail(output []byte) string {
 	s := cliout.RedactTokens(string(output))
 	if len(s) > maxSnippet {
-		s = "(truncated) ..." + s[len(s)-maxSnippet:]
+		s = "(truncated) ..." + s[runeBoundaryAfter(s, len(s)-maxSnippet):]
 	}
 	return s
 }

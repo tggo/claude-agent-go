@@ -33,10 +33,21 @@ func (w *LineWriter) Write(p []byte) (int, error) {
 // tokenized URLs, so the token can surface in git's own error text — which then
 // lands in a log or an error string.
 func RedactTokens(s string) string {
-	if idx := strings.Index(s, "x-access-token:"); idx != -1 {
-		if end := strings.Index(s[idx:], "@"); end != -1 {
-			s = s[:idx] + "x-access-token:***" + s[idx+end:]
+	const marker = "x-access-token:"
+	var b strings.Builder
+	for {
+		idx := strings.Index(s, marker)
+		if idx == -1 {
+			break
 		}
+		end := strings.IndexByte(s[idx:], '@')
+		if end == -1 {
+			break // unterminated: nothing to anchor the end of the secret on
+		}
+		b.WriteString(s[:idx+len(marker)])
+		b.WriteString("***")
+		s = s[idx+end:]
 	}
-	return s
+	b.WriteString(s)
+	return b.String()
 }

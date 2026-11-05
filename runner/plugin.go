@@ -57,6 +57,14 @@ func (e *PluginAbortError) Error() string {
 func (e *PluginAbortError) Unwrap() error { return e.Err }
 
 func (r *Runner) beginRun(ctx context.Context, in Input) (Input, error) {
+	if r.cfg.Preflight {
+		r.preflightOnce.Do(func() {
+			r.preflightInfo, r.preflightErr = r.runPreflight(ctx)
+		})
+		if r.preflightErr != nil {
+			return in, r.preflightErr
+		}
+	}
 	for _, p := range r.cfg.Plugins {
 		if b, ok := p.(BeforeRun); ok {
 			var err error
