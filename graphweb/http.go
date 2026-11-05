@@ -32,6 +32,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("GET /api/topology", s.handleTopology)
 	mux.HandleFunc("GET /api/artifact/{seq}", s.handleArtifact)
+	mux.HandleFunc("GET /api/review/{seq}/{n}", s.handleReviewItem)
 	mux.HandleFunc("GET /api/breakpoints", s.handleGetBreakpoints)
 	mux.HandleFunc("POST /api/answer", s.post(s.handleAnswer))
 	mux.HandleFunc("POST /api/breakpoints", s.post(s.handleSetBreakpoints))
@@ -369,25 +370,49 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	f, err := os.Open(a.Artifact.Path)
+	serveFile(w, r, a.Artifact.Path, a.Artifact.Mime)
+}
+
+// serveFile streams path with its mime type (guessed when empty), sandboxed.
+func serveFile(w http.ResponseWriter, r *http.Request, path, ct string) {
+	f, err := os.Open(path)
 	if err != nil {
-		http.Error(w, "artifact file is gone", http.StatusNotFound)
+		http.Error(w, "file is gone", http.StatusNotFound)
 		return
 	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil || st.IsDir() {
-		http.Error(w, "artifact file is gone", http.StatusNotFound)
+		http.Error(w, "file is gone", http.StatusNotFound)
 		return
 	}
-	ct := a.Artifact.Mime
 	if ct == "" {
-		ct = guessMime(a.Artifact.Path)
+		ct = guessMime(path)
 	}
 	h := w.Header()
 	h.Set("Content-Type", ct)
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Content-Security-Policy", "sandbox")
 	h.Set("Cache-Control", "no-cache")
-	http.ServeContent(w, r, filepath.Base(a.Artifact.Path), st.ModTime(), f)
+	http.ServeContent(w, r, filepath.Base(path), st.ModTime(), f)
+}
+
+// handleReviewItem streams item n of the review carried by the interrupt
+// event seq. As with artifacts, the path comes only from the journal.
+func (s *Server) handleReviewItem(w http.ResponseWriter, r *http.Request) {
+	seq, err1 := strconv.ParseInt(r.PathValue("seq"), 10, 64)
+	n, err2 := strconv.Atoi(r.PathValue("n"))
+	var path string
+	s.mu.Lock()
+	if err1 == nil && err2 == nil && seq >= 1 && seq <= int64(len(s.events)) {
+		if ev := s.events[seq-1]; ev.Type == TypeInterrupt && n >= 0 && n < len(ev.Items) {
+			path = ev.Items[n].Path
+		}
+	}
+	s.mu.Unlock()
+	if path == "" {
+		http.NotFound(w, r)
+		return
+	}
+	serveFile(w, r, path, "")
 }

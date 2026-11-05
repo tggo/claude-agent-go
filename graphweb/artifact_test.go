@@ -1,13 +1,16 @@
 package graphweb
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -120,5 +123,74 @@ func TestGuessMime(t *testing.T) {
 	assert.Equal(t, "application/octet-stream", guessMime("a.zzzunknown"))
 	for _, ext := range []string{".json", ".webp", ".txt"} {
 		assert.NotEqual(t, "application/octet-stream", guessMime("a"+ext))
+	}
+}
+
+func TestReviewItemsServedAndAnswered(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "p01.png")
+	require.NoError(t, os.WriteFile(p, []byte("IMG"), 0o600))
+	items := []graph.ReviewItem{{Name: "p01", Path: p, Caption: "c"}, {Name: "gone", Path: filepath.Join(dir, "nope.png")}}
+	s := newSrv(t)
+	ts := newTS(t, s)
+	g := graph.New[st]("rev").
+		AddNode("letter", func(ctx context.Context, x *st) error {
+			rv, ok := graph.ReviewAnswer(ctx)
+			if !ok {
+				return graph.InterruptReview("look", items)
+			}
+			x.Note = rv.Comments["p01"] + "|" + rv.General
+			return nil
+		}).AddEdge(graph.Start, "letter").AddEdge("letter", graph.End)
+	run, err := g.Compile(graph.WithObserver(s))
+	require.NoError(t, err)
+
+	done := make(chan st, 1)
+	go func() {
+		final, _, err := RunInteractive(context.Background(), run, st{}, s)
+		assert.NoError(t, err)
+		done <- final
+	}()
+	var seq int64
+	require.Eventually(t, func() bool {
+		for _, ev := range s.Events() {
+			if ev.Type == TypeInterrupt {
+				seq = ev.Seq
+				assert.Equal(t, items, ev.Items)
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 10*time.Millisecond)
+
+	u := ts.URL + "/api/review/" + strconv.FormatInt(seq, 10) + "/"
+	resp, body := get(t, u+"0", "")
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "image/png", resp.Header.Get("Content-Type"))
+	assert.Equal(t, "IMG", string(body))
+	for _, bad := range []string{"1", "2", "-1", "x"} {
+		resp, _ = get(t, u+bad, "")
+		assert.Equal(t, 404, resp.StatusCode, bad)
+	}
+	resp, _ = get(t, ts.URL+"/api/review/1/0", "") // not an interrupt event
+	assert.Equal(t, 404, resp.StatusCode)
+	resp, _ = get(t, ts.URL+"/api/review/zz/0", "")
+	assert.Equal(t, 404, resp.StatusCode)
+	resp, _ = get(t, u+"0", "evil.example")
+	assert.Equal(t, 403, resp.StatusCode)
+
+	ans, _ := json.Marshal(map[string]any{"approved": false, "comments": map[string]string{"p01": "fix"}, "general": "g"})
+	body2, _ := json.Marshal(map[string]string{"answer": string(ans)})
+	req, _ := http.NewRequest("POST", ts.URL+"/api/answer", bytes.NewReader(body2))
+	req.Header.Set("X-Graphweb-Token", s.Token())
+	r2, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	r2.Body.Close()
+	assert.Equal(t, 200, r2.StatusCode)
+	select {
+	case final := <-done:
+		assert.Equal(t, "fix|g", final.Note)
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not resume")
 	}
 }

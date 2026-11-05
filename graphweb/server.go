@@ -22,6 +22,11 @@
 //	    return nil
 //	}
 //
+// A node can also pause for a human review of files: return
+// graph.InterruptReview(question, items) and the UI shows a review page (every
+// item, a comment box under each, "Approve all" / "Send comments"); the answer
+// reaches the node as graph.ReviewAnswer(ctx).
+//
 // Only paths recorded in artifact events are ever served (GET
 // /api/artifact/{seq}); they are read from disk at request time, so the files
 // must outlive the run, also for NewReplay.
@@ -113,8 +118,9 @@ type Event struct {
 
 	Artifact *graph.Artifact `json:"artifact,omitempty"` // artifact (served at /api/artifact/{seq})
 
-	Question string `json:"question,omitempty"` // interrupt
-	Answer   string `json:"answer,omitempty"`   // resume
+	Question string             `json:"question,omitempty"` // interrupt
+	Items    []graph.ReviewItem `json:"items,omitempty"`    // interrupt: files to review (served at /api/review/{seq}/{n})
+	Answer   string             `json:"answer,omitempty"`   // resume
 
 	Status       string   `json:"status,omitempty"` // graph_end: ok | error | cancelled | max_steps
 	TotalCostUSD float64  `json:"total_cost_usd,omitempty"`
@@ -295,7 +301,7 @@ func (s *Server) NodeEnd(_ context.Context, i graph.StepInfo, err error) {
 	s.emit(ev)
 	if i.Paused {
 		s.markOpen()
-		s.emit(Event{Run: i.RunID, Type: TypeInterrupt, Node: i.Node, Step: i.Step, Question: i.Question})
+		s.emit(Event{Run: i.RunID, Type: TypeInterrupt, Node: i.Node, Step: i.Step, Question: i.Question, Items: i.Items})
 	}
 }
 
@@ -528,7 +534,7 @@ func RunInteractive[S any](ctx context.Context, r *graph.Runnable[S], init S, sr
 		if !ok {
 			return st, rep, err
 		}
-		srv.ensureOpen(intr.Checkpoint.RunID, intr.Node, intr.Question)
+		srv.ensureOpen(intr.Checkpoint.RunID, intr.Node, intr.Question, intr.Items)
 		answer, aerr := srv.waitAnswer(ctx)
 		if aerr != nil {
 			return st, rep, aerr
@@ -538,7 +544,7 @@ func RunInteractive[S any](ctx context.Context, r *graph.Runnable[S], init S, sr
 }
 
 // ensureOpen opens the interrupt in the UI if the observer has not already.
-func (s *Server) ensureOpen(run, node, question string) {
+func (s *Server) ensureOpen(run, node, question string, items []graph.ReviewItem) {
 	s.mu.Lock()
 	if s.open > 0 {
 		s.mu.Unlock()
@@ -546,7 +552,7 @@ func (s *Server) ensureOpen(run, node, question string) {
 	}
 	s.open++
 	s.mu.Unlock()
-	s.emit(Event{Run: run, Type: TypeInterrupt, Node: node, Question: question})
+	s.emit(Event{Run: run, Type: TypeInterrupt, Node: node, Question: question, Items: items})
 }
 
 // ---- helpers ----
