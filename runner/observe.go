@@ -29,6 +29,7 @@ type Observer interface {
 // RunRecord is a summary of one run, passed to an Observer.
 type RunRecord struct {
 	Mode         string        // "plain" | "json" | "stream"
+	Label        string        // Input.Label (e.g. a graph node name)
 	Model        string        // resolved model
 	Transport    string        // transport Go type, e.g. "transport.SSH"
 	WorkDir      string        // working directory
@@ -50,6 +51,7 @@ func (r *Runner) observe(mode string, in Input, start time.Time, res *Result, er
 	}
 	rec := RunRecord{
 		Mode:      mode,
+		Label:     in.Label,
 		Model:     r.modelOf(in),
 		Transport: fmt.Sprintf("%T", r.cfg.Transport),
 		WorkDir:   in.WorkDir,

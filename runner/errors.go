@@ -46,6 +46,11 @@ type ProcessError struct {
 	// platform's resource accounting (see MaxRSSBytes).
 	ProcessState *os.ProcessState
 
+	// SessionID is the Claude session id the run reported before it died
+	// (stream mode), or "". With it the session can be resumed (--resume)
+	// instead of rerun from scratch — see RetryPolicy.Resume.
+	SessionID string
+
 	Err error
 }
 
@@ -96,13 +101,60 @@ func (e *ProcessError) Unwrap() error { return e.Err }
 // TimeoutError is returned when the invocation exceeds ProcessTimeout.
 type TimeoutError struct {
 	Timeout string
-	Err     error
+	// SessionID is the session id seen before the timeout (stream mode), or "".
+	SessionID string
+	Err       error
 }
 
 func (e *TimeoutError) Error() string {
 	return fmt.Sprintf("claude cli timed out after %s", e.Timeout)
 }
 func (e *TimeoutError) Unwrap() error { return e.Err }
+
+// TruncatedStreamError is returned by RunStream when the CLI exited cleanly but
+// the stream ended without a result event — the response was cut mid-flight
+// (an upstream connection drop, a proxy closing a long response). The partial
+// Result is returned alongside it. Its TotalCostUSD is 0: the CLI reports cost
+// only in the result event, so the spend of a truncated attempt is unknown and
+// is not counted toward RetryPolicy.MaxSpendUSD.
+type TruncatedStreamError struct {
+	// SessionID is the session id seen before the cut, or "" if none was.
+	SessionID string
+	// Events is how many stream lines were read.
+	Events int
+	// PartialText is the assistant text received before the cut.
+	PartialText string
+}
+
+func (e *TruncatedStreamError) Error() string {
+	return fmt.Sprintf("claude cli stream ended without a result event after %d events (session %q)", e.Events, e.SessionID)
+}
+
+// IsTruncatedStream reports whether err is (or wraps) a TruncatedStreamError,
+// and returns it.
+func IsTruncatedStream(err error) (*TruncatedStreamError, bool) {
+	var e *TruncatedStreamError
+	if errors.As(err, &e) {
+		return e, true
+	}
+	return nil, false
+}
+
+// SessionIDOf returns the session id carried by a run error (ProcessError,
+// TimeoutError, TruncatedStreamError), or "".
+func SessionIDOf(err error) string {
+	if e, ok := IsTruncatedStream(err); ok {
+		return e.SessionID
+	}
+	if e, ok := IsProcessError(err); ok {
+		return e.SessionID
+	}
+	var te *TimeoutError
+	if errors.As(err, &te) {
+		return te.SessionID
+	}
+	return ""
+}
 
 // IsCLINotFound reports whether err is (or wraps) a CLINotFoundError.
 func IsCLINotFound(err error) bool {

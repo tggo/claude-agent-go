@@ -14,6 +14,7 @@ import (
 	"github.com/tggo/claude-agent-go/claudecli"
 	"github.com/tggo/claude-agent-go/internal/cliout"
 	"github.com/tggo/claude-agent-go/internal/procgroup"
+	"github.com/tggo/claude-agent-go/recording"
 	"github.com/tggo/claude-agent-go/transport"
 )
 
@@ -275,11 +276,21 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		return nil, &CLINotFoundError{Binary: r.cfg.Binary, Err: err}
 	}
 
+	rec := r.openRecorder(ctx, in, start)
+	defer func() {
+		if rec != nil {
+			if cerr := rec.Close(); cerr != nil {
+				r.cfg.Logger.Warn("claude cli: recording close", "err", cerr)
+			}
+		}
+	}()
+
 	scanner := bufio.NewScanner(stdoutPipe)
 	scanner.Buffer(make([]byte, 0, r.cfg.MaxBufferSize), r.cfg.MaxBufferSize)
 
 	var allLines [][]byte
 	var resultEvent *claudecli.StreamEvent
+	sessionID := ""
 	eventNum := 0
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -287,9 +298,19 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		copy(lineCopy, line)
 		allLines = append(allLines, lineCopy)
 		eventNum++
+		if rec != nil {
+			if werr := rec.WriteLine(lineCopy); werr != nil {
+				r.cfg.Logger.Warn("claude cli: recording write failed; continuing unrecorded", "err", werr)
+				rec.Close()
+				rec = nil
+			}
+		}
 		ev := claudecli.ParseStreamLine(lineCopy)
 		if ev == nil {
 			continue
+		}
+		if ev.SessionID != "" {
+			sessionID = ev.SessionID
 		}
 		if ev.IsResult() {
 			resultEvent = ev
@@ -298,20 +319,30 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 			progress(*ev, eventNum)
 		}
 	}
-	if scanErr := scanner.Err(); scanErr != nil {
+	scanErr := scanner.Err()
+	if scanErr != nil {
 		r.cfg.Logger.Warn("claude cli: scanner error", "err", scanErr)
+		// The scanner stopped reading; drain the pipe so the child is not
+		// left blocked on a write until ProcessTimeout.
+		_, _ = io.Copy(io.Discard, stdoutPipe)
 	}
 
 	waitErr := cmd.Wait()
 	close(procDone)
+	if scanErr != nil && cmdCtx.Err() == nil {
+		// Deterministic (e.g. bufio.ErrTooLong): not a truncation, not retryable.
+		return nil, fmt.Errorf("claude cli: read stream (raise WithMaxBufferSize if a line is too long): %w", scanErr)
+	}
 	if waitErr != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: waitErr}
+			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), SessionID: sessionID, Err: waitErr}
 		}
 		if cmdCtx.Err() != nil {
 			return nil, fmt.Errorf("claude cli cancelled: %w", cmdCtx.Err())
 		}
-		return nil, processError(cmd, tailBytes(allLines, 20), stderr.Bytes(), waitErr)
+		pe := processError(cmd, tailBytes(allLines, 20), stderr.Bytes(), waitErr)
+		pe.SessionID = sessionID
+		return nil, pe
 	}
 
 	resultText, finalEvent := claudecli.ExtractTextFromStream(allLines)
@@ -319,16 +350,46 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		resultEvent = finalEvent
 	}
 
-	res = &Result{ResultText: resultText, Duration: time.Since(start)}
-	if resultEvent != nil {
-		res.SessionID = resultEvent.SessionID
-		res.TotalCostUSD = resultEvent.Cost()
-		res.NumTurns = resultEvent.NumTurns
-		res.IsError = resultEvent.IsError
+	res = &Result{ResultText: resultText, SessionID: sessionID, Duration: time.Since(start)}
+	if resultEvent == nil {
+		r.cfg.Logger.Warn("claude cli: stream ended without a result event", "events", eventNum, "session_id", sessionID)
+		return res, &TruncatedStreamError{SessionID: sessionID, Events: eventNum, PartialText: resultText}
 	}
+	if resultEvent.SessionID != "" {
+		res.SessionID = resultEvent.SessionID
+	}
+	res.TotalCostUSD = resultEvent.Cost()
+	res.NumTurns = resultEvent.NumTurns
+	res.IsError = resultEvent.IsError
 
 	r.cfg.Logger.Info("claude cli: done", "mode", "stream", "events", eventNum, "cost_usd", res.TotalCostUSD, "turns", res.NumTurns, "duration", res.Duration)
 	return res, nil
+}
+
+// openRecorder opens a recording for a stream run, or returns nil when no
+// Recorder is configured or it fails (logged; the run is not blocked).
+func (r *Runner) openRecorder(ctx context.Context, in Input, start time.Time) *recording.Writer {
+	if r.cfg.Recorder == nil {
+		return nil
+	}
+	w, err := r.cfg.Recorder(recording.Header{
+		Label:     in.Label,
+		Prompt:    in.Prompt,
+		Model:     r.modelOf(in),
+		WorkDir:   in.WorkDir,
+		StartedAt: start,
+		Attempt:   attemptOf(ctx),
+	})
+	if err != nil {
+		r.cfg.Logger.Warn("claude cli: recorder failed; running unrecorded", "err", err)
+		return nil
+	}
+	return w
+}
+
+func attemptOf(ctx context.Context) int {
+	n, _ := ctx.Value(attemptKey{}).(int)
+	return n
 }
 
 func (r *Runner) modelOf(in Input) string {

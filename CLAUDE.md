@@ -4,7 +4,7 @@ A Go SDK that drives the **Claude Code CLI** (`claude`) as a subprocess: a thin,
 typed client around the binary, plus an interactive session client, in-process
 Go tools, permission/hook callbacks, and inline subagents.
 
-Module: `github.com/tggo/claude-agent-go` · Go 1.25.
+Module: `github.com/tggo/claude-agent-go` · Go 1.27.
 
 ## What this is (and isn't)
 
@@ -29,6 +29,11 @@ Module: `github.com/tggo/claude-agent-go` · Go 1.25.
 | `transport` | How the binary is launched: `Local` (default), `DockerExec`, `SSH`. Builds the `*exec.Cmd`; runner/client own piping + teardown. |
 | `workspace` | Project/session dirs, `CLAUDE.md` placement, git worktrees, `RunGit`. |
 | `signal` | Marker-agnostic outcome detection. |
+| `graph` | Typed execution graphs (`Graph[S]`): nodes, conditional edges/loops, parallel fan-out, `Interrupt`/`Resume` checkpoints, `Agent` nodes over runner, per-node `Report`, `Mermaid()`. |
+| `eval` | Agent evals: trajectory matching, ROUGE/judge scoring, budgets, JSON eval sets, `RunT`. Metrics come from stream lines or recordings. |
+| `recording` | JSONL run recordings (`runner.WithRecorder`) + `ReplayTransport` for offline replay. One file is replay fixture, eval golden and `cag trace` input. |
+| `fleet` / `budget` | Worker pool over worktrees; cross-run spend tracking. |
+| `internal/trace` | HTML rendering for `cag trace`. |
 | `internal/procgroup` | Cross-platform process-group setup/kill. |
 
 ## Commands
@@ -70,5 +75,10 @@ go test -tags integration ./...    # uses the cheap haiku model
 - `can_use_tool` needs the CLI to emit `control_request{subtype:"can_use_tool"}`
   under `--permission-prompt-tool stdio`. Broken in CLI 2.1.6, fixed in 2.1.196
   (the version this SDK targets). On older CLIs the callback silently won't fire.
+- Stream-json per-message `usage` is a mid-stream snapshot (output tokens are
+  mostly absent); the `result` event's `usage` holds the run totals. Prefer it.
+- `AskUserQuestion` reaches the host as `can_use_tool` (with
+  `requires_user_interaction: true`); answer with `updatedInput` = input +
+  `answers` keyed by question text (verified on 2.1.318).
 - The `skills` allowlist filters skills out of the model's **context**, not the
   installed-skills list reported in `system/init`.

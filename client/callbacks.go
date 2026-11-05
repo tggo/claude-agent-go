@@ -126,7 +126,18 @@ func (c *Client) handleControlRequest(line []byte) {
 func (c *Client) dispatchControl(req incomingControlRequest) (map[string]any, error) {
 	switch req.Request.Subtype {
 	case "can_use_tool":
+		if req.Request.ToolName == askUserToolName && c.cfg.OnAskUser != nil {
+			return c.runCallback(func(ctx context.Context) (map[string]any, error) {
+				return c.answerAskUser(ctx, req.Request.Input), nil
+			})
+		}
 		if c.cfg.CanUseTool == nil {
+			if c.cfg.OnAskUser != nil {
+				if c.cfg.denyOtherTools {
+					return Deny(`tool "` + req.Request.ToolName + `" needs approval: set Config.CanUseTool to handle tools other than AskUserQuestion`).toResponseData(req.Request.Input), nil
+				}
+				return Allow().toResponseData(req.Request.Input), nil
+			}
 			return nil, errNoPermissionCallback
 		}
 		return c.runCallback(func(ctx context.Context) (map[string]any, error) {

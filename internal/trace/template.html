@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cag trace{{if .Models}} · {{(index .Models 0).Title}}{{end}}</title>
+<style>
+:root{--bg:#fafafa;--fg:#1c1e21;--mut:#6b7280;--card:#fff;--bd:#e3e5e8;--acc:#2563eb;--tool:#7c3aed;--ok:#15803d;--err:#b91c1c;--errbg:#fef2f2;--code:#f3f4f6;--think:#b45309;}
+@media (prefers-color-scheme:dark){:root{--bg:#111316;--fg:#e6e8eb;--mut:#9aa1ab;--card:#191c20;--bd:#2c3036;--acc:#6ea0ff;--tool:#b69cff;--ok:#4ade80;--err:#f87171;--errbg:#2a1717;--code:#22262b;--think:#fbbf24;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 12px}h2{font-size:18px;margin:0 0 6px}
+pre,code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+pre{background:var(--code);border-radius:6px;padding:8px 10px;margin:4px 0;white-space:pre-wrap;word-break:break-word;overflow-x:auto}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin:0 0 18px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--bd)}
+th{color:var(--mut);font-weight:600}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:10px 0}
+.stat{background:var(--code);border-radius:8px;padding:6px 10px}
+.stat b{display:block;font-size:16px}.stat span{color:var(--mut);font-size:12px}
+.meta{color:var(--mut);font-size:13px;word-break:break-word}
+.prompt{white-space:pre-wrap}
+.badge{display:inline-block;padding:0 8px;border-radius:99px;font-size:12px;border:1px solid currentColor}
+.ok{color:var(--ok)}.error{color:var(--err)}.incomplete{color:var(--think)}
+.step{border-left:3px solid var(--bd);padding:4px 0 4px 10px;margin:6px 0}
+.step .hd{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13px}
+.t{color:var(--mut);font-family:ui-monospace,Menlo,monospace;font-size:12px;min-width:64px}
+.k{font-weight:600}
+.step.text{border-color:var(--acc)}.step.text .k{color:var(--acc)}
+.step.thinking{border-color:var(--think)}.step.thinking .k{color:var(--think)}
+.step.tool_use{border-color:var(--tool)}.step.tool_use .k{color:var(--tool)}
+.step.tool_result{border-color:var(--ok)}.step.tool_result .k{color:var(--ok)}
+.step.tool_result.err,.step.result.err{border-color:var(--err);background:var(--errbg)}
+.step.tool_result.err .k,.step.result.err .k{color:var(--err)}
+.step.system,.step.rate_limit{border-color:var(--bd);color:var(--mut);font-size:12.5px}
+.step.result{border-color:var(--fg)}
+.body{white-space:pre-wrap;word-break:break-word}
+details>summary{cursor:pointer;color:var(--mut);font-size:13px}
+.wf{position:relative;height:8px;background:var(--code);border-radius:4px;margin:4px 0;max-width:420px}
+.wf i{position:absolute;top:0;bottom:0;background:var(--tool);border-radius:4px;min-width:2px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin:8px 0}
+.toolbar label{cursor:pointer}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>cag trace</h1>
+{{if .Graph}}<section class="card"><h2>Graph</h2><pre>{{.Graph}}</pre></section>{{end}}
+{{if .Multi}}
+<section class="card"><h2>Runs</h2>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Label</th><th>Model</th><th class="n">Cost</th><th class="n">Duration</th><th class="n">Tool calls</th><th>Status</th></tr>
+{{range $i, $m := .Models}}<tr><td>{{inc $i}}</td><td><a href="#{{$m.ID}}">{{$m.Title}}</a></td><td>{{$m.Model}}</td><td class="n">{{cost $m.CostUSD}}</td><td class="n">{{dur $m.Wall}}</td><td class="n">{{$m.ToolCalls}}</td><td><span class="badge {{$m.Status}}">{{$m.Status}}</span></td></tr>
+{{end}}{{with total .Models}}<tr><th></th><th>Total <span class="meta">(failed or truncated attempts included: they are real executed work)</span></th><th></th><th class="n">{{cost .Cost}}</th><th class="n">{{dur .Wall}}</th><th class="n">{{.Tools}}</th><th></th></tr>{{end}}
+</table></div></section>
+{{end}}
+<div class="toolbar">
+<button type="button" id="expand">Expand all</button><button type="button" id="collapse">Collapse all</button>
+<label><input type="checkbox" data-k="thinking" checked> thinking</label>
+<label><input type="checkbox" data-k="system" checked> system</label>
+<label><input type="checkbox" data-k="tool_result" checked> tool results</label>
+</div>
+{{range .Models}}
+<section class="card" id="{{.ID}}">
+<h2>{{.Title}} <span class="badge {{.Status}}">{{.Status}}</span></h2>
+<div class="meta">{{with .Model}}{{.}} · {{end}}{{with .SessionID}}session <span class="mono">{{.}}</span> · {{end}}{{with .WorkDir}}<span class="mono">{{.}}</span> · {{end}}{{with .Source}}{{.}}{{end}}</div>
+{{with .Prompt}}<details open><summary>Prompt</summary><pre class="prompt">{{.}}</pre></details>{{end}}
+<div class="stats">
+<div class="stat"><b>{{cost .CostUSD}}</b><span>cost</span></div>
+<div class="stat"><b>{{dur .Wall}}</b><span>wall time</span></div>
+<div class="stat"><b>{{.Turns}}</b><span>turns</span></div>
+<div class="stat"><b>{{num .InputTokens}} / {{num .OutputTokens}}</b><span>tokens in / out</span></div>
+<div class="stat"><b>{{num .CacheRead}} / {{num .CacheWrite}}</b><span>cache read / write</span></div>
+<div class="stat"><b>{{.Events}}</b><span>events</span></div>
+<div class="stat"><b>{{.ToolCalls}}</b><span>tool calls</span></div>
+<div class="stat"><b>{{.Inferences}}</b><span>inferences</span></div>
+{{if .Errors}}<div class="stat"><b class="error">{{.Errors}}</b><span>errors</span></div>{{end}}
+</div>
+{{range .Steps}}
+{{if eq .Kind "text"}}<div class="step text" data-k="text"><div class="hd"><span class="t">+{{dur .Offset}}</span><span class="k">assistant</span></div><div class="body">{{.Text}}</div></div>
+{{else if eq .Kind "thinking"}}<div class="step thinking" data-k="thinking"><details><summary><span class="t">+{{dur .Offset}}</span> <span class="k">thinking</span></summary><div class="body">{{.Text}}</div></details></div>
+{{else if eq .Kind "tool_use"}}<div class="step tool_use" data-k="tool_use"><details><summary><span class="t">+{{dur .Offset}}</span> <span class="k">tool_use</span> <b>{{.Name}}</b>{{if .HasDuration}} · {{dur .Duration}}{{else}} · no result{{end}}</summary><pre>{{.Text}}</pre></details>
+<div class="wf" title="{{dur .Offset}} + {{dur .Duration}}"><i style="left:{{pos .Left}}%;width:{{pos .Width}}%"></i></div></div>
+{{else if eq .Kind "tool_result"}}<div class="step tool_result{{if .IsError}} err{{end}}" data-k="tool_result"><div class="hd"><span class="t">+{{dur .Offset}}</span><span class="k">{{if .IsError}}error{{else}}result{{end}}</span>{{with .Name}}<span>{{.}}</span>{{end}}</div>{{if .Full}}<pre>{{.Text}}</pre><details><summary>expand full output</summary><pre>{{.Full}}</pre></details>{{else if .Text}}<pre>{{.Text}}</pre>{{end}}</div>
+{{else if eq .Kind "result"}}<div class="step result{{if .IsError}} err{{end}}" data-k="result"><div class="hd"><span class="t">+{{dur .Offset}}</span><span class="k">final result</span>{{with .Name}}<span>{{.}}</span>{{end}}</div><div class="body">{{.Text}}</div></div>
+{{else}}<div class="step {{.Kind}}" data-k="system"><span class="t">+{{dur .Offset}}</span> {{.Text}}</div>
+{{end}}{{end}}
+</section>
+{{end}}
+</main>
+<script>
+(function(){
+var d=document;
+function all(s){return Array.prototype.slice.call(d.querySelectorAll(s));}
+d.getElementById('expand').onclick=function(){all('details').forEach(function(e){e.open=true;});};
+d.getElementById('collapse').onclick=function(){all('details').forEach(function(e){e.open=false;});};
+all('input[data-k]').forEach(function(c){c.onchange=function(){
+all('.step[data-k="'+c.getAttribute('data-k')+'"]').forEach(function(s){s.classList.toggle('hidden',!c.checked);});};});
+})();
+</script>
+</body>
+</html>

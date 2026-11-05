@@ -27,6 +27,7 @@ const usage = `cag — a runner for Claude Code agents (local, docker, ssh, flee
 usage:
   cag run [flags] "<prompt>"     run a single agent
   cag fleet <config.yaml>        run a batch of tasks across a fleet
+  cag trace <rec.jsonl | dir>    render a recording (or dir) as an HTML trace page
   cag version                    print version
 
 run 'cag run -h' or 'cag fleet -h' for flags.`
@@ -62,6 +63,8 @@ func main() {
 		runCmd(os.Args[2:])
 	case "fleet":
 		fleetCmd(os.Args[2:])
+	case "trace":
+		traceCmd(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Printf("cag %s\n", resolveVersion())
 	case "help", "-h", "--help":

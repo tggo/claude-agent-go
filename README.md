@@ -70,6 +70,9 @@ Both require the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI on
 | `mcp` | Write `--mcp-config` files for external MCP servers. |
 | `transport` | How the binary is launched: local exec, `docker exec`, or `ssh`. |
 | `fleet` | Fan a batch of tasks (with a dependency DAG) across a pool of workers, one worktree each, aggregating cost. |
+| `graph` | Wire runs (and plain Go steps) into an execution graph: conditional edges, loops, parallel fan-out, pause-and-resume for human input, per-node cost report, Mermaid export. |
+| `eval` | Evaluate agents: tool-trajectory matching, ROUGE / Claude-judge scoring, cost/tool/time budgets, JSON eval sets, `go test` integration. |
+| `recording` | Record every stream run to JSONL; replay a recording through a runner offline (`ReplayTransport`). |
 | `workspace` | Project/session dirs, `CLAUDE.md`, git worktrees. |
 | `signal` | Marker-agnostic outcome detection. |
 
@@ -266,6 +269,77 @@ c, _ := client.New(ctx, client.Config{
 })
 ```
 
+### Execution graphs
+
+`graph` composes Claude Code runs into any flow: here plan → code → review, with a
+review/fix loop that exits when the reviewer approves (through an in-process Go
+tool) or gives up after three rounds. Full version: [`examples/pipeline`](./examples/pipeline).
+
+```go
+g := graph.New[State]("coding")
+g.AddNode("plan", graph.Agent(planner, buildPlan, savePlan))
+g.AddNode("code", graph.Agent(coder, buildCode, nil))
+g.AddNode("review", graph.Agent(reviewer, buildReview, saveReview))
+g.AddNode("fix", graph.Agent(coder, buildFix, countRound))
+g.AddNode("docs", graph.Agent(writer, buildDocs, saveDocs))
+g.AddEdge(graph.Start, "plan").AddEdge("plan", "code").AddEdge("code", "review").
+	AddEdge("fix", "review").AddEdge("docs", graph.End)
+g.AddConditionalEdge("review", func(s *State) string {
+	switch {
+	case s.Approved:
+		return "docs"
+	case s.Rounds >= 3:
+		return graph.End
+	}
+	return "fix"
+}, "docs", "fix", graph.End)
+
+run, err := g.Compile(graph.WithMaxSteps(20)) // validates every edge up front
+st, report, err := run.Run(ctx, State{Task: task})
+```
+
+- A node can stop the graph to ask a question: `return graph.Interrupt("which format?")`.
+  `Run` returns `*graph.Interrupted[S]` with a JSON-serializable checkpoint, and
+  `run.Resume(ctx, cp, answer)` continues from it, with the answer in `graph.Answer(ctx)`.
+- `AddParallel` fans branches out on copies of the state and merges them.
+- `report` holds per-node duration, cost and errors. `run.Mermaid()` draws the graph.
+
+### Recording, replay and evals
+
+```go
+r := runner.New(runner.WithRecorder(recording.Dir("runs/"))) // one JSONL per run
+// ... later, offline and free:
+replay := runner.New(runner.WithTransport(recording.ReplayTransport{Path: "runs/x.jsonl"}))
+```
+
+```go
+eval.RunT(t, set, eval.RunnerAgent(r, build), eval.Criteria{
+	TrajectoryThreshold: eval.Threshold(1.0),   // expected tools: Exact / InOrder / AnyOrder
+	ResponseMatch:       eval.Threshold(0.3),   // ROUGE-L against the reference
+	Judge:               eval.ClaudeJudge(judgeRunner), // or an LLM judge
+	MaxCostUSD:          0.50,
+})
+```
+
+`eval.CaseFromRecording` turns a real run into a golden case, and
+`eval.FromRecordingDir` evaluates a whole graph run (one recording per node).
+
+To inspect a run visually: `cag trace runs/ --open` renders a self-contained HTML
+page. It has the graph, a per-node summary table, and a timeline of text,
+thinking, tool calls with inputs, results and durations.
+
+### Resuming after a dropped stream
+
+`RunStream` now reports a stream that ends without a result event as
+`*runner.TruncatedStreamError`, with the session ID and the partial text.
+`RunStreamWithRetry` with `RetryPolicy{Resume: true}` continues that session via
+`--resume` instead of starting the task over.
+
+### Asking the user
+
+`client.Config.OnAskUser` answers the CLI's built-in `AskUserQuestion` tool from
+your code (Slack, a web form, stdin via `client.AnswerFromStdin`).
+
 ## Examples
 
 See [`examples/`](./examples):
@@ -286,6 +360,7 @@ See [`examples/`](./examples):
 | `transport` | run the same agent locally, in a container (`docker exec`), or on a remote host (`ssh`) |
 | `retry` | retry transient failures with backoff, accumulating cost and capping total spend |
 | `fleet` | fan tasks across workers, each in its own worktree, with a dependency DAG and a spend cap |
+| `pipeline` | a `graph` of real agents: plan → code → review/fix loop → docs, approval via a Go tool, pause for clarification, recordings + `cag trace`, and an eval |
 
 Run one:
 

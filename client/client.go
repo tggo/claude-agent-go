@@ -4,6 +4,25 @@
 // turns on stdin, reading streamed events on stdout — the Go analogue of the
 // Python SDK's ClaudeSDKClient. It supports mid-session interrupts and full
 // conversational context across turns.
+//
+// # Human-in-the-loop questions
+//
+// The CLI's built-in AskUserQuestion tool lets the model ask the user a
+// multiple-choice question. Set Config.OnAskUser to answer it:
+//
+//	OnAskUser: func(ctx context.Context, qs []client.Question) (map[string]string, error) {
+//		return map[string]string{qs[0].Question: qs[0].Options[0].Label}, nil
+//	}
+//
+// Answers are keyed by question text; a multi-select answer joins the chosen
+// labels with ", "; free text is allowed. AnswerFromStdin builds a terminal
+// implementation. OnAskUser wins over CanUseTool for AskUserQuestion only.
+// An error from the callback denies the tool call with the error message.
+//
+// Other tools: OnAskUser alone does not restrict them. Unless CanUseTool is set,
+// they are allowed exactly as without OnAskUser (when no PermissionMode is
+// set), or denied (when an explicit restrictive PermissionMode such as
+// "default" or "plan" is set). Set CanUseTool to decide them yourself.
 package client
 
 import (
@@ -66,6 +85,25 @@ type Config struct {
 	// the session into permission-routing mode: --permission-prompt-tool stdio
 	// is added and --dangerously-skip-permissions is dropped.
 	CanUseTool CanUseToolFunc
+
+	// OnAskUser, when set, answers the CLI's built-in AskUserQuestion tool: the
+	// agent's questions are handed to this callback and the returned answers
+	// (question text -> chosen answer) are fed back to the model. It takes
+	// precedence over CanUseTool for AskUserQuestion only; every other tool goes
+	// to CanUseTool. Setting it enables permission routing like CanUseTool.
+	//
+	// WITHOUT CanUseTool the SDK itself decides every other tool call that
+	// reaches it: with no PermissionMode set (or "bypassPermissions", or
+	// SkipPermissions true) other tools are ALLOWED, exactly as without
+	// OnAskUser; with an explicit PermissionMode such as "default" or "plan"
+	// they are DENIED with a message saying CanUseTool is required (the CLI
+	// still auto-approves what that mode permits without asking). Set CanUseTool
+	// to take control of other tools.
+	OnAskUser AskUserFunc
+
+	// denyOtherTools is set by applyClientDefaults: OnAskUser without CanUseTool
+	// under an explicit restrictive PermissionMode.
+	denyOtherTools bool
 
 	// Hooks registers hook callbacks keyed by event name ("PreToolUse",
 	// "PostToolUse", "Stop", …). Declared to the CLI via the initialize
@@ -199,7 +237,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	// When permission/hook callbacks, inline agents, or a skills allowlist are
 	// configured, the CLI must learn about them via the initialize handshake
 	// before the first turn.
-	if cfg.CanUseTool != nil || len(cfg.Hooks) > 0 || len(cfg.Agents) > 0 || cfg.Skills != nil {
+	if cfg.routesPermissions() || len(cfg.Hooks) > 0 || len(cfg.Agents) > 0 || cfg.Skills != nil {
 		ictx, icancel := context.WithTimeout(ctx, cfg.StartTimeout)
 		defer icancel()
 		if _, err := c.Initialize(ictx); err != nil {
@@ -210,6 +248,10 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 
 	return c, nil
 }
+
+// routesPermissions reports whether the session must route tool permission
+// prompts to the SDK (--permission-prompt-tool stdio).
+func (c Config) routesPermissions() bool { return c.CanUseTool != nil || c.OnAskUser != nil }
 
 func applyClientDefaults(cfg *Config) {
 	if cfg.Binary == "" {
@@ -235,7 +277,9 @@ func applyClientDefaults(cfg *Config) {
 	}
 	// Permission routing wins: with a can_use_tool callback the SDK must see
 	// permission prompts, so never bypass them.
-	if cfg.CanUseTool != nil {
+	if cfg.routesPermissions() {
+		cfg.denyOtherTools = cfg.CanUseTool == nil && !cfg.SkipPermissions &&
+			cfg.PermissionMode != "" && cfg.PermissionMode != "bypassPermissions"
 		cfg.SkipPermissions = false
 		if cfg.PermissionMode == "" {
 			cfg.PermissionMode = "default"
@@ -264,7 +308,7 @@ func buildClientArgs(cfg Config) []string {
 	if cfg.PermissionMode != "" {
 		args = append(args, "--permission-mode", cfg.PermissionMode)
 	}
-	if cfg.CanUseTool != nil {
+	if cfg.routesPermissions() {
 		// Route tool-permission prompts to us over the control protocol.
 		args = append(args, "--permission-prompt-tool", "stdio")
 	}

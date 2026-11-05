@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `graph`: typed execution graphs over runs and Go steps.
+  - Static and conditional edges (loops), and parallel fan-out with merge.
+  - `Compile`-time validation and a `MaxSteps` guard.
+  - `Interrupt` → JSON checkpoint → `Resume(answer)` for human-in-the-loop pauses.
+  - `Agent` nodes over `runner`, with optional retry/resume.
+  - A per-node cost/duration `Report`, `Observer` hooks and `Mermaid()` export.
+- `eval`: agent evaluation.
+  - Tool-trajectory matching (`Exact`/`InOrder`/`AnyOrder`, `IgnoreArgs`, `ArgsSubset`, `MCPNames`).
+  - ROUGE-1/ROUGE-L, `Contains`/regex checks, and a `ClaudeJudge` LLM judge.
+  - Cost/tool-call/duration budgets and repeats with parallelism.
+  - JSON eval sets, `CaseFromRecording` golden cases and `RunT` for `go test`.
+  - Metrics: tool calls, inferences, tokens, cost, model vs tool time. `Combine`/`FromRecordingDir` evaluate a multi-node run.
+- `recording`: a JSONL format for stream runs (header + raw lines stamped with `_cag_t`).
+  - `Dir` writes one file per run.
+  - `ReplayTransport` replays a recording through a runner, offline and deterministic.
+- `runner.WithRecorder`, `Input.Label` (also in `RunRecord.Label`).
+- `runner.RunStreamWithRetry` and `RetryPolicy.Resume` / `ResumePrompt`: after a failure that carries a session ID, the retry continues the session via `--resume` instead of rerunning.
+- `runner.TruncatedStreamError`, `IsTruncatedStream` and `SessionIDOf`. `ProcessError.SessionID` and `TimeoutError.SessionID`.
+- `client.Config.OnAskUser` / `Question` / `AnswerFromStdin`: answer the CLI's `AskUserQuestion` tool from Go. Verified against CLI 2.1.318.
+- `cag trace <recording|dir>`: a self-contained HTML view of recorded runs.
+- `examples/pipeline`: a plan → code → review/fix → docs graph of real agents, with an eval integration test.
+
+### Changed
+- Minimum Go version is now 1.27 (was 1.25); CI and release build on 1.27.
+- **Behavior change:** `RunStream` used to return success with an empty result when the stream ended without a `result` event. It now returns the partial `Result` *and* a `*TruncatedStreamError`. `DefaultRetryable` treats it as retryable.
+
 ## [0.2.1] - 2026-07-16
 
 ### Added

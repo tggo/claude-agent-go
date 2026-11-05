@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/tggo/claude-agent-go/recording"
 	"github.com/tggo/claude-agent-go/transport"
 )
 
@@ -81,6 +82,12 @@ type Config struct {
 	// — the seam for tracing/metrics. Dep-free: bridge it to OpenTelemetry,
 	// Prometheus, or logs in a few lines (see docs). See WithObserver.
 	Observer Observer
+
+	// Recorder, if set, is called at the start of every RunStream to open a
+	// recording; every stream-json line is written to it. A Recorder error is
+	// logged and the run proceeds unrecorded. See recording.Dir and
+	// WithRecorder.
+	Recorder func(recording.Header) (*recording.Writer, error)
 }
 
 // Option mutates a Config. Use with New for ergonomic construction.
@@ -157,6 +164,13 @@ func WithLogger(l *slog.Logger) Option { return func(c *Config) { c.Logger = l }
 // WithObserver sets the run observer for tracing/metrics.
 func WithObserver(o Observer) Option { return func(c *Config) { c.Observer = o } }
 
+// WithRecorder records every RunStream to the writer the factory returns —
+// typically recording.Dir("runs/"). The recordings feed replay
+// (recording.ReplayTransport), evals and `cag trace`.
+func WithRecorder(f func(recording.Header) (*recording.Writer, error)) Option {
+	return func(c *Config) { c.Recorder = f }
+}
+
 // Input describes a single Claude CLI invocation. Working-directory and
 // session/MCP-file management are the caller's responsibility (see the
 // workspace and mcp packages) — Input takes the resolved paths directly.
@@ -208,4 +222,8 @@ type Input struct {
 
 	// Env is extra per-invocation environment appended after Config.Env.
 	Env []string
+
+	// Label names the run for observers and recordings (e.g. a graph node
+	// name). It is not sent to the CLI.
+	Label string
 }

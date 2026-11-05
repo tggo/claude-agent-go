@@ -15,3 +15,10 @@ mcp.demo.json
 
 # goreleaser
 dist/
+
+# Local notes
+todo.md
+
+# Local secrets (cerber endpoint/key for examples)
+.env
+.env.*

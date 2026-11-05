@@ -33,7 +33,22 @@ type RetryPolicy struct {
 
 	// OnRetry, if set, is called before each backoff sleep — for logging/metrics.
 	OnRetry func(RetryInfo)
+
+	// Resume makes a retry continue the failed attempt's session (--resume
+	// <session_id>) instead of starting over, whenever the failure carries a
+	// session id (see SessionIDOf). The work already done — files edited, tool
+	// results — is kept, and only the rest is paid for. Used by
+	// RunStreamWithRetry; ignored by RunJSONWithRetry (JSON mode reports no
+	// session id from a run that died).
+	Resume bool
+
+	// ResumePrompt is the prompt sent on a resumed attempt (default
+	// DefaultResumePrompt).
+	ResumePrompt string
 }
+
+// DefaultResumePrompt is sent when resuming a session after a failed attempt.
+const DefaultResumePrompt = "Your previous response was interrupted by a connection error. Continue from where you stopped and finish the task."
 
 // RetryInfo is passed to OnRetry before each retry.
 type RetryInfo struct {
@@ -56,6 +71,9 @@ func applyRetryDefaults(p *RetryPolicy) {
 	}
 	if p.Retryable == nil {
 		p.Retryable = DefaultRetryable
+	}
+	if p.ResumePrompt == "" {
+		p.ResumePrompt = DefaultResumePrompt
 	}
 }
 
@@ -85,6 +103,9 @@ func DefaultRetryable(res *Result, err error) bool {
 			return false
 		}
 		if IsTimeout(err) {
+			return true
+		}
+		if _, ok := IsTruncatedStream(err); ok {
 			return true
 		}
 		if pe, ok := IsProcessError(err); ok {
@@ -153,6 +174,25 @@ func (p RetryPolicy) backoff(attempt int, res *Result, err error) time.Duration 
 // once cumulative spend reaches RetryPolicy.MaxSpendUSD. On exhaustion it
 // returns the last result (with cumulative spend) and an error.
 func (r *Runner) RunJSONWithRetry(ctx context.Context, in Input, p RetryPolicy) (*Result, error) {
+	p.Resume = false
+	return r.withRetry(ctx, in, p, r.RunJSON)
+}
+
+// RunStreamWithRetry is RunStream with the same retry semantics as
+// RunJSONWithRetry, plus truncation handling: a stream cut without a result
+// event (TruncatedStreamError) is retryable, and with p.Resume set a retry
+// continues the session via --resume instead of rerunning the task. progress
+// sees the events of every attempt.
+func (r *Runner) RunStreamWithRetry(ctx context.Context, in Input, progress ProgressFunc, p RetryPolicy) (*Result, error) {
+	return r.withRetry(ctx, in, p, func(ctx context.Context, in Input) (*Result, error) {
+		return r.RunStream(ctx, in, progress)
+	})
+}
+
+// attemptKey carries the retry attempt number to openRecorder.
+type attemptKey struct{}
+
+func (r *Runner) withRetry(ctx context.Context, in Input, p RetryPolicy, run func(context.Context, Input) (*Result, error)) (*Result, error) {
 	applyRetryDefaults(&p)
 
 	var spent float64
@@ -160,7 +200,7 @@ func (r *Runner) RunJSONWithRetry(ctx context.Context, in Input, p RetryPolicy) 
 	var lastErr error
 
 	for attempt := 1; attempt <= p.MaxAttempts; attempt++ {
-		res, err := r.RunJSON(ctx, in)
+		res, err := run(context.WithValue(ctx, attemptKey{}, attempt), in)
 		if res != nil {
 			spent += res.TotalCostUSD
 			last = res
@@ -180,6 +220,18 @@ func (r *Runner) RunJSONWithRetry(ctx context.Context, in Input, p RetryPolicy) 
 		// Cost guard: don't spend more once we've hit the cap.
 		if p.MaxSpendUSD > 0 && spent >= p.MaxSpendUSD {
 			break
+		}
+
+		if p.Resume {
+			sid := SessionIDOf(err)
+			if sid == "" && res != nil {
+				sid = res.SessionID
+			}
+			if sid != "" {
+				r.cfg.Logger.Info("claude cli: resuming session after failure", "session_id", sid, "attempt", attempt)
+				in.Resume, in.Continue, in.ForkSession = sid, false, false
+				in.Prompt = p.ResumePrompt
+			}
 		}
 
 		delay := p.backoff(attempt, res, err)
