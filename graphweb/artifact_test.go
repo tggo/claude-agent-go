@@ -194,3 +194,33 @@ func TestReviewItemsServedAndAnswered(t *testing.T) {
 		t.Fatal("run did not resume")
 	}
 }
+
+func TestArtifactDataServed(t *testing.T) {
+	dir := t.TempDir()
+	md, js := filepath.Join(dir, "s.md"), filepath.Join(dir, "s.json")
+	require.NoError(t, os.WriteFile(md, []byte("# Script"), 0o600))
+	require.NoError(t, os.WriteFile(js, []byte(`{"a":1}`), 0o600))
+	s := newSrv(t)
+	s.Artifact(context.Background(), graph.StepInfo{Node: "writer", Step: 1}, graph.Artifact{Name: "script", Path: md, Mime: "text/markdown", Data: js})
+	s.Artifact(context.Background(), graph.StepInfo{Node: "writer", Step: 1}, graph.Artifact{Name: "plain", Path: md})
+	ts := newTS(t, s)
+	var seq, plain int64
+	for _, ev := range s.Events() {
+		if ev.Type == TypeArtifact && ev.Artifact.Name == "script" {
+			seq = ev.Seq
+		}
+		if ev.Type == TypeArtifact && ev.Artifact.Name == "plain" {
+			plain = ev.Seq
+		}
+	}
+	u := ts.URL + "/api/artifact/" + strconv.FormatInt(seq, 10)
+	resp, body := get(t, u, "")
+	assert.Equal(t, "# Script", string(body))
+	assert.Equal(t, "text/markdown", resp.Header.Get("Content-Type"))
+	resp, body = get(t, u+"?data=1", "")
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	assert.Equal(t, `{"a":1}`, string(body))
+	resp, _ = get(t, ts.URL+"/api/artifact/"+strconv.FormatInt(plain, 10)+"?data=1", "")
+	assert.Equal(t, 404, resp.StatusCode)
+}

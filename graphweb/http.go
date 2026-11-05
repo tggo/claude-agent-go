@@ -370,6 +370,14 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if r.URL.Query().Get("data") == "1" { // the JSON source of an EmitData artifact
+		if a.Artifact.Data == "" {
+			http.NotFound(w, r)
+			return
+		}
+		serveFile(w, r, a.Artifact.Data, "application/json")
+		return
+	}
 	serveFile(w, r, a.Artifact.Path, a.Artifact.Mime)
 }
 

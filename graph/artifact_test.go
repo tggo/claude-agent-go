@@ -2,7 +2,9 @@ package graph
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -72,5 +74,43 @@ func TestEmitArtifactNoop(t *testing.T) {
 		require.NoError(t, err)
 		_, _, err = r.Run(context.Background(), 0)
 		require.NoError(t, err)
+	}
+}
+
+func TestEmitData(t *testing.T) {
+	dir := t.TempDir()
+	obs := &artObs{}
+	g := New[int]("d").AddNode("n", func(ctx context.Context, _ *int) error {
+		if err := EmitData(ctx, dir, "script_v1", "script v1", map[string]int{"panels": 3}, func() string { return "# Script\n" }, "3 panels"); err != nil {
+			return err
+		}
+		return EmitData(ctx, dir, "raw", "", []int{1}, nil, "")
+	}).AddEdge(Start, "n").AddEdge("n", End)
+	r, err := g.Compile(WithObserver(obs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.Run(context.Background(), 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(obs.got) != 2 {
+		t.Fatalf("got %d artifacts", len(obs.got))
+	}
+	a := obs.got[0]
+	if a.Mime != "text/markdown" || filepath.Base(a.Path) != "script_v1.md" || filepath.Base(a.Data) != "script_v1.json" || a.Caption != "3 panels" {
+		t.Fatalf("%+v", a)
+	}
+	if b, _ := os.ReadFile(a.Data); !strings.Contains(string(b), `"panels": 3`) {
+		t.Fatal(string(b))
+	}
+	if b := obs.got[1]; b.Mime != "application/json" || b.Data != "" || b.Name != "raw.json" {
+		t.Fatalf("%+v", b)
+	}
+	// outside a run the files are still written
+	if err := EmitData(context.Background(), filepath.Join(dir, "x"), "f", "f", 1, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := EmitData(context.Background(), dir, "bad", "bad", make(chan int), nil, ""); err == nil {
+		t.Fatal("unmarshalable value must fail")
 	}
 }

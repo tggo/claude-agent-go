@@ -94,6 +94,14 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 .art{margin:0 0 14px;border:1px solid var(--line);border-radius:8px;background:var(--ink);padding:8px}
 .art img{display:block;max-width:100%;max-height:300px;margin:0 auto 6px;cursor:zoom-in;border-radius:4px;background:var(--ink-3)}
 .art .an{font-family:var(--mono);font-size:12px;color:var(--cyan)}
+.art .abar{display:flex;gap:6px;margin-top:6px}
+.art .md{margin-top:8px;font:13px/1.5 system-ui,sans-serif;color:var(--fg,#e6e6e6);max-height:70vh;overflow:auto;padding-right:4px}
+.art .md h2,.art .md h3,.art .md h4,.art .md h5{margin:12px 0 6px;line-height:1.25}.art .md h2{font-size:17px}.art .md h3{font-size:15px}.art .md h4,.art .md h5{font-size:13px}
+.art .md p{margin:6px 0}.art .md ul,.art .md ol{margin:4px 0 8px;padding-left:20px}.art .md li.sub{margin-left:14px}
+.art .md blockquote{margin:4px 0;padding:2px 10px;border-left:3px solid var(--line);color:var(--muted,#9aa)}
+.art .md code{font-family:var(--mono);font-size:12px;background:var(--ink-3);padding:0 4px;border-radius:3px}
+.art .md table{border-collapse:collapse;margin:6px 0;font-size:12px}.art .md th,.art .md td{border:1px solid var(--line);padding:3px 6px;vertical-align:top}
+.art .md a{color:var(--cyan)}.art .md hr{border:0;border-top:1px solid var(--line)}
 .art .ac{font-size:12.5px;color:var(--muted);margin-top:2px}
 .art .am{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:2px}
 .art a{color:var(--cyan);font-family:var(--mono);font-size:12px}
@@ -270,7 +278,7 @@ const nk = (n,s) => n+'#'+s;
 // ---------------- state ----------------
 const S = { events:[], cursor:0, follow:true, playing:false, speed:1, runs:[], topo:{}, curRun:null,
   sel:null, selAuto:true, tab:'timeline', bps:new Set(), drawn:null, m:null, initial:true,
-  showAgent:false, draft:{}, lbCustom:null, gal:true, lb:null, open:new Set(), txt:{}, lastSeq:0, view:{x:0,y:0,k:1}, layout:null };
+  showAgent:false, draft:{}, lbCustom:null, gal:true, lb:null, open:new Set(), txt:{}, aview:{}, lastSeq:0, view:{x:0,y:0,k:1}, layout:null };
 
 // ---------------- model (fold) ----------------
 function newModel(run){
@@ -1087,20 +1095,61 @@ function artCard(a){
   if (a.caption) body.push(el('div',{class:'ac',text:a.caption}));
   body.push(el('div',{class:'am'}, 'step '+a.step+' · '+(a.mime||'?')+' · ', el('a',{href:artURL(a),target:'_blank',rel:'noopener',text:'open'})));
   if (isTxt(a)){
-    const open = S.open.has(a.seq);
-    body.push(el('button',{class:'btn',style:'margin-top:6px',text:open?'hide':'view',onclick:()=>toggleTxt(a)}));
-    if (open) body.push(el('pre',{text:S.txt[a.seq]==null?'loading…':S.txt[a.seq]}));
+    const open = S.open.has(a.seq), md = isMd(a), view = S.aview[a.seq] || (md ? 'md' : 'raw');
+    const bar = [el('button',{class:'btn',text:open?'hide':'view',onclick:()=>toggleTxt(a)})];
+    if (open && a.data) for (const [k,lbl] of [['md','md'],['json','json']])
+      bar.push(el('button',{class:'btn'+(view===k?' primary':''),text:lbl,onclick:()=>setView(a,k)}));
+    body.push(el('div',{class:'abar'},bar));
+    if (open) {
+      const key = view==='json' ? a.seq+':data' : a.seq, t = S.txt[key];
+      if (t==null) body.push(el('pre',{text:'loading…'}));
+      else if (view==='md' && md) { const d=el('div',{class:'md'}); d.innerHTML=mdToHtml(t); body.push(d); }
+      else body.push(el('pre',{text:t}));
+    }
   }
-  return el('div',{class:'art'},body);
+  return el('div',{class:'art'+(S.open.has(a.seq)&&isMd(a)?' wide':'')},body);
+}
+const isMd = a => /markdown/.test(a.mime||'') || /\.md$/i.test(a.path||'');
+function setView(a,k){ S.aview[a.seq]=k; if (k==='json') loadTxt(a, a.seq+':data', artURL(a)+'?data=1', true); panelSig=''; paintPanel(); }
+function loadTxt(a,key,url,json){
+  if (S.txt[key]!=null) return;
+  fetch(url).then(r=>r.ok?r.text():Promise.reject(r.status)).then(t=>{
+    if (json || /json/.test(a.mime)) { try { t=JSON.stringify(JSON.parse(t),null,2); } catch(e){} }
+    S.txt[key]=t.length>200000?t.slice(0,200000)+'\n…[truncated]':t; panelSig=''; paintPanel(); },
+    e=>{ S.txt[key]='(cannot load: '+e+')'; panelSig=''; paintPanel(); });
+}
+// mdToHtml: a small, safe markdown subset (headings, lists, quotes, bold/italic/code, links, tables, rules).
+// Everything is HTML-escaped first; only the tags produced here exist in the output.
+function mdToHtml(src){
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inl=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+    .replace(/(^|[\s(])_([^_]+)_(?=[\s).,:;!?]|$)/g,'$1<i>$2</i>').replace(/(^|[\s(])\*([^*]+)\*(?=[\s).,:;!?]|$)/g,'$1<i>$2</i>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,(m,t,u)=>'<a href="'+u.replace(/"/g,'%22')+'" target="_blank" rel="noopener">'+t+'</a>');
+  const out=[]; let list=null, para=[];
+  const flush=()=>{ if (para.length){ out.push('<p>'+para.map(inl).join('<br>')+'</p>'); para=[]; } if (list){ out.push('</'+list+'>'); list=null; } };
+  const lines=src.replace(/\r/g,'').split('\n');
+  for (let i=0;i<lines.length;i++){
+    const l=lines[i], t=l.trim(); let m;
+    if (!t){ flush(); continue; }
+    if (t.startsWith('```')){ flush(); const buf=[]; while (++i<lines.length && !lines[i].trim().startsWith('```')) buf.push(lines[i]); out.push('<pre>'+esc(buf.join('\n'))+'</pre>'); continue; }
+    if ((m=t.match(/^(#{1,4})\s+(.*)$/))){ flush(); out.push('<h'+(m[1].length+1)+'>'+inl(m[2])+'</h'+(m[1].length+1)+'>'); continue; }
+    if (/^(-{3,}|\*{3,})$/.test(t)){ flush(); out.push('<hr>'); continue; }
+    if (t.startsWith('|') && i+1<lines.length && /^\|?\s*:?-{2,}/.test(lines[i+1].trim())){
+      flush(); const row=r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      const hd=row(t); i++; const rows=[]; while (i+1<lines.length && lines[i+1].trim().startsWith('|')) rows.push(row(lines[++i]));
+      out.push('<table><tr>'+hd.map(c=>'<th>'+inl(c)+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+inl(c)+'</td>').join('')+'</tr>').join('')+'</table>'); continue; }
+    if ((m=l.match(/^\s*>\s?(.*)$/))){ flush(); out.push('<blockquote>'+inl(m[1])+'</blockquote>'); continue; }
+    if ((m=l.match(/^(\s*)([-*]|\d+\.)\s+(.*)$/))){
+      if (para.length){ const p=para; para=[]; out.push('<p>'+p.map(inl).join('<br>')+'</p>'); }
+      const kind=/\d/.test(m[2])?'ol':'ul'; if (list!==kind){ if (list) out.push('</'+list+'>'); out.push('<'+kind+'>'); list=kind; }
+      out.push('<li'+(m[1].length>=2?' class="sub"':'')+'>'+inl(m[3])+'</li>'); continue; }
+    if (list){ out.push('</'+list+'>'); list=null; }
+    para.push(t);
+  }
+  flush(); return out.join('');
 }
 function toggleTxt(a){
-  if (S.open.has(a.seq)) S.open.delete(a.seq); else {
-    S.open.add(a.seq);
-    if (S.txt[a.seq]==null) fetch(artURL(a)).then(r=>r.ok?r.text():Promise.reject(r.status)).then(t=>{
-      if (/json/.test(a.mime)) { try { t=JSON.stringify(JSON.parse(t),null,2); } catch(e){} }
-      S.txt[a.seq]=t.length>200000?t.slice(0,200000)+'\n…[truncated]':t; panelSig=''; paintPanel(); },
-      e=>{ S.txt[a.seq]='(cannot load: '+e+')'; panelSig=''; paintPanel(); });
-  }
+  if (S.open.has(a.seq)) S.open.delete(a.seq); else { S.open.add(a.seq); loadTxt(a, a.seq, artURL(a), false); }
   panelSig=''; paintPanel();
 }
 // gallery: newest version per node+name, in emit order of that version
