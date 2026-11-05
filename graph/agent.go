@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tggo/claude-agent-go/claudecli"
 	"github.com/tggo/claude-agent-go/runner"
 )
 
@@ -57,10 +58,34 @@ func runAgent(ctx context.Context, r *runner.Runner, in runner.Input, cfg *agent
 		res *runner.Result
 		err error
 	)
+	if sc, ok := ctx.Value(scopeKey{}).(*scope); ok {
+		if io, ok := sc.obs.(AgentInputObserver); ok {
+			ai := AgentInfo{Input: r.Effective(in)}
+			if cfg.retry != nil {
+				ai.Retry = &RetryInfo{MaxAttempts: cfg.retry.MaxAttempts, Resume: cfg.retry.Resume}
+				if ai.Retry.MaxAttempts <= 0 {
+					ai.Retry.MaxAttempts = 3 // runner.RetryPolicy default
+				}
+			}
+			io.AgentInput(ctx, sc.info, ai)
+		}
+	}
+	progress := cfg.progress
+	if sc, ok := ctx.Value(scopeKey{}).(*scope); ok {
+		if ao, ok := sc.obs.(AgentObserver); ok {
+			user, info := cfg.progress, sc.info
+			progress = func(ev claudecli.StreamEvent, n int) {
+				if user != nil {
+					user(ev, n)
+				}
+				ao.AgentEvent(ctx, info, ev)
+			}
+		}
+	}
 	if cfg.retry != nil {
-		res, err = r.RunStreamWithRetry(ctx, in, cfg.progress, *cfg.retry)
+		res, err = r.RunStreamWithRetry(ctx, in, progress, *cfg.retry)
 	} else {
-		res, err = r.RunStream(ctx, in, cfg.progress)
+		res, err = r.RunStream(ctx, in, progress)
 	}
 	if res != nil {
 		AddCost(ctx, res.TotalCostUSD)

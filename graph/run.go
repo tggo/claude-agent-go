@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -52,6 +53,7 @@ type Runnable[S any] struct {
 	branches map[string]bool
 	cfg      options
 	clone    func(S) S
+	labels   map[[2]string]string
 }
 
 // Run executes the graph from Start with init as the initial state. It returns
@@ -59,13 +61,42 @@ type Runnable[S any] struct {
 // the run got). A node that called Interrupt makes Run return a *Interrupted[S]
 // error; pass its Checkpoint to Resume.
 func (r *Runnable[S]) Run(ctx context.Context, init S) (S, *Report, error) {
-	rec := &recorder{began: time.Now()}
+	rec := &recorder{began: time.Now(), runID: newRunID()}
+	ctx = context.WithValue(ctx, runIDKey{}, rec.runID)
 	s := init
+	info := r.runInfo(rec, &s, false)
+	if ro, ok := r.cfg.obs.(RunObserver); ok {
+		ro.RunStart(ctx, info)
+	}
 	first, err := r.next(Start, &s)
 	if err != nil {
-		return s, rec.report(), err
+		rep := rec.report()
+		r.runEnd(ctx, info, rep, err)
+		return s, rep, err
 	}
-	return r.loop(ctx, s, first, 0, nil, "", false, rec)
+	r.edge(ctx, Start, first, 0)
+	s, rep, err := r.loop(ctx, s, first, 0, nil, "", false, rec)
+	r.runEnd(ctx, info, rep, err)
+	return s, rep, err
+}
+
+func (r *Runnable[S]) runInfo(rec *recorder, s *S, resumed bool) RunInfo {
+	if _, ok := r.cfg.obs.(RunObserver); !ok {
+		return RunInfo{}
+	}
+	return RunInfo{RunID: rec.runID, Graph: r.name, Topology: r.Topology(), State: snapshot(s), Resumed: resumed}
+}
+
+func (r *Runnable[S]) runEnd(ctx context.Context, info RunInfo, rep *Report, err error) {
+	if ro, ok := r.cfg.obs.(RunObserver); ok {
+		ro.RunEnd(ctx, info, rep, err)
+	}
+}
+
+func (r *Runnable[S]) edge(ctx context.Context, from, to string, step int) {
+	if eo, ok := r.cfg.obs.(EdgeObserver); ok {
+		eo.EdgeTaken(ctx, from, to, step)
+	}
 }
 
 // Resume continues a run paused by Interrupt: it re-executes cp.Node with the
@@ -76,7 +107,10 @@ func (r *Runnable[S]) Run(ctx context.Context, init S) (S, *Report, error) {
 // Report is cumulative: Steps, TotalCostUSD, Duration and Path include
 // everything recorded in cp.Prior.
 func (r *Runnable[S]) Resume(ctx context.Context, cp Checkpoint[S], answer string) (S, *Report, error) {
-	rec := &recorder{began: time.Now()}
+	rec := &recorder{began: time.Now(), runID: cp.RunID}
+	if rec.runID == "" {
+		rec.runID = newRunID()
+	}
 	n, ok := r.nodes[cp.Node]
 	if !ok || r.branches[cp.Node] {
 		return cp.State, rec.report(), fmt.Errorf("graph %q: resume: checkpoint node %q is not a node of this graph", r.name, cp.Node)
@@ -85,11 +119,20 @@ func (r *Runnable[S]) Resume(ctx context.Context, cp Checkpoint[S], answer strin
 		return cp.State, rec.report(), fmt.Errorf("graph %q: resume: negative step in checkpoint", r.name)
 	}
 	rec.prior = Prior{Steps: slices.Clone(cp.Prior.Steps), Duration: cp.Prior.Duration}
-	return r.loop(ctx, cp.State, n.name, cp.Step, slices.Clone(cp.Path), answer, true, rec)
+	ctx = context.WithValue(ctx, runIDKey{}, rec.runID)
+	st := cp.State
+	info := r.runInfo(rec, &st, true)
+	if ro, ok := r.cfg.obs.(RunObserver); ok {
+		ro.RunStart(ctx, info)
+	}
+	st, rep, err := r.loop(ctx, st, n.name, cp.Step, slices.Clone(cp.Path), answer, true, rec)
+	r.runEnd(ctx, info, rep, err)
+	return st, rep, err
 }
 
 func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path []string, answer string, hasAnswer bool, rec *recorder) (S, *Report, error) {
 	rec.path = path
+	rec.seedVisits(path)
 	for cur != End {
 		if err := ctx.Err(); err != nil {
 			return s, rec.report(), fmt.Errorf("graph %q: cancelled before node %q: %w", r.name, cur, err)
@@ -98,6 +141,13 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 			return s, rec.report(), fmt.Errorf("%w (%d) in graph %q before node %q, path %v", ErrMaxSteps, r.cfg.maxSteps, r.name, cur, rec.path)
 		}
 		n := r.nodes[cur]
+		if !hasAnswer {
+			if g, ok := r.cfg.obs.(Gate); ok {
+				if err := g.Before(ctx, StepInfo{RunID: rec.runID, Graph: r.name, Node: cur, Step: step + 1}); err != nil {
+					return s, rec.report(), err
+				}
+			}
+		}
 		step++
 		rec.path = append(rec.path, cur)
 
@@ -105,6 +155,9 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 		if hasAnswer {
 			nctx = context.WithValue(ctx, answerKey{}, answer)
 			hasAnswer = false
+			if ro, ok := r.cfg.obs.(ResumeObserver); ok {
+				ro.Resumed(ctx, StepInfo{RunID: rec.runID, Graph: r.name, Node: cur, Step: step}, answer)
+			}
 		}
 		var fn NodeFunc[S] = n.fn
 		if n.par != nil {
@@ -115,7 +168,7 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 			var ie *interruptError
 			if errors.As(err, &ie) {
 				rep := rec.report()
-				cp := Checkpoint[S]{State: s, Node: n.name, Step: step - 1, Path: slices.Clone(rec.path),
+				cp := Checkpoint[S]{RunID: rec.runID, State: s, Node: n.name, Step: step - 1, Path: slices.Clone(rec.path),
 					Prior: Prior{Steps: rep.Steps, Duration: rep.Duration}}
 				// Step counts executions completed before this one, so the
 				// resumed attempt re-takes the same step number.
@@ -126,6 +179,7 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 		if cur, err = r.next(n.name, &s); err != nil {
 			return s, rec.report(), err
 		}
+		r.edge(ctx, n.name, cur, step)
 	}
 	return s, rec.report(), nil
 }
@@ -151,15 +205,20 @@ func (r *Runnable[S]) next(from string, s *S) (to string, err error) {
 // exec runs one node function with scope, timing, observer, recover and
 // recording. It is used for top-level nodes, parallel nodes and branches.
 func (r *Runnable[S]) exec(ctx context.Context, name, parent string, step int, rec *recorder, fn NodeFunc[S], s *S) (err error) {
-	sc := &scope{name: name}
+	info := StepInfo{RunID: rec.runID, Graph: r.name, Node: name, Step: step, Parent: parent, Attempt: rec.visit(name)}
+	sc := &scope{name: name, info: info, obs: r.cfg.obs}
 	ctx = context.WithValue(ctx, scopeKey{}, sc)
 	if r.cfg.nodeTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, r.cfg.nodeTimeout)
 		defer cancel()
 	}
-	info := StepInfo{Graph: r.name, Node: name, Step: step, Parent: parent}
 	started := time.Now()
+	so, _ := r.cfg.obs.(StateObserver)
+	var before json.RawMessage
+	if so != nil {
+		before = snapshot(s)
+	}
 	if r.cfg.obs != nil {
 		r.cfg.obs.NodeStart(ctx, info)
 	}
@@ -171,6 +230,11 @@ func (r *Runnable[S]) exec(ctx context.Context, name, parent string, step int, r
 		}()
 		err = fn(ctx, s)
 	}()
+	if so != nil {
+		if after := snapshot(s); before != nil && after != nil {
+			so.NodeState(ctx, info, before, after)
+		}
+	}
 	// A pause is not a failure. Inside a parallel node an interrupt is
 	// rejected later, so there it stays an error.
 	var ie *interruptError
@@ -217,6 +281,7 @@ func (r *Runnable[S]) parallelFn(n *node[S], step int, rec *recorder) NodeFunc[S
 			first error
 		)
 		for i, b := range p.branches {
+			r.edge(ctx, n.name, b, step)
 			results[i] = r.cloneState(*s)
 			wg.Add(1)
 			go func() {

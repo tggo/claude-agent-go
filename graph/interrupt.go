@@ -23,7 +23,10 @@ func Interrupt(question string) error { return &interruptError{Question: questio
 // Checkpoint is everything needed to resume a paused run. It is plain data and
 // JSON-serializable whenever S is, so it can be stored between requests.
 type Checkpoint[S any] struct {
-	State S `json:"state"`
+	// RunID is the run this checkpoint belongs to; Resume keeps it so
+	// observers can tie the segments together.
+	RunID string `json:"run_id,omitempty"`
+	State S      `json:"state"`
 	// Node is the node to re-run on Resume.
 	Node string `json:"node"`
 	// Step is the number of node executions completed before Node's

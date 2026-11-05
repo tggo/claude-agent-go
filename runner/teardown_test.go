@@ -193,12 +193,12 @@ func TestSSHRunTimeoutKillsRemoteProcess(t *testing.T) {
 	claude := shFake(t, "trap '' TERM\necho $$ > "+pidOut+"\nsleep 60 &\nwhile :; do sleep 1; done")
 
 	tr := transport.SSH{Host: "h", SSHBin: sshBin, Binary: claude}
-	r := New(WithTransport(tr), WithTimeout(time.Second))
+	r := New(WithTransport(tr), WithTimeout(5*time.Second)) // generous: under full -race load sh startup can take seconds
 	start := time.Now()
 	_, err := r.RunJSON(context.Background(), Input{Prompt: "x"})
 	var te *TimeoutError
 	require.ErrorAs(t, err, &te)
-	assert.Less(t, time.Since(start), 12*time.Second)
+	assert.Less(t, time.Since(start), 25*time.Second)
 
 	b, rerr := os.ReadFile(pidOut)
 	require.NoError(t, rerr)

@@ -45,10 +45,15 @@ type Report struct {
 
 // StepInfo identifies a node execution to an Observer.
 type StepInfo struct {
+	// RunID is shared by every segment (Run, Resume) of one logical run.
+	RunID  string
 	Graph  string
 	Node   string
 	Step   int    // 1-based execution number; branches share their parallel node's
 	Parent string // the parallel node, for a branch
+	// Attempt counts executions of this node in the run, 1-based (a node in a
+	// loop, or re-run by Resume, has Attempt > 1).
+	Attempt int
 	// Duration and CostUSD are set on NodeEnd only.
 	Duration time.Duration
 	CostUSD  float64
@@ -67,11 +72,35 @@ type Observer interface {
 }
 
 type recorder struct {
-	mu    sync.Mutex
-	began time.Time
-	steps []Step
-	path  []string
-	prior Prior
+	mu     sync.Mutex
+	began  time.Time
+	steps  []Step
+	path   []string
+	prior  Prior
+	runID  string
+	visits map[string]int
+}
+
+// seedVisits counts the executions already in path (a resumed run).
+func (r *recorder) seedVisits(path []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.visits = map[string]int{}
+	for _, n := range path {
+		r.visits[n]++
+	}
+}
+
+// visit returns the 1-based execution count of name including this one,
+// continuing from what seedVisits counted from the checkpoint path.
+func (r *recorder) visit(name string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.visits == nil {
+		r.visits = map[string]int{}
+	}
+	r.visits[name]++
+	return r.visits[name]
 }
 
 func (r *recorder) add(s Step) {
@@ -98,6 +127,7 @@ func (r *recorder) report() *Report {
 }
 
 type (
+	runIDKey  struct{}
 	scopeKey  struct{}
 	answerKey struct{}
 )
@@ -105,6 +135,8 @@ type (
 // scope is the per-node-execution cost accumulator carried in the context.
 type scope struct {
 	name string
+	info StepInfo
+	obs  Observer
 	mu   sync.Mutex
 	cost float64
 }
@@ -131,4 +163,11 @@ func NodeName(ctx context.Context) string {
 		return s.name
 	}
 	return ""
+}
+
+// RunID returns the id of the run ctx belongs to: the context handed to nodes
+// and to every Observer call carries it ("" outside a run).
+func RunID(ctx context.Context) string {
+	id, _ := ctx.Value(runIDKey{}).(string)
+	return id
 }

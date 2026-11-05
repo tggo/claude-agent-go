@@ -32,12 +32,14 @@ import (
 	"time"
 
 	"github.com/tggo/claude-agent-go/graph"
+	"github.com/tggo/claude-agent-go/graphweb"
 )
 
 func main() {
 	task := flag.String("task", "Write fizzbuzz(n) returning a list of strings for 1..n; n <= 0 returns [].", "coding task")
 	model := flag.String("model", "haiku", "model for every agent (haiku is cheap; sonnet writes better code)")
 	out := flag.String("out", "", "output dir (default: a new temp dir)")
+	web := flag.String("web", "", "serve the live graph UI on this address (e.g. 127.0.0.1:8799); the planner's question is then answered in the browser")
 	flag.Parse()
 
 	dir := *out
@@ -52,26 +54,53 @@ func main() {
 		log.Fatal(err)
 	}
 
-	p, err := Build(*model, filepath.Join(dir, "runs"))
+	runs := filepath.Join(dir, "runs")
+	ctx := context.Background()
+	var copts []graph.CompileOption
+	var ui *graphweb.Server
+	if *web != "" {
+		if err := os.MkdirAll(runs, 0o755); err != nil {
+			log.Fatal(err)
+		}
+		var err error
+		if ui, err = graphweb.New(graphweb.WithJournal(filepath.Join(runs, graphweb.DefaultJournal))); err != nil {
+			log.Fatal(err)
+		}
+		defer ui.Close()
+		url, err := ui.Start(ctx, *web)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("web: %s\n", url)
+		copts = append(copts, graph.WithObserver(ui))
+	}
+
+	p, err := Build(*model, runs, copts...)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer p.Close()
 
-	ctx := context.Background()
 	fmt.Printf("graph:\n%s\n", p.Graph.Mermaid())
-	st, rep, err := p.Graph.Run(ctx, State{Task: *task, WorkDir: work})
-
-	// Human in the loop: answer the planner's question, resume from checkpoint.
-	in := bufio.NewReader(os.Stdin)
-	for {
-		var intr *graph.Interrupted[State]
-		if !errors.As(err, &intr) {
-			break
+	var (
+		st  State
+		rep *graph.Report
+	)
+	if ui != nil {
+		st, rep, err = graphweb.RunInteractive(ctx, p.Graph, State{Task: *task, WorkDir: work}, ui)
+	} else {
+		st, rep, err = p.Graph.Run(ctx, State{Task: *task, WorkDir: work})
+		// Human in the loop: answer the planner's question, resume from checkpoint.
+		in := bufio.NewReader(os.Stdin)
+		for {
+			var intr *graph.Interrupted[State]
+			if !errors.As(err, &intr) {
+				break
+			}
+			fmt.Printf("\n⏸  %s asks: %s\n> ", intr.Node, intr.Question)
+			answer, _ := in.ReadString('\n')
+			st, rep, err = p.Graph.Resume(ctx, intr.Checkpoint, strings.TrimSpace(answer))
 		}
-		fmt.Printf("\n⏸  %s asks: %s\n> ", intr.Node, intr.Question)
-		answer, _ := in.ReadString('\n')
-		st, rep, err = p.Graph.Resume(ctx, intr.Checkpoint, strings.TrimSpace(answer))
 	}
 	if err != nil {
 		log.Fatalf("pipeline failed: %v", err)
@@ -88,4 +117,7 @@ func main() {
 		fmt.Printf("NOT approved after %d rounds; last review:\n%s\n", st.Rounds, st.Review)
 	}
 	fmt.Printf("\nproject: %s\ntrace:   go run ./cmd/cag trace %s --open\n", work, p.RunsDir)
+	if ui != nil {
+		fmt.Printf("web:     go run ./cmd/cag web --replay %s --open\n", p.RunsDir)
+	}
 }

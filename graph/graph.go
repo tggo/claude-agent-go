@@ -27,8 +27,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
+
+	"github.com/tggo/claude-agent-go/runner"
 )
 
 // Reserved node names for the entry and exit pseudo-nodes.
@@ -53,9 +56,11 @@ type RouteFunc[S any] func(s *S) string
 type MergeFunc[S any] func(dst *S, results []S) error
 
 type node[S any] struct {
-	name string
-	fn   NodeFunc[S]
-	par  *parallelSpec[S] // non-nil for AddParallel nodes
+	name   string
+	fn     NodeFunc[S]
+	par    *parallelSpec[S] // non-nil for AddParallel nodes
+	agent  bool             // tagged by AddAgentNode / MarkAgent (topology only)
+	runner *runner.Runner   // set by AgentRunner (topology only)
 }
 
 type parallelSpec[S any] struct {
@@ -71,22 +76,28 @@ type condEdge[S any] struct {
 // Graph is a builder. It is not safe for concurrent mutation; Compile it and
 // share the resulting Runnable instead.
 type Graph[S any] struct {
-	name   string
-	nodes  map[string]*node[S]
-	order  []string
-	static map[string]string
-	cond   map[string]*condEdge[S]
-	clone  func(S) S
-	errs   []error
+	name    string
+	nodes   map[string]*node[S]
+	order   []string
+	static  map[string]string
+	cond    map[string]*condEdge[S]
+	clone   func(S) S
+	labels  map[[2]string]string
+	agents  map[string]bool
+	runners map[string]*runner.Runner
+	errs    []error
 }
 
 // New returns an empty graph. The name appears in errors and observer events.
 func New[S any](name string) *Graph[S] {
 	return &Graph[S]{
-		name:   name,
-		nodes:  map[string]*node[S]{},
-		static: map[string]string{},
-		cond:   map[string]*condEdge[S]{},
+		name:    name,
+		nodes:   map[string]*node[S]{},
+		static:  map[string]string{},
+		cond:    map[string]*condEdge[S]{},
+		labels:  map[[2]string]string{},
+		agents:  map[string]bool{},
+		runners: map[string]*runner.Runner{},
 	}
 }
 
@@ -116,6 +127,40 @@ func (g *Graph[S]) AddNode(name string, fn NodeFunc[S]) *Graph[S] {
 		g.fail("node %q: nil function", name)
 	}
 	g.addNode(name, &node[S]{name: name, fn: fn})
+	return g
+}
+
+// AddAgentNode is AddNode for a node that runs a Claude Code agent (for
+// example one built with Agent). It behaves identically; the tag only shows
+// up in Topology, so viewers can draw agent nodes differently.
+func (g *Graph[S]) AddAgentNode(name string, fn NodeFunc[S]) *Graph[S] {
+	g.agents[name] = true
+	return g.AddNode(name, fn)
+}
+
+// MarkAgent tags already registered nodes as agent nodes (see AddAgentNode).
+// Unknown names are ignored.
+func (g *Graph[S]) MarkAgent(names ...string) *Graph[S] {
+	for _, n := range names {
+		g.agents[n] = true
+	}
+	return g
+}
+
+// AgentRunner tags node name as an agent node and records the Runner it uses,
+// so Topology can show the runner's effective defaults (model, tools, limits)
+// before the node has run. It changes nothing about execution.
+func (g *Graph[S]) AgentRunner(name string, r *runner.Runner) *Graph[S] {
+	g.agents[name] = true
+	g.runners[name] = r
+	return g
+}
+
+// LabelEdge attaches a human-readable label to the edge from -> to, shown by
+// Topology consumers (for a conditional edge, say what the route means, e.g.
+// "approved"). It does not create the edge.
+func (g *Graph[S]) LabelEdge(from, to, label string) *Graph[S] {
+	g.labels[[2]string{from, to}] = label
 	return g
 }
 
@@ -332,8 +377,11 @@ func (g *Graph[S]) Compile(opts ...CompileOption) (*Runnable[S], error) {
 		branches: branchSet,
 		cfg:      cfg,
 		clone:    g.clone,
+		labels:   maps.Clone(g.labels),
 	}
 	for k, v := range g.nodes {
+		v.agent = v.agent || g.agents[k]
+		v.runner = g.runners[k]
 		r.nodes[k] = v
 	}
 	for k, v := range g.static {

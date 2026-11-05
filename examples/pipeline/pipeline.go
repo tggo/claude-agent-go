@@ -68,7 +68,9 @@ type approveOut struct {
 }
 
 // Build wires plan → code → review → (fix → review)* → docs.
-func Build(model, runsDir string) (*Pipeline, error) {
+//
+// copts are extra graph compile options, e.g. graph.WithObserver(webServer).
+func Build(model, runsDir string, copts ...graph.CompileOption) (*Pipeline, error) {
 	ap := &approvals{m: map[string]string{}}
 	reg := tools.NewRegistry("pipeline")
 	tools.Register(reg, "approve",
@@ -106,10 +108,11 @@ func Build(model, runsDir string) (*Pipeline, error) {
 	retry := graph.WithRetry(runner.RetryPolicy{MaxAttempts: 2, Resume: true})
 
 	g := graph.New[State]("coding-pipeline")
+	g.AgentRunner("plan", planner).AgentRunner("code", coder).AgentRunner("review", reviewer).AgentRunner("fix", coder).AgentRunner("docs", writer)
 
 	// plan: may stop the graph to ask the user (graph.Interrupt), but only when
 	// the task cannot be started without an answer.
-	g.AddNode("plan", func(ctx context.Context, s *State) error {
+	g.AddAgentNode("plan", func(ctx context.Context, s *State) error {
 		if a, ok := graph.Answer(ctx); ok {
 			s.Answers += "\n- " + a
 		}
@@ -124,11 +127,9 @@ unittest cases that must pass. Prefer reasonable assumptions and list them under
 "Assumptions". ONLY if the task is impossible to start without an answer (e.g.
 requirements contradict each other) reply with a single line starting with
 "QUESTION:" and nothing else.`
-		res, err := planner.RunStreamWithRetry(ctx, runner.Input{Prompt: prompt, WorkDir: s.WorkDir, Label: "plan"}, nil,
-			runner.RetryPolicy{MaxAttempts: 2, Resume: true})
-		if res != nil {
-			graph.AddCost(ctx, res.TotalCostUSD)
-		}
+		// RunAgent adds the cost to this node and streams events to observers.
+		res, err := graph.RunAgent(ctx, planner, runner.Input{Prompt: prompt, WorkDir: s.WorkDir, Label: "plan"},
+			graph.WithRetry(runner.RetryPolicy{MaxAttempts: 2, Resume: true}))
 		if err != nil {
 			return err
 		}
@@ -140,7 +141,7 @@ requirements contradict each other) reply with a single line starting with
 		return nil
 	})
 
-	g.AddNode("code", graph.Agent(coder, func(s *State) runner.Input {
+	g.AddAgentNode("code", graph.Agent(coder, func(s *State) runner.Input {
 		return runner.Input{WorkDir: s.WorkDir, Prompt: "Implement this plan in the current directory.\n\n" + s.Plan + `
 
 Create the module and a test file (unittest). Run the tests with
@@ -148,7 +149,7 @@ Create the module and a test file (unittest). Run the tests with
 summary: files written, test result.`}
 	}, nil, retry))
 
-	g.AddNode("review", graph.Agent(reviewer, func(s *State) runner.Input {
+	g.AddAgentNode("review", graph.Agent(reviewer, func(s *State) runner.Input {
 		return runner.Input{WorkDir: s.WorkDir, MCPConfigPath: mcpPath, Prompt: "You are a strict code reviewer. Project dir: " + s.WorkDir + "\nPlan:\n" + s.Plan + `
 
 1. Read the code and run "python3 -m unittest -v" yourself.
@@ -173,7 +174,7 @@ summary: files written, test result.`}
 		}
 	}, "docs", "fix", graph.End)
 
-	g.AddNode("fix", graph.Agent(coder, func(s *State) runner.Input {
+	g.AddAgentNode("fix", graph.Agent(coder, func(s *State) runner.Input {
 		return runner.Input{WorkDir: s.WorkDir, Prompt: "Fix the code in the current directory according to this review:\n\n" + s.Review +
 			"\n\nRun \"python3 -m unittest -v\" until the tests pass. Reply with a short summary of the changes."}
 	}, func(s *State, _ *runner.Result) error {
@@ -181,7 +182,7 @@ summary: files written, test result.`}
 		return nil
 	}, retry))
 
-	g.AddNode("docs", graph.Agent(writer, func(s *State) runner.Input {
+	g.AddAgentNode("docs", graph.Agent(writer, func(s *State) runner.Input {
 		return runner.Input{WorkDir: s.WorkDir, Prompt: `Read the module in the current directory and write README.md:
 title, one-paragraph summary, "## Usage" with an example, "## API" for each
 public function (params, returns, raises), "## Edge cases". Reply "done".`}
@@ -200,7 +201,8 @@ public function (params, returns, raises), "## Edge cases". Reply "done".`}
 		AddEdge("fix", "review").
 		AddEdge("docs", graph.End)
 
-	r, err := g.Compile(graph.WithMaxSteps(20))
+	g.LabelEdge("review", "docs", "approved").LabelEdge("review", "fix", "issues").LabelEdge("review", graph.End, "gave up")
+	r, err := g.Compile(append([]graph.CompileOption{graph.WithMaxSteps(20)}, copts...)...)
 	if err != nil {
 		closeSrv()
 		return nil, err

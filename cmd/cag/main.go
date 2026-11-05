@@ -28,6 +28,7 @@ usage:
   cag run [flags] "<prompt>"     run a single agent
   cag fleet <config.yaml>        run a batch of tasks across a fleet
   cag trace <rec.jsonl | dir>    render a recording (or dir) as an HTML trace page
+  cag web --replay <journal | dir>  serve a graph run journal in the web UI (watch/replay)
   cag version                    print version
 
 run 'cag run -h' or 'cag fleet -h' for flags.`
@@ -65,6 +66,8 @@ func main() {
 		fleetCmd(os.Args[2:])
 	case "trace":
 		traceCmd(os.Args[2:])
+	case "web":
+		webCmd(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Printf("cag %s\n", resolveVersion())
 	case "help", "-h", "--help":

@@ -77,6 +77,7 @@ type Options struct {
 	Model    string
 	RunsDir  string
 	Progress runner.ProgressFunc // live view of every agent run; nil = quiet
+	Observer graph.Observer      // e.g. a *graphweb.Server; nil = none
 }
 
 // Build wires the mocks as Go tools and the graph
@@ -131,7 +132,8 @@ func Build(o Options) (*Agent, error) {
 
 	g := graph.New[State]("pizza")
 
-	g.AddNode("order", graph.Agent(taker, func(s *State) runner.Input {
+	g.AgentRunner("order", taker)
+	g.AddAgentNode("order", graph.Agent(taker, func(s *State) runner.Input {
 		p := `You take pizza delivery orders for "Forno", a pizzeria in Kyiv.
 Customer request: ` + s.Request + `
 `
@@ -201,11 +203,16 @@ Otherwise reply with a one-sentence summary for the customer.`
 		return nil
 	})
 
+	g.LabelEdge("confirm", "place", "yes").LabelEdge("confirm", "order", "change").LabelEdge("confirm", graph.End, "no / give up")
 	g.AddEdge(graph.Start, "order")
 	g.AddEdge("order", "confirm")
 	g.AddEdge("place", graph.End)
 
-	r, err := g.Compile(graph.WithMaxSteps(20))
+	copts := []graph.CompileOption{graph.WithMaxSteps(20)}
+	if o.Observer != nil {
+		copts = append(copts, graph.WithObserver(o.Observer))
+	}
+	r, err := g.Compile(copts...)
 	if err != nil {
 		closeSrv()
 		return nil, err
