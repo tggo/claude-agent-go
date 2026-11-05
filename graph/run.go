@@ -237,6 +237,7 @@ func (r *Runnable[S]) next(from string, s *S) (to string, err error) {
 func (r *Runnable[S]) exec(ctx context.Context, name, parent string, step int, rec *recorder, fn NodeFunc[S], s *S) (err error) {
 	info := StepInfo{RunID: rec.runID, Graph: r.name, Node: name, Step: step, Parent: parent, Attempt: rec.visit(name)}
 	sc := &scope{name: name, info: info, obs: r.cfg.obs}
+	sc.hook, _ = ctx.Value(stepHookKey{}).(*StepHooks)
 	if parent == "" {
 		sc.ck = rec.ck // branches are not individually recoverable: no session records
 	}

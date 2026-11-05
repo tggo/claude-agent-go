@@ -467,7 +467,7 @@ func (r *Runnable[S]) logResume(ctx context.Context, rec *recorder, st *S, cp Ch
 
 // noteSession logs the agent session id of the node once per distinct id.
 func (s *scope) noteSession(ctx context.Context, id string) {
-	if id == "" || s.ck == nil {
+	if id == "" || (s.ck == nil && s.hook == nil) {
 		return
 	}
 	s.mu.Lock()
@@ -477,5 +477,11 @@ func (s *scope) noteSession(ctx context.Context, id string) {
 	}
 	s.sess = id
 	s.mu.Unlock()
+	if s.hook != nil && s.hook.OnSession != nil {
+		s.hook.OnSession(id)
+	}
+	if s.ck == nil {
+		return
+	}
 	_ = s.ck.append(ctx, Record{Kind: KindSession, Node: s.name, Step: s.info.Step, SessionID: id}) // failure is sticky; the commit reports it
 }

@@ -90,12 +90,15 @@ func runAgent(ctx context.Context, r *runner.Runner, in runner.Input, cfg *agent
 		}
 	}
 	progress := cfg.progress
-	if sc, ok := ctx.Value(scopeKey{}).(*scope); ok && sc.ck != nil {
+	if sc, ok := ctx.Value(scopeKey{}).(*scope); ok && (sc.ck != nil || sc.hook != nil) {
 		user := progress
 		progress = func(ev claudecli.StreamEvent, n int) {
 			sc.noteSession(ctx, ev.SessionID) // logged before anyone reacts to the event
 			if user != nil {
 				user(ev, n)
+			}
+			if sc.hook != nil && sc.hook.OnEvent != nil {
+				sc.hook.OnEvent(ev, n)
 			}
 		}
 	}

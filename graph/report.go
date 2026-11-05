@@ -163,7 +163,8 @@ type scope struct {
 	name string
 	info StepInfo
 	obs  Observer
-	ck   *ckWriter // log of the run; nil without a store or inside a parallel branch
+	ck   *ckWriter  // log of the run; nil without a store or inside a parallel branch
+	hook *StepHooks // set by Runnable.Step
 	mu   sync.Mutex
 	cost float64
 	sess string // last agent session id logged
