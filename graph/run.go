@@ -172,7 +172,7 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 					Prior: Prior{Steps: rep.Steps, Duration: rep.Duration}}
 				// Step counts executions completed before this one, so the
 				// resumed attempt re-takes the same step number.
-				return s, rep, &Interrupted[S]{Question: ie.Question, Node: n.name, Checkpoint: cp}
+				return s, rep, &Interrupted[S]{Question: ie.Question, Node: n.name, Checkpoint: cp, Items: ie.Items}
 			}
 			return s, rec.report(), err
 		}
@@ -249,6 +249,7 @@ func (r *Runnable[S]) exec(ctx context.Context, name, parent string, step int, r
 	obsErr := err
 	if paused {
 		st.Paused, st.Question, obsErr = true, ie.Question, nil
+		info.Items = ie.Items
 	} else {
 		st.Err = err
 	}

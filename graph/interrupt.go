@@ -11,7 +11,10 @@ import (
 // from Interrupt and the *Interrupted[S] that Run and Resume return.
 var ErrInterrupt = errors.New("graph: interrupted")
 
-type interruptError struct{ Question string }
+type interruptError struct {
+	Question string
+	Items    []ReviewItem
+}
 
 func (e *interruptError) Error() string        { return "graph: interrupted: " + e.Question }
 func (e *interruptError) Is(target error) bool { return target == ErrInterrupt }
@@ -51,6 +54,8 @@ type Interrupted[S any] struct {
 	Question   string
 	Node       string
 	Checkpoint Checkpoint[S]
+	// Items are the things to review when the node called InterruptReview.
+	Items []ReviewItem
 }
 
 func (e *Interrupted[S]) Is(target error) bool { return target == ErrInterrupt }

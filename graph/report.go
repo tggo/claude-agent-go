@@ -61,6 +61,8 @@ type StepInfo struct {
 	// (the err argument is nil then).
 	Paused   bool
 	Question string
+	// Items is set with Paused when the node called InterruptReview.
+	Items []ReviewItem
 }
 
 // Observer receives node lifecycle events. Calls for one run are made in
