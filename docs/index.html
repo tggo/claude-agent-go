@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>claude-agent-go — a Go SDK for the Claude Code CLI</title>
-<meta name="description" content="A typed, dependency-light Go SDK that drives the Claude Code CLI: one-shot runs, interactive sessions, in-process Go tools, permission and hook callbacks, inline subagents. Behaviorally verified against the real binary." />
+<title>claude-agent-go — build, run, debug and test Claude Code agents in Go</title>
+<meta name="description" content="A typed Go SDK that drives the real Claude Code CLI: execution graphs with durable crash recovery, a live and replay web debugger, evals, permission policies, docker and ssh transports. Behaviorally verified against the binary." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -19,7 +19,7 @@
     --amber:#F2C14E;        /* tool / value */
     --text:#E7EFF6;
     --muted:#8499AB;
-    --faint:#54677A;
+    --faint:#6E8296;
     --line:#1C3047;
     --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
     --disp:'Space Grotesk',system-ui,sans-serif;
@@ -50,7 +50,7 @@
   .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan-deep);margin:0 0 22px}
   h1{font-size:clamp(38px,6vw,62px);line-height:1.02;letter-spacing:-.035em;font-weight:700;margin:0 0 22px}
   h1 .pipe{color:var(--cyan)}
-  .lede{font-size:18px;color:var(--muted);max-width:34ch;margin:0 0 30px}
+  .lede{font-size:18px;color:var(--muted);max-width:38ch;margin:0 0 30px}
   .lede b{color:var(--text);font-weight:500}
   .cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
   .get{font-family:var(--mono);font-size:14px;background:var(--ink-2);border:1px solid var(--line);
@@ -118,13 +118,110 @@
   footer a{color:var(--muted)} footer a:hover{color:var(--cyan)}
 
   @media (max-width:860px){
-    .hero{grid-template-columns:1fr;gap:38px;padding:44px 0 56px}
+    .hero{grid-template-columns:minmax(0,1fr);gap:38px;padding:44px 0 56px}
+    .hero>*{min-width:0}
     .grid,.verify{grid-template-columns:1fr}
-    .nav-links{display:none}
+    .nav-links{display:flex}
   }
   @media (prefers-reduced-motion:reduce){
     .ln{animation:none;opacity:1;transform:none}
     html{scroll-behavior:auto}
+  }
+
+  /* ---- extended page ---- */
+  .wrap, nav{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+  @media (min-width:600px){.wrap,nav{padding-left:28px;padding-right:28px}}
+  .nav-links{flex-wrap:wrap}
+  .grid.three{grid-template-columns:repeat(3,1fr)}
+  .grid > *{min-width:0}
+  .card .snip{max-width:100%}
+  .card h3{overflow-wrap:anywhere}
+  .card p a,.sec-sub a,li a{color:var(--cyan);border-bottom:1px solid rgba(61,214,245,.3)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--amber);vertical-align:middle;margin-left:8px}
+  .pill.soon{color:var(--muted)}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:36px;align-items:start}
+  .split > *{min-width:0}
+  .prose p{color:var(--muted);margin:0 0 14px;font-size:15.5px}
+  .prose b{color:var(--text);font-weight:500}
+  .prose code,.sec-sub code,.card p code,td code,li code{font-family:var(--mono);font-size:.88em;color:var(--amber);background:rgba(242,193,78,.07);padding:1px 5px;border-radius:4px}
+
+  /* diagrams */
+  .fig{background:linear-gradient(180deg,var(--ink-2),#0B1828);border:1px solid var(--line);border-radius:14px;padding:14px 14px 10px;margin:0}
+  .fig figcaption{font-family:var(--mono);font-size:12px;color:var(--muted);padding:10px 4px 4px;line-height:1.6}
+  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .scroll svg{display:block;min-width:600px;width:100%;height:auto}
+  .fig svg text{font-family:'IBM Plex Mono',ui-monospace,monospace}
+  .n-box{fill:#0F2236;stroke:#27506e;stroke-width:1.5}
+  .n-box.agent{stroke:var(--cyan-deep)}
+  .n-box.go{stroke:#4a6a85}
+  .n-t{fill:var(--text);font-size:14px;font-weight:500;text-anchor:middle}
+  .n-s{fill:var(--muted);font-size:10.5px;text-anchor:middle}
+  .e-line{stroke:#2d5a7a;stroke-width:1.8;fill:none}
+  .e-loop{stroke:var(--coral);stroke-width:1.8;fill:none;stroke-dasharray:5 4}
+  .e-ok{stroke:#3c9d7e;stroke-width:1.8;fill:none}
+  .lbl{font-size:11px;fill:var(--muted);text-anchor:middle}
+  .lbl.coral{fill:var(--coral)} .lbl.green{fill:#7fd6b4}
+  .packet{fill:var(--cyan);filter:drop-shadow(0 0 5px rgba(61,214,245,.9));
+    offset-path:path("M10,120 H375 V236 H435 V120 H640");offset-rotate:0deg;offset-distance:0%;
+    animation:travel 8s linear infinite}
+  .packet.p2{animation-delay:-4s}
+  @keyframes travel{0%{offset-distance:0%;opacity:0}4%{opacity:1}96%{opacity:1}100%{offset-distance:100%;opacity:0}}
+  .ctr{font-size:12px;fill:var(--amber);font-weight:600}
+  .ctr-a{animation:c0 8s steps(1) infinite}.ctr-b{animation:c1 8s steps(1) infinite}
+  @keyframes c0{0%{opacity:1}54%{opacity:0}100%{opacity:0}}
+  @keyframes c1{0%{opacity:0}54%{opacity:1}100%{opacity:1}}
+  .glow{animation:glow 8s linear infinite}
+  @keyframes glow{0%,45%{stroke:#27506e;filter:none}50%,60%{stroke:var(--coral);filter:drop-shadow(0 0 6px rgba(255,107,92,.7))}66%,100%{stroke:#27506e;filter:none}}
+  .crash{animation:pulse 2.4s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+  @keyframes pulse{50%{opacity:.45}}
+
+  /* code blocks with copy */
+  .code{position:relative;background:#0A1623;border:1px solid var(--line);border-radius:10px;margin:0 0 16px;min-width:0}
+  .code pre{margin:0;padding:16px 16px 14px;overflow-x:auto;font-family:var(--mono);font-size:12.6px;line-height:1.7;color:#c4d6e5;tab-size:4}
+  .code .cap{display:block;padding:9px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .copy{position:absolute;top:6px;right:6px;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--ink-2);
+    border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}
+  .copy:hover{color:var(--text);border-color:var(--cyan-deep)}
+  .copy:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .code .kw{color:var(--cyan)} .code .fn{color:var(--amber)} .code .st{color:#9ad8c0} .code .cm{color:var(--faint)}
+
+  /* screenshot */
+  .shot{margin:0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0B1828;box-shadow:0 30px 80px -40px rgba(0,0,0,.8)}
+  .shot img{display:block;width:100%;height:auto}
+  .shot figcaption{padding:12px 16px;font-family:var(--mono);font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+
+  /* tables */
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+  th,td{text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--ink-2);font-weight:500}
+  td{color:var(--muted)} td:first-child{color:var(--text)}
+  tr:last-child td{border-bottom:0}
+  .yes{color:#7fd6b4} .part{color:var(--amber)} .no{color:var(--coral)}
+  .note{font-size:13px;color:var(--muted);margin:14px 0 0;max-width:80ch}
+
+  .mini{list-style:none;padding:0;margin:0;display:grid;gap:10px}
+  .mini li{font-size:14.5px;color:var(--muted);padding-left:18px;position:relative}
+  .mini li::before{content:"›";position:absolute;left:0;color:var(--cyan)}
+  .mini b{color:var(--text);font-weight:500}
+
+  @media (max-width:860px){
+    .grid.three,.split{grid-template-columns:1fr}
+    .nav-links{display:flex;gap:16px;font-size:13px}
+    .nav-links .hide-m{display:none}
+    nav{flex-wrap:wrap;gap:8px}
+    section{padding:48px 0}
+    .sec-head{margin-bottom:28px}
+    .get{max-width:100%;overflow-x:auto;white-space:nowrap}
+    .stream{max-width:100%}
+    .feed{font-size:11.5px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .packet,.glow,.crash,.ctr-a,.ctr-b{animation:none}
+    .packet.p2{display:none}
+    .packet{offset-distance:34%;opacity:1}
+    .ctr-a{opacity:0}.ctr-b{opacity:1}
   }
 </style>
 </head>
@@ -133,8 +230,12 @@
 <nav>
   <div class="brand">claude<b>·</b>agent<b>·</b>go</div>
   <div class="nav-links">
-    <a href="#capabilities">Capabilities</a>
-    <a href="#verified">Verified</a>
+    <a href="#build">Build</a>
+    <a href="#graphs">Graphs</a>
+    <a href="#debugger" class="hide-m">Debugger</a>
+    <a href="#evals" class="hide-m">Evals</a>
+    <a href="#safety" class="hide-m">Safety</a>
+    <a href="#adk" class="hide-m">vs ADK</a>
     <a href="https://github.com/tggo/claude-agent-go">GitHub</a>
   </div>
 </nav>
@@ -143,15 +244,16 @@
   <div>
     <p class="eyebrow">Go SDK · Claude Code CLI</p>
     <h1>Build agents in Go,<br>over the <span class="pipe">stream</span>.</h1>
-    <p class="lede">A typed, dependency-light client for the <b>claude</b> binary. One-shot runs, live sessions, in-process Go tools, and Go callbacks for every permission and hook — <b>spoken over one bidirectional pipe</b>.</p>
+    <p class="lede">Build, run, debug and test agents on the real <b>claude</b> binary. Typed runs and tools, <b>execution graphs that survive a crash</b>, a web debugger and evals — in plain Go.</p>
     <div class="cta">
       <div class="get"><span class="dollar">$</span><span>go get <b>github.com/tggo/claude-agent-go</b></span></div>
       <a class="btn" href="https://github.com/tggo/claude-agent-go">View on GitHub →</a>
+      <a class="btn ghost" href="#graphs">See the graph demo</a>
     </div>
     <div class="badges">
       <span><i class="dot"></i>Zero runtime deps</span>
       <span><i class="dot amber"></i>&gt;90% coverage</span>
-      <span><i class="dot coral"></i>17 live-binary tests</span>
+      <span><i class="dot coral"></i>22 fuzz targets</span>
     </div>
   </div>
 
@@ -164,8 +266,308 @@
 
 <main class="wrap">
 
+<section id="build">
+  <div class="sec-head"><span class="sec-num">01</span><div><h2>What you can build</h2>
+    <p class="sec-sub">The agent loop stays in the CLI, so you keep upstream models and tools. The SDK is everything around it.</p></div>
+  </div>
+  <div class="grid three">
+    <div class="card"><h3>Review/fix pipelines <span class="tag">// graph</span></h3><p>Plan, code, review, fix, docs. Conditional edges, loops with a step guard, parallel fan-out, stage groups.</p></div>
+    <div class="card"><h3>Human-in-the-loop <span class="tag">// interrupt</span></h3><p>A node pauses to ask, or to put files in front of a reviewer. The checkpoint is plain JSON; resume from any front end.</p></div>
+    <div class="card"><h3>Crash-proof long runs <span class="tag">// durable</span></h3><p>Every node commit is logged. Recover in a fresh process, resume the agent's CLI session, or fork from any commit.</p></div>
+    <div class="card"><h3>Agents with real tools <span class="tag">// tools</span></h3><p>Your Go functions as MCP tools, in-process, behind a bearer token. Typed in and out, schema inferred.</p></div>
+    <div class="card"><h3>Fleets <span class="tag">// fleet</span></h3><p>A dependency DAG of tasks across workers, one git worktree each, over local, docker or ssh, with a spend cap.</p></div>
+    <div class="card"><h3>Tested agents <span class="tag">// eval</span></h3><p>Trajectory, ROUGE and judge scoring, pass@k, simulated users, and goldens replayed offline for free.</p></div>
+  </div>
+</section>
+
+<section id="graphs">
+  <div class="sec-head"><span class="sec-num">02</span><div><h2>Graphs of agents, with a loop that stops</h2>
+    <p class="sec-sub">A review/fix loop is three edges and a counter. Packets below are work items; the dashed edge is the reviewer sending it back.</p></div>
+  </div>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 760 300" role="img" aria-labelledby="gt gd">
+      <title id="gt">A graph with a review and fix loop</title>
+      <desc id="gd">Work flows from plan to code to review. If the reviewer rejects, it goes to fix and back to review, up to three rounds. If approved it goes to docs and ends.</desc>
+      <!-- edges -->
+      <path class="e-line" d="M10 120 H30"/>
+      <path class="e-line" d="M140 120 H190"/>
+      <path class="e-line" d="M300 120 H350"/>
+      <path class="e-ok" d="M460 120 H610"/>
+      <path class="e-loop" d="M375 142 V214"/>
+      <path class="e-loop" d="M435 214 V142"/>
+      <path class="e-line" d="M720 120 H748"/>
+      <path d="M744 115 l6 5 l-6 5" class="e-line"/>
+      <text class="lbl green" x="535" y="108">approved</text>
+      <text class="lbl coral" x="352" y="184" style="text-anchor:end">rejected</text>
+      <text class="lbl" x="468" y="184" style="text-anchor:start">fixed</text>
+      <!-- nodes -->
+      <g><rect class="n-box agent" x="30" y="98" width="110" height="44" rx="9"/><text class="n-t" x="85" y="118">plan</text><text class="n-s" x="85" y="133">agent</text></g>
+      <g><rect class="n-box agent" x="190" y="98" width="110" height="44" rx="9"/><text class="n-t" x="245" y="118">code</text><text class="n-s" x="245" y="133">agent</text></g>
+      <g><rect class="n-box agent glow" x="350" y="98" width="110" height="44" rx="9"/><text class="n-t" x="405" y="118">review</text><text class="n-s" x="405" y="133">agent · Go tool</text></g>
+      <g><rect class="n-box agent" x="350" y="214" width="110" height="44" rx="9"/><text class="n-t" x="405" y="234">fix</text><text class="n-s" x="405" y="249">agent</text></g>
+      <g><rect class="n-box agent" x="610" y="98" width="110" height="44" rx="9"/><text class="n-t" x="665" y="118">docs</text><text class="n-s" x="665" y="133">agent</text></g>
+      <!-- counter -->
+      <text class="lbl" x="560" y="236" style="text-anchor:start">loop counter</text>
+      <text class="ctr ctr-a" x="560" y="256">rounds 0 / 3</text>
+      <text class="ctr ctr-b" x="560" y="256">rounds 1 / 3</text>
+      <!-- packets -->
+      <circle class="packet" r="6" cx="0" cy="0"/>
+      <circle class="packet p2" r="6" cx="0" cy="0"/>
+    </svg>
+    </div>
+    <figcaption>review → fix → review exits on approval or after three rounds, whichever comes first.</figcaption>
+  </figure>
+
+  <div class="split" style="margin-top:36px">
+    <div>
+<div class="code"><span class="cap">graph.go</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code><span class="cm">// plan → code → review, fix loop, docs</span>
+g := graph.<span class="fn">New</span>[State](<span class="st">"coding"</span>)
+g.<span class="fn">AddNode</span>(<span class="st">"review"</span>, graph.<span class="fn">Agent</span>(reviewer, buildReview, saveReview))
+g.<span class="fn">AddNode</span>(<span class="st">"fix"</span>, graph.<span class="fn">Agent</span>(coder, buildFix, countRound))
+g.<span class="fn">AddConditionalEdge</span>(<span class="st">"review"</span>, <span class="kw">func</span>(s *State) <span class="kw">string</span> {
+    <span class="kw">switch</span> {
+    <span class="kw">case</span> s.Approved:   <span class="kw">return</span> <span class="st">"docs"</span>
+    <span class="kw">case</span> s.Rounds &gt;= 3: <span class="kw">return</span> graph.End
+    }
+    <span class="kw">return</span> <span class="st">"fix"</span>
+}, <span class="st">"docs"</span>, <span class="st">"fix"</span>, graph.End)
+
+run, _ := g.<span class="fn">Compile</span>(graph.<span class="fn">WithMaxSteps</span>(20)) <span class="cm">// validates every edge</span>
+st, report, err := run.<span class="fn">Run</span>(ctx, State{Task: task})</code></pre></div>
+    </div>
+    <div class="prose">
+      <p><b>Validated at compile time.</b> Missing nodes, dangling edges and unreachable steps fail <code>Compile</code>, not the third hour of a run.</p>
+      <p><b>Parallel and grouped.</b> <code>AddParallel</code> fans out on copies of the state and merges. <code>Group</code> labels stages; the debugger draws them as collapsible boxes.</p>
+      <p><b>Ask a human.</b> <code>graph.Interrupt("which format?")</code> returns a JSON checkpoint; <code>Resume</code> continues with the answer. <code>InterruptReview</code> does it for a list of files, and <code>EmitArtifact</code> publishes images and reports a node produced.</p>
+      <p><b>Cost per node.</b> The <code>Report</code> carries duration, spend and errors for every step.</p>
+    </div>
+  </div>
+</section>
+
+<section id="durable">
+  <div class="sec-head"><span class="sec-num">03</span><div><h2>Durable runs, without a server</h2>
+    <p class="sec-sub">Attach a checkpoint store and every node commit is appended to a log before the run moves on. A killed process loses at most the node in flight.</p></div>
+  </div>
+  <figure class="fig">
+    <div class="scroll">
+    <svg viewBox="0 0 760 270" role="img" aria-labelledby="tt td2">
+      <title id="tt">Crash and recover timeline</title>
+      <desc id="td2">Process A commits plan, code and review to the checkpoint log, then crashes during fix. Process B calls Recover, resumes the fix agent's CLI session, and finishes review and docs.</desc>
+      <text class="lbl" x="6" y="34" style="text-anchor:start">process A</text>
+      <text class="lbl" x="6" y="224" style="text-anchor:start">process B</text>
+      <text class="lbl" x="6" y="130" style="text-anchor:start">log</text>
+      <!-- lane A -->
+      <path class="e-line" d="M90 30 H430"/>
+      <g><rect class="n-box agent" x="100" y="14" width="80" height="32" rx="7"/><text class="n-t" x="140" y="35" style="font-size:12.5px">plan</text></g>
+      <g><rect class="n-box agent" x="196" y="14" width="80" height="32" rx="7"/><text class="n-t" x="236" y="35" style="font-size:12.5px">code</text></g>
+      <g><rect class="n-box agent" x="292" y="14" width="80" height="32" rx="7"/><text class="n-t" x="332" y="35" style="font-size:12.5px">review</text></g>
+      <g><rect class="n-box" x="388" y="14" width="80" height="32" rx="7" style="stroke:var(--coral)"/><text class="n-t" x="428" y="35" style="font-size:12.5px">fix</text></g>
+      <g class="crash"><circle cx="500" cy="30" r="13" fill="none" stroke="var(--coral)" stroke-width="2"/><path d="M494 24 L506 36 M506 24 L494 36" stroke="var(--coral)" stroke-width="2.2" fill="none"/></g>
+      <text class="lbl coral" x="500" y="64">SIGKILL</text>
+      <!-- log lane -->
+      <rect x="90" y="100" width="640" height="56" rx="9" fill="#0A1623" stroke="var(--line)"/>
+      <g font-size="11" fill="var(--muted)" text-anchor="middle">
+        <rect x="100" y="112" width="70" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="135" y="132" fill="#7fd6b4">commit 1</text>
+        <rect x="180" y="112" width="70" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="215" y="132" fill="#7fd6b4">commit 2</text>
+        <rect x="260" y="112" width="70" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="295" y="132" fill="#7fd6b4">commit 3</text>
+        <rect x="340" y="112" width="86" height="32" rx="6" fill="#0F2236" stroke="var(--amber)" stroke-dasharray="4 3"/><text x="383" y="132" fill="var(--amber)">fix: session</text>
+        <rect x="560" y="112" width="80" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="600" y="132" fill="#7fd6b4">commit 4</text>
+        <rect x="648" y="112" width="74" height="32" rx="6" fill="#0F2236" stroke="#3c9d7e"/><text x="685" y="132" fill="#7fd6b4">run_end</text>
+      </g>
+      <text class="lbl" x="90" y="178" style="text-anchor:start;fill:var(--muted)">FileStore · MemStore · your own (Postgres example)</text>
+      <!-- recover arrow -->
+      <path class="e-loop" d="M500 156 V204" style="stroke:var(--amber)"/>
+      <text class="lbl" x="488" y="196" style="text-anchor:end;fill:var(--amber)">Recover(runID)</text>
+      <!-- lane B -->
+      <path class="e-line" d="M520 220 H730"/>
+      <g><rect class="n-box agent" x="500" y="204" width="116" height="32" rx="7" style="stroke:var(--amber)"/><text class="n-t" x="558" y="225" style="font-size:12px">fix · --resume</text></g>
+      <g><rect class="n-box agent" x="626" y="204" width="46" height="32" rx="7"/><text class="n-t" x="649" y="225" style="font-size:11px">rev</text></g>
+      <g><rect class="n-box agent" x="680" y="204" width="50" height="32" rx="7"/><text class="n-t" x="705" y="225" style="font-size:11px">docs</text></g>
+      <text class="lbl" x="90" y="256" style="text-anchor:start">plan, code and review are not paid for twice.</text>
+    </svg>
+    </div>
+    <figcaption>A crash costs only the node in flight; the agent's own CLI session is resumed, so spent tokens are not wasted.</figcaption>
+  </figure>
+
+  <div class="split" style="margin-top:36px">
+    <div>
+<div class="code"><span class="cap">durable.go</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code>store, _ := graph.<span class="fn">FileStore</span>(<span class="st">"./checkpoints"</span>)
+run, _ := g.<span class="fn">Compile</span>(graph.<span class="fn">WithCheckpointStore</span>(store))
+
+st, report, err := run.<span class="fn">Run</span>(ctx, State{Task: task})
+<span class="cm">// report.RunID names the run. After a crash, in a new process:</span>
+st, report, err = run.<span class="fn">Recover</span>(ctx, runID)
+
+<span class="cm">// side effects stay safe on the re-run:</span>
+payments.<span class="fn">Charge</span>(ctx, amt, graph.<span class="fn">IdempotencyKey</span>(ctx))
+
+<span class="cm">// what-if: copy history up to commit 12, edit, continue</span>
+run.<span class="fn">Fork</span>(ctx, runID, <span class="fn">12</span>, <span class="st">"retry"</span>, <span class="kw">func</span>(s *State) { s.Rounds = 0 })</code></pre></div>
+    </div>
+    <div class="prose">
+      <p><b>Recover</b> restarts at the node that was in flight and resumes its agent session with <code>--resume</code> and a continue prompt.</p>
+      <p><b>Idempotency key</b> is stable across the re-run and different on each loop iteration, so an external system sees one charge.</p>
+      <p><b>Fork</b> is rollback and what-if: history is never rewritten, the new run gets its own id.</p>
+      <p><b>Guarded.</b> A graph edited since the run started is refused with <code>ErrTopologyChanged</code>. <code>cag runs &lt;dir&gt;</code> lists runs as running, crashed, paused or done.</p>
+    </div>
+  </div>
+  <div class="split" style="margin-top:36px">
+    <div>
+<div class="code"><span class="cap">temporal.go</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code>r, _ := g.<span class="fn">Compile</span>()
+w := worker.<span class="fn">New</span>(c, temporal.<span class="fn">TaskQueue</span>(r), worker.Options{})
+temporal.<span class="fn">Register</span>(w, r, temporal.<span class="fn">WithHeartbeat</span>(30*time.Second, 10*time.Second))
+
+run, _ := temporal.<span class="fn">Start</span>(ctx, c, r, State{}, temporal.StartOptions{ID: <span class="st">"job-1"</span>})
+final, res, err := temporal.<span class="fn">Wait</span>[State](ctx, run)
+<span class="cm">// graph.Interrupt pauses it; temporal.Answer(ctx, c, "job-1", "yes") resumes</span></code></pre></div>
+    </div>
+    <div class="prose">
+      <p><b>Multi-machine durability.</b> The <code>temporal/</code> module runs each node as an activity and the loop as a workflow. A worker crash re-runs only the node in flight.</p>
+      <p><b>Same session.</b> A retried agent node continues its Claude session through heartbeat details, not from scratch.</p>
+      <p><b>Separate module.</b> The core takes no Temporal dependency. Limits: no continue-as-new yet; failed-attempt cost is not in the report.</p>
+    </div>
+  </div>
+</section>
+
+<section id="debugger">
+  <div class="sec-head"><span class="sec-num">04</span><div><h2>graphweb: watch a run, or replay one</h2>
+    <p class="sec-sub">A web debugger for graph runs, live or from a journal or checkpoint store. It binds to loopback, checks the Host header, and guards controls with a random token.</p></div>
+  </div>
+  <figure class="shot">
+    <img src="img/graphweb.png" width="1440" height="860" loading="lazy" alt="graphweb replaying a 16-node video pipeline: grouped stages Research, Script and Casting, a revise loop between writer and editor with a x2 counter, a minimap, and a node inspector on the right.">
+    <figcaption>Replay of a 16-node pipeline: stages, a revise loop with its counter, the minimap, per-node inspector and a timeline scrubber.</figcaption>
+  </figure>
+  <div class="grid three" style="margin-top:24px">
+    <div class="card"><h3>See the run</h3><p>Topology with collapsible stages, per-node cost and time, loop counters, a follow camera and a minimap. Snake, LR and TB layouts.</p></div>
+    <div class="card"><h3>Inspect a node</h3><p>Agent events, state before/after as a diff, the effective runner config (secret-free), and artifacts as a gallery.</p></div>
+    <div class="card"><h3>Steer it</h3><p>Set breakpoints, pause and step, and answer interrupts and reviews in the browser, via <code>RunInteractive</code>.</p></div>
+  </div>
+<div class="code" style="margin-top:24px"><span class="cap">shell</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code><span class="cm"># live, from the examples</span>
+go run ./examples/pipeline -web 127.0.0.1:8799
+
+<span class="cm"># replay a journal, or a durable checkpoint store</span>
+cag web --replay run.jsonl --open
+cag web --replay ./checkpoints --run &lt;runID&gt;
+
+<span class="cm"># HTML trace of recorded runs</span>
+cag trace runs/ --open</code></pre></div>
+</section>
+
+<section id="evals">
+  <div class="sec-head"><span class="sec-num">05</span><div><h2>Evals that run in <span class="mono" style="font-size:.8em">go test</span></h2>
+    <p class="sec-sub">Score trajectories and answers, repeat flaky cases, simulate the user, and turn any recorded run into a golden.</p></div>
+  </div>
+  <div class="split">
+<div class="code"><span class="cap">agent_test.go</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code>eval.<span class="fn">RunT</span>(t, set, eval.<span class="fn">RunnerAgent</span>(r, build), eval.Criteria{
+    TrajectoryThreshold: eval.<span class="fn">Threshold</span>(<span class="fn">1.0</span>), <span class="cm">// Exact / InOrder / AnyOrder</span>
+    ResponseMatch:       eval.<span class="fn">Threshold</span>(<span class="fn">0.3</span>), <span class="cm">// ROUGE-L</span>
+    Judge:               eval.<span class="fn">ClaudeJudge</span>(judgeRunner, eval.<span class="fn">JudgeSamples</span>(<span class="fn">3</span>)),
+    MaxCostUSD:          <span class="fn">0.50</span>,
+})</code></pre></div>
+    <ul class="mini">
+      <li><b>Trajectory</b> matching: exact, in order or any order; ignore or subset arguments.</li>
+      <li><b>Scoring</b>: ROUGE-1/L, regex, an LLM judge with a median over n samples, and yes/no rubrics with a breakdown.</li>
+      <li><b>Flaky agents</b>: repeats with a pass-rate threshold, <code>pass@k</code>, <code>4/5</code> in the report.</li>
+      <li><b>Multi-turn</b>: scripted or LLM-driven simulated users over a runner or a live client.</li>
+      <li><b>Budgets and goldens</b>: cost, tool-call and time limits; <code>CaseFromRecording</code> and <code>FromRecordingDir</code> for a whole graph run.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="safety">
+  <div class="sec-head"><span class="sec-num">06</span><div><h2>Permissions and safety</h2>
+    <p class="sec-sub">Deny by default, in Go, with the audit trail. Parsers and matchers are fuzzed because a policy bug is a security bug.</p></div>
+  </div>
+  <div class="split">
+<div class="code"><span class="cap">policy.go</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code>p := &permissions.Policy{
+    Rules: []permissions.Rule{
+        permissions.<span class="fn">Deny</span>(<span class="st">"Bash(rm *)"</span>, <span class="st">"no deleting"</span>),
+        permissions.<span class="fn">Allow</span>(<span class="st">"Bash(git status*)"</span>),
+        permissions.<span class="fn">Allow</span>(<span class="st">"mcp__calc__*"</span>),
+        permissions.<span class="fn">Ask</span>(<span class="st">"Write"</span>, askUser),
+    },
+    Remember: <span class="kw">true</span>,
+    Audit: <span class="kw">func</span>(d permissions.Decision) { log.Printf(<span class="st">"%s %s"</span>, d.Tool, d.Effect) },
+}
+c, _ := client.<span class="fn">New</span>(ctx, client.Config{CanUseTool: p.<span class="fn">CanUseTool</span>()})</code></pre></div>
+    <ul class="mini">
+      <li><b>First match wins, unmatched is denied.</b> Claude Code pattern syntax: <code>Bash(git status*)</code>.</li>
+      <li><b>Compound-safe Bash.</b> Allow needs every segment of <code>a &amp;&amp; b | c</code> to match and never allows substitution or redirection. Deny also sees <code>$()</code>, backticks, subshells and groups.</li>
+      <li><b>File tools.</b> Allow never matches a path with <code>..</code>; Deny sees the cleaned path.</li>
+      <li><b>Bearer-token MCP.</b> The in-process tool server needs a random 256-bit token; no token, 401.</li>
+      <li><b>Spend caps.</b> <code>MaxSpendUSD</code> across retries, a <code>SpendCap</code> plugin, a fleet budget tracker.</li>
+      <li><b>Fuzz-hardened.</b> 22 native fuzz targets in CI. <i>Known limit:</i> Deny does not see through <code>sudo</code>, <code>env</code> or <code>xargs</code>; deny the wrapper too.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="transports">
+  <div class="sec-head"><span class="sec-num">07</span><div><h2>Anywhere the binary can run</h2>
+    <p class="sec-sub">Swap one field and the same code runs in a container or on another machine. Cancel actually stops the remote agent.</p></div>
+  </div>
+  <div class="split">
+<div class="code"><span class="cap">transport.go</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code>r := runner.<span class="fn">New</span>(
+    runner.<span class="fn">WithTransport</span>(transport.SSH{Host: <span class="st">"gpu-box"</span>}),
+    runner.<span class="fn">WithPreflight</span>(<span class="kw">true</span>), <span class="cm">// binary, version, auth</span>
+)
+<span class="cm">// also: transport.DockerExec{Container: "box"}</span>
+<span class="cm">//       transport.DockerRun{Image: "agent:latest"}</span></code></pre></div>
+    <ul class="mini">
+      <li><b>Local, docker exec, docker run, ssh.</b> They only build the command; runner and client own the piping.</li>
+      <li><b>Real teardown.</b> <code>Terminator</code> stops the remote <code>claude</code> and its children on cancel, timeout, abort and <code>client.Close</code>, tagged by <code>CAG_RUN_ID</code>.</li>
+      <li><b>Preflight.</b> Fails early with <code>ErrClaudeNotFound</code>, <code>ErrCLITooOld</code> or <code>ErrNotAuthenticated</code>; no tokens spent.</li>
+      <li><b>Fleets.</b> Give each worker its own transport and one worktree per task.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="testing">
+  <div class="sec-head"><span class="sec-num">08</span><div><h2>A testing kit for your agents</h2>
+    <p class="sec-sub">Your unit tests need no credentials and cost nothing.</p></div>
+  </div>
+  <div class="split">
+<div class="code"><span class="cap">fake_test.go</span><button class="copy" type="button" aria-label="Copy snippet">copy</button><pre><code>bin := clitest.<span class="fn">FakeCLI</span>(t,
+    clitest.<span class="fn">Init</span>(<span class="st">"sess-1"</span>),
+    clitest.<span class="fn">ToolUse</span>(<span class="st">"t1"</span>, <span class="st">"Read"</span>, <span class="st">`{"file_path":"a.txt"}`</span>),
+    clitest.<span class="fn">ToolResult</span>(<span class="st">"t1"</span>, <span class="st">"hello"</span>),
+    clitest.<span class="fn">Result</span>(<span class="st">"done"</span>, <span class="fn">0.01</span>),
+)
+r := runner.<span class="fn">New</span>(runner.<span class="fn">WithBinary</span>(bin))</code></pre></div>
+    <ul class="mini">
+      <li><b>clitest</b>: fake <code>claude</code> binaries, or one built from a real recording; capture argv and stdin.</li>
+      <li><b>CheckInvariants</b>: tool_use/tool_result pairing, one final result, one session id.</li>
+      <li><b>Golden replay</b>: run a whole graph offline from recordings; the pipeline and pizza examples do.</li>
+      <li><b>Integration tests</b> behind a build tag assert the effect against the real binary.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="adk">
+  <div class="sec-head"><span class="sec-num">09</span><div><h2>Compared with Google ADK</h2>
+    <p class="sec-sub">ADK is a framework that builds the agent loop for you. This is a client for an agent loop that already exists. We mirrored the parts of ADK worth having.</p></div>
+  </div>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Capability</th><th>Google ADK</th><th>claude-agent-go</th></tr></thead>
+    <tbody>
+      <tr><td>Agent loop</td><td>Its own, model-agnostic</td><td>The real Claude Code CLI, driven as a subprocess</td></tr>
+      <tr><td>Language</td><td>Python (also Java, Go, TypeScript)</td><td>Go, typed, <code>context.Context</code> throughout</td></tr>
+      <tr><td>Workflow / graph agents</td><td class="yes">Yes</td><td class="yes">Yes: <code>graph</code> with loops, fan-out, groups, interrupts</td></tr>
+      <tr><td>Evaluation</td><td class="yes">Yes</td><td class="yes">Yes: trajectory, ROUGE, judge, pass@k, user simulation</td></tr>
+      <tr><td>Dev web UI</td><td class="yes">Yes (<code>adk web</code>)</td><td class="yes">Yes: graphweb, live and replay</td></tr>
+      <tr><td>Resume a crashed run</td><td class="part">Via a session service you operate</td><td class="yes">A checkpoint log: <code>FileStore</code> or your own; no server</td></tr>
+      <tr><td>Multi-machine durability</td><td class="part">Bring your own infrastructure</td><td class="yes">Temporal adapter: <code>temporal/</code> module, one activity per node</td></tr>
+      <tr><td>Where it runs</td><td>Your process, or its hosted runtimes</td><td>Local, docker, ssh, with remote teardown</td></tr>
+      <tr><td>Permission policy</td><td>Callbacks and plugins</td><td>Rule policy in Claude Code syntax, plus <code>can_use_tool</code> and hooks</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">ADK facts are from its public documentation and change quickly; check upstream before deciding. Failure modes reported against ADK are covered by regression tests here (retry cost, SIGTERM-trapping CLIs, sub-agent text leaks).</p>
+</section>
+
 <section id="capabilities">
-  <div class="sec-head"><span class="sec-num">01</span><div><h2>Everything the CLI can do, typed</h2>
+  <div class="sec-head"><span class="sec-num">10</span><div><h2>Everything the CLI can do, typed</h2>
     <p class="sec-sub">The agent loop stays in the binary. The SDK gives you a clean Go surface over it — and over the control protocol most wrappers never reach.</p></div>
   </div>
   <div class="grid">
@@ -221,13 +623,13 @@ t := c.<span class="fn">Query</span>(ctx, <span class="st">"Which number?"</span
 </section>
 
 <section id="verified">
-  <div class="sec-head"><span class="sec-num">02</span><div><h2>Claims you can re-run</h2>
+  <div class="sec-head"><span class="sec-num">11</span><div><h2>Claims you can re-run</h2>
     <p class="sec-sub">Every capability has an integration test that asserts the effect against the real binary — a denied tool that doesn't write, a skill whose marker appears only when loaded, a subagent whose prompt reaches the answer.</p></div>
   </div>
   <div class="verify">
     <div class="stat">
-      <div class="big">17<small> / 17</small></div>
-      <p style="color:var(--muted);margin:14px 0 0;max-width:30ch">live-binary integration tests passing — plus &gt;90% unit coverage on every package.</p>
+      <div class="big">30<small>+</small></div>
+      <p style="color:var(--muted);margin:14px 0 0;max-width:30ch">live-binary integration tests that assert effects, plus &gt;90% unit coverage and 22 fuzz targets.</p>
     </div>
     <ul class="checks">
       <li><span class="tick">✓</span><span><b>Deny blocks.</b> can_use_tool denial leaves the file uncreated, not just the callback fired.</span></li>
@@ -242,8 +644,8 @@ t := c.<span class="fn">Query</span>(ctx, <span class="st">"Which number?"</span
 </main>
 
 <footer class="wrap">
-  <span>MIT · built for Go 1.25 · needs the claude CLI</span>
-  <span><a href="https://github.com/tggo/claude-agent-go">github.com/tggo/claude-agent-go</a></span>
+  <span>MIT · Go 1.27 · needs the claude CLI</span>
+  <span><a href="https://github.com/tggo/claude-agent-go">GitHub</a> · <a href="https://pkg.go.dev/github.com/tggo/claude-agent-go">pkg.go.dev</a> · <a href="https://github.com/tggo/claude-agent-go/blob/main/CHANGELOG.md">Changelog</a> · <a href="https://github.com/tggo/claude-agent-go/tree/main/examples">Examples</a></span>
 </footer>
 
 <script>
@@ -271,6 +673,15 @@ t := c.<span class="fn">Query</span>(ctx, <span class="st">"Which number?"</span
   }
   render();
   if(!reduce){ setInterval(render, lines.length*420 + 4200); }
+
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click',function(){
+      var t=b.parentNode.querySelector('pre').innerText;
+      var done=function(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1400)};
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,function(){})}
+      else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(a)}
+    });
+  });
 </script>
 </body>
 </html>

@@ -38,6 +38,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `StreamEvent.ParentToolUseID` / `IsSubagent` (ADK #3984).
 - `tools`: `(*Registry).ServeMCP(dir)` serves and writes the MCP config in one call.
 - `cag trace <recording|dir>`: a self-contained HTML view of recorded runs.
+- `graph`: durable runs.
+  - `WithCheckpointStore` appends every run to a `CheckpointStore` (`FileStore` on disk, `MemStore` in memory; bring your own, see `examples/pgstore`). State must survive a JSON round trip.
+  - `Recover(ctx, runID)` continues a crashed, failed or paused run from its last commit; a node that was in flight is re-run, with `IdempotencyKey(ctx)` for side effects. A recovered agent resumes its CLI session (`RecoveredSession`, `WithRecoverPrompt`).
+  - `Fork` copies a run's history up to a commit, optionally edits the state, and continues under a new id (rollback and what-if).
+  - A changed graph is refused with `ErrTopologyChanged` unless compiled with `AllowTopologyChange`. `Report.RunID`, `ErrRunNotFound`, `ErrCheckpoint`.
+  - `examples/pgstore` (Postgres store over `database/sql`); `examples/pizza -store/-recover`.
+- `graph`: `EmitArtifact` / `ArtifactObserver` for files a node produces, and `InterruptReview` / `ReviewAnswer` for human review of a list of items.
+- `graph`: stage groups (`Graph.Group`, `GroupWith`, `Topology.Groups`, Mermaid subgraphs) and `Topology()` for visualisers, plus `AddAgentNode`, `MarkAgent`, `AgentRunner` and `LabelEdge`.
+- `graph`: optional observer interfaces, detected by type assertion: `RunObserver`, `EdgeObserver`, `StateObserver`, `ResumeObserver`, `Gate`, `AgentObserver`, `AgentInputObserver`. `StepInfo` gains `RunID` and `Attempt`.
+- `graphweb`: a live and replay web UI for graph runs (topology, per-node state diffs, agent event stream, breakpoints, answering interrupts and reviews in the browser, artifacts gallery, Config tab). Snake/LR/TB layouts, automatic stages, collapsible groups, follow camera, minimap and keyboard navigation. `NewReplay` / `NewReplayStore` replay a journal or a checkpoint store. `-web` flag in `examples/pipeline` and `examples/pizza`.
+- `runner.Effective(Input)`: the secret-free effective configuration of a run, shown in the graphweb Config tab.
+- `cag web --replay <journal|dir>` serves a recorded run in the web UI; `cag runs <store> [runID]` lists durable runs (running/crashed/paused/done) or prints one run's log.
+- `transport.Terminator` and `CommandOpts.RunID` (`CAG_RUN_ID` in the remote env): `SSH`, `DockerExec` and `DockerRun` stop the remote `claude` on cancel, timeout, abort and `client.Close`, instead of only killing the local proxy. `DockerRun` names its container `cag-<runid>`.
+- `transport.Preflight`, `runner.Preflight` and `runner.WithPreflight` check the target before a run is paid for, failing with `ErrClaudeNotFound`, `ErrCLITooOld` or `ErrNotAuthenticated`.
+- Fuzzing: 22 native fuzz targets and `scripts/fuzz.sh`, run by a non-blocking CI job.
+- `graph`: `Runnable.Step` / `StepOptions` / `StepResult` / `StepHooks` execute one node and its route, so external engines can own the control loop.
+- New module `github.com/tggo/claude-agent-go/temporal`: graphs as Temporal workflows, one activity per node (`Register`, `Start`, `Wait`, `Answer`, `PendingQuestion`). Interrupts are the `answer` signal and the `pending` query; a retried agent node resumes its CLI session via heartbeat details; `IdempotencyKey` is `workflowID:node:step`. The core gains no Temporal dependency. Limits: no continue-as-new yet, failed-attempt cost is not in the report.
 - Examples:
   - `examples/pipeline`: plan → code → review/fix → docs.
   - `examples/pizza`: an order-taking agent over mocked services, with a human-confirmed draft bound by hash, a live view, `-replay`, and a 4-scenario eval.
@@ -58,6 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Result.Attempts` is the real attempt count when retries stop early.
 - `client`: a panicking `OnAskUser`/`CanUseTool`/hook callback is answered instead of crashing the host (ADK #3645).
 - Sub-agent text no longer leaks into the final answer in `ExtractTextFromStream` and `eval` (ADK #3984).
+- Huge `Retry-After` and `_cag_t` values no longer overflow; `ProcessError` output is truncated on rune boundaries.
+
+### Security
+Found by fuzzing:
+- `permissions`: Allow/Ask rules for file tools never match a path containing `..`, and Deny rules match the cleaned path.
+- `permissions`: Bash Deny rules see commands inside `$()`, backticks, subshells and groups.
+- `permissions`: `Remember` keys can no longer collide.
+- `RedactTokens` masks every occurrence of a token, not only the first.
+- Known limit: a Bash Deny rule does not see through wrappers such as `sudo`, `env` or `xargs`. Deny the wrapper too, or do not rely on Deny alone.
 
 ## [0.2.1] - 2026-07-16
 
