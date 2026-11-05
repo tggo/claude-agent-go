@@ -140,7 +140,12 @@ func (c *Client) dispatchControl(req incomingControlRequest) (map[string]any, er
 			}
 			return nil, errNoPermissionCallback
 		}
-		return c.runCallback(func(ctx context.Context) (map[string]any, error) {
+		return c.runCallback(func(ctx context.Context) (data map[string]any, _ error) {
+			defer func() {
+				if p := recover(); p != nil {
+					data = Deny(fmt.Sprintf("permission callback panicked: %v", p)).toResponseData(req.Request.Input)
+				}
+			}()
 			res, err := c.cfg.CanUseTool(ctx, req.Request.ToolName, req.Request.Input, PermissionContext{
 				ToolUseID:   req.Request.ToolUseID,
 				DisplayName: req.Request.DisplayName,
@@ -191,6 +196,13 @@ func (c *Client) runCallback(fn func(context.Context) (map[string]any, error)) (
 	}
 	ch := make(chan result, 1)
 	go func() {
+		// A panicking user callback must not take the host process down, nor
+		// leave the CLI waiting for a reply.
+		defer func() {
+			if p := recover(); p != nil {
+				ch <- result{nil, fmt.Errorf("callback panicked: %v", p)}
+			}
+		}()
 		data, err := fn(ctx)
 		ch <- result{data, err}
 	}()

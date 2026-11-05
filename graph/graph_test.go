@@ -832,3 +832,20 @@ func TestInterruptInBranchStaysFailedStep(t *testing.T) {
 		assert.Error(t, s.Err)
 	}
 }
+
+// ADK #7286: a checkpoint's JSON is stable across a round trip and keeps the
+// order of a long path with repeated nodes.
+func TestCheckpointJSONStable(t *testing.T) {
+	cp := Checkpoint[st]{State: st{Log: []string{"b", "a", "b"}, N: 3, Text: "x"}, Node: "ask", Step: 100}
+	for i := 0; i < 100; i++ {
+		cp.Path = append(cp.Path, []string{"a", "b", "a"}[i%3])
+	}
+	first, err := json.Marshal(cp)
+	require.NoError(t, err)
+	var back Checkpoint[st]
+	require.NoError(t, json.Unmarshal(first, &back))
+	assert.Equal(t, cp, back)
+	second, err := json.Marshal(back)
+	require.NoError(t, err)
+	assert.Equal(t, string(first), string(second))
+}

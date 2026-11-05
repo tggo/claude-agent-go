@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,6 +30,10 @@ const (
 	// maxScanBuf bounds a single stream-json line (64 MiB) — assistant turns
 	// can embed large tool results.
 	maxScanBuf = 64 * 1024 * 1024
+
+	// killGrace is how long a cancelled/timed-out CLI gets between SIGTERM and
+	// SIGKILL. A process that traps SIGTERM must not hang the caller.
+	killGrace = 2 * time.Second
 )
 
 // Runner executes the Claude CLI. It is safe for concurrent use: each call
@@ -110,6 +115,10 @@ type Result struct {
 	// IsError is true when the CLI reported a result-level error.
 	IsError bool
 
+	// Subtype is the result event's subtype ("success", "error_max_turns",
+	// "error_during_execution", ...), when reported. See IsMaxTurns.
+	Subtype string
+
 	// Metadata holds the full parsed execution metadata (RunJSON).
 	Metadata *claudecli.ExecutionMetadata
 
@@ -163,7 +172,7 @@ func startTeardown(cmdCtx context.Context, cmd *exec.Cmd) (chan struct{}, error)
 	go func() {
 		select {
 		case <-cmdCtx.Done():
-			procgroup.Kill(cmd)
+			procgroup.KillGraceful(cmd, killGrace, procDone)
 		case <-procDone:
 		}
 	}()
@@ -195,7 +204,10 @@ func (r *Runner) Run(ctx context.Context, in Input) (res *Result, err error) {
 	close(procDone)
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: err}
+			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: errors.Join(cmdCtx.Err(), err)}
+		}
+		if cmdCtx.Err() != nil {
+			return nil, fmt.Errorf("claude cli cancelled: %w", cmdCtx.Err())
 		}
 		return nil, processError(cmd, stdout.Bytes(), stderr.Bytes(), err)
 	}
@@ -231,7 +243,10 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (res *Result, err error)
 	close(procDone)
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: err}
+			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), Err: errors.Join(cmdCtx.Err(), err)}
+		}
+		if cmdCtx.Err() != nil {
+			return nil, fmt.Errorf("claude cli cancelled: %w", cmdCtx.Err())
 		}
 		return nil, processError(cmd, stdout.Bytes(), stderr.Bytes(), err)
 	}
@@ -247,6 +262,7 @@ func (r *Runner) RunJSON(ctx context.Context, in Input) (res *Result, err error)
 		res.TotalCostUSD = meta.TotalCostUSD
 		res.NumTurns = meta.NumTurns
 		res.IsError = meta.IsError
+		res.Subtype = meta.Subtype
 	}
 	return res, nil
 }
@@ -334,11 +350,15 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 		return nil, fmt.Errorf("claude cli: read stream (raise WithMaxBufferSize if a line is too long): %w", scanErr)
 	}
 	if waitErr != nil {
-		if cmdCtx.Err() == context.DeadlineExceeded {
-			return nil, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), SessionID: sessionID, Err: waitErr}
-		}
 		if cmdCtx.Err() != nil {
-			return nil, fmt.Errorf("claude cli cancelled: %w", cmdCtx.Err())
+			// Cancelled or timed out: hand back what the run produced so far
+			// (text, session id) so the caller can resume or show it.
+			text, _ := claudecli.ExtractTextFromStream(allLines)
+			partial := &Result{ResultText: text, SessionID: sessionID, Duration: time.Since(start)}
+			if cmdCtx.Err() == context.DeadlineExceeded {
+				return partial, &TimeoutError{Timeout: r.cfg.ProcessTimeout.String(), SessionID: sessionID, Err: errors.Join(cmdCtx.Err(), waitErr)}
+			}
+			return partial, fmt.Errorf("claude cli cancelled: %w", cmdCtx.Err())
 		}
 		pe := processError(cmd, tailBytes(allLines, 20), stderr.Bytes(), waitErr)
 		pe.SessionID = sessionID
@@ -361,6 +381,7 @@ func (r *Runner) RunStream(ctx context.Context, in Input, progress ProgressFunc)
 	res.TotalCostUSD = resultEvent.Cost()
 	res.NumTurns = resultEvent.NumTurns
 	res.IsError = resultEvent.IsError
+	res.Subtype = resultEvent.Subtype
 
 	r.cfg.Logger.Info("claude cli: done", "mode", "stream", "events", eventNum, "cost_usd", res.TotalCostUSD, "turns", res.NumTurns, "duration", res.Duration)
 	return res, nil

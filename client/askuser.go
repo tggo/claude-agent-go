@@ -47,7 +47,7 @@ func (c *Client) answerAskUser(ctx context.Context, input json.RawMessage) map[s
 			return Deny("malformed AskUserQuestion questions: " + err.Error()).toResponseData(input)
 		}
 	}
-	answers, err := c.cfg.OnAskUser(ctx, qs)
+	answers, err := callAskUser(ctx, c.cfg.OnAskUser, qs)
 	if err != nil {
 		return Deny(err.Error()).toResponseData(input)
 	}
@@ -58,6 +58,17 @@ func (c *Client) answerAskUser(ctx context.Context, input json.RawMessage) map[s
 	orig["answers"] = ab
 	updated, _ := json.Marshal(orig) // RawMessage values are valid JSON
 	return AllowWithInput(updated).toResponseData(input)
+}
+
+// callAskUser runs fn, turning a panic into an error so the call is denied
+// (and the CLI answered) rather than crashing the host.
+func callAskUser(ctx context.Context, fn AskUserFunc, qs []Question) (answers map[string]string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			answers, err = nil, fmt.Errorf("OnAskUser panicked: %v", p)
+		}
+	}()
+	return fn(ctx, qs)
 }
 
 // AnswerFromStdin returns an AskUserFunc that prints each question with

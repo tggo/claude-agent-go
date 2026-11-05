@@ -33,6 +33,10 @@ type ToolCall struct {
 	// It is observed data only and never compared by MatchTrajectory.
 	Result  string `json:"result,omitempty"`
 	IsError bool   `json:"is_error,omitempty"`
+	// ParentToolUseID is set when a sub-agent made the call: the id of the
+	// tool_use that spawned it. Sub-agent calls count in Metrics.ToolCalls
+	// like any other; filter on this to separate them.
+	ParentToolUseID string `json:"parent_tool_use_id,omitempty"`
 }
 
 // Metrics summarises the cost and latency of a run.
@@ -214,7 +218,7 @@ func (b *builder) add(ev *claudecli.StreamEvent, off time.Duration) {
 		if am == nil {
 			return
 		}
-		b.addAssistant(am, off)
+		b.addAssistant(am, off, ev.ParentToolUseID)
 	case "user":
 		var um userMessage
 		if json.Unmarshal(ev.Message, &um) != nil {
@@ -240,7 +244,7 @@ func (b *builder) add(ev *claudecli.StreamEvent, off time.Duration) {
 	}
 }
 
-func (b *builder) addAssistant(am *claudecli.AssistantMessage, off time.Duration) {
+func (b *builder) addAssistant(am *claudecli.AssistantMessage, off time.Duration, parent string) {
 	if am.ID == "" {
 		b.anonInfs++
 		if am.Usage != nil {
@@ -267,10 +271,10 @@ func (b *builder) addAssistant(am *claudecli.AssistantMessage, off time.Duration
 				b.callIx[blk.ID] = len(b.calls)
 				b.useAt[blk.ID] = off
 			}
-			b.calls = append(b.calls, ToolCall{Name: blk.Name, Args: append(json.RawMessage(nil), blk.Input...)})
+			b.calls = append(b.calls, ToolCall{Name: blk.Name, Args: append(json.RawMessage(nil), blk.Input...), ParentToolUseID: parent})
 		}
 	}
-	if len(text) > 0 {
+	if len(text) > 0 && parent == "" { // a sub-agent's text is not the answer
 		b.lastText = strings.Join(text, "\n")
 	}
 }

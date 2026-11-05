@@ -186,3 +186,15 @@ func exitCodeOf(err error) int {
 	}
 	return -1
 }
+
+// subtypeMaxTurns is the result subtype the CLI reports when --max-turns cut
+// the run off before the agent finished.
+const subtypeMaxTurns = "error_max_turns"
+
+// IsMaxTurns reports whether res is a run the CLI stopped because it hit the
+// turn cap (--max-turns). Such a run is not a success even where the CLI
+// reports is_error=false: ResultText is whatever the agent had at the cutoff.
+// Raise WithMaxTurns, or resume the session, instead of retrying blindly.
+func IsMaxTurns(res *Result) bool {
+	return res != nil && res.Subtype == subtypeMaxTurns
+}

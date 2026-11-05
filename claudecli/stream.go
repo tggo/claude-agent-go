@@ -46,6 +46,11 @@ type StreamEvent struct {
 	// emitted under --include-partial-messages). Decode via Partial().
 	Event json.RawMessage `json:"event,omitempty"`
 
+	// ParentToolUseID is set on events produced inside a sub-agent: it is the
+	// tool_use id of the Task/Agent call that spawned it. Empty for the main
+	// agent. Filter on it to keep sub-agent chatter out of the main transcript.
+	ParentToolUseID string `json:"parent_tool_use_id,omitempty"`
+
 	// Raw is the original line bytes, set by ParseStreamLine. Useful for event
 	// types the SDK does not model (e.g. rate_limit_event) — Unmarshal it
 	// yourself for the fields you need.
@@ -72,6 +77,9 @@ func ParseStreamLine(line []byte) *StreamEvent {
 func (e *StreamEvent) IsRateLimit() bool {
 	return e.Type == "rate_limit_event"
 }
+
+// IsSubagent reports whether the event was emitted inside a sub-agent.
+func (e *StreamEvent) IsSubagent() bool { return e.ParentToolUseID != "" }
 
 // IsResult returns true if this event is the final result.
 func (e *StreamEvent) IsResult() bool {
@@ -134,7 +142,8 @@ func ExtractTextFromStream(lines [][]byte) (text string, result *StreamEvent) {
 		if event == nil {
 			continue
 		}
-		if t := event.AssistantText(); t != "" {
+		// A sub-agent's text is not the main agent's answer.
+		if t := event.AssistantText(); t != "" && !event.IsSubagent() {
 			textParts = append(textParts, t)
 		}
 		if event.IsResult() {

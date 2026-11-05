@@ -454,7 +454,7 @@ func (c *Client) Close() error {
 	case <-c.done:
 		return c.exitErr()
 	case <-time.After(5 * time.Second):
-		procgroup.Kill(c.cmd)
+		procgroup.KillGraceful(c.cmd, 2*time.Second, c.done)
 		<-c.done
 		return c.exitErr()
 	}

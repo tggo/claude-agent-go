@@ -7,6 +7,7 @@ package procgroup
 import (
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 // Setup puts the child in its own process group.
@@ -21,4 +22,22 @@ func Kill(cmd *exec.Cmd) {
 		return
 	}
 	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+}
+
+// KillGraceful sends SIGTERM to the group, then SIGKILL if done has not closed
+// within grace. A child that traps or ignores SIGTERM is therefore still torn
+// down instead of leaving the caller blocked in Wait. It blocks until done is
+// closed or the SIGKILL has been sent.
+func KillGraceful(cmd *exec.Cmd, grace time.Duration, done <-chan struct{}) {
+	if cmd.Process == nil {
+		return
+	}
+	Kill(cmd)
+	t := time.NewTimer(grace)
+	defer t.Stop()
+	select {
+	case <-done:
+	case <-t.C:
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 }

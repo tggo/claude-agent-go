@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tggo/claude-agent-go/claudecli"
 )
 
 // RetryPolicy configures RunJSONWithRetry. The zero value is usable (defaults
@@ -109,7 +111,7 @@ func DefaultRetryable(res *Result, err error) bool {
 			return true
 		}
 		if pe, ok := IsProcessError(err); ok {
-			return looksTransient(pe.Stderr)
+			return looksTransient(pe.Stderr) || stdoutResultTransient(pe.Stdout)
 		}
 		return false
 	}
@@ -123,6 +125,25 @@ func DefaultRetryable(res *Result, err error) bool {
 		return looksTransient(blob)
 	}
 	return false
+}
+
+// apiStatusRe finds a transient api_error_status in a stdout tail whose JSON
+// line was cut by truncation and so no longer parses.
+var apiStatusRe = regexp.MustCompile(`"api_error_status"\s*:\s*"?(429|5\d\d)\b`)
+
+// stdoutResultTransient reports whether the stdout tail of a failed process
+// ends in an error result that looks transient. The CLI exits non-zero after
+// an is_error result (a 429/529 from the API), leaving stderr empty and the
+// reason only in the result event on stdout. Only result events are
+// inspected, so assistant text that merely mentions "timeout" never counts.
+func stdoutResultTransient(stdout string) bool {
+	for _, line := range strings.Split(stdout, "\n") {
+		ev := claudecli.ParseStreamLine([]byte(strings.TrimSpace(line)))
+		if ev != nil && ev.IsResult() && ev.IsError {
+			return looksTransient(ev.Result+" "+ev.Subtype) || apiStatusRe.MatchString(line)
+		}
+	}
+	return apiStatusRe.MatchString(stdout)
 }
 
 var retryAfterRe = regexp.MustCompile(`(?i)retry[- ]?after[:\s]+(\d+)`)

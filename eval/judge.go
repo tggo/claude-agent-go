@@ -1,12 +1,14 @@
 package eval
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/tggo/claude-agent-go/claudecli"
@@ -59,10 +61,18 @@ func JudgeModel(m string) JudgeOption { return func(j *claudeJudge) { j.model = 
 // (default 0.7).
 func JudgeThreshold(t float64) JudgeOption { return func(j *claudeJudge) { j.threshold = t } }
 
+// JudgeSamples makes the judge grade each response n times and report the
+// median score. A single LLM judge call is noisy (ADK #3593); the median
+// damps one outlier verdict. A sample that fails or does not parse is
+// skipped, and Score errors only when every sample failed. Pass is
+// median >= threshold. Default 1. JudgeResult.CostUSD sums all samples.
+func JudgeSamples(n int) JudgeOption { return func(j *claudeJudge) { j.samples = max(n, 1) } }
+
 type claudeJudge struct {
 	r         *runner.Runner
 	model     string
 	threshold float64
+	samples   int
 }
 
 // ClaudeJudge returns a Judge that asks a Claude model, through r, to grade
@@ -78,6 +88,52 @@ func ClaudeJudge(r *runner.Runner, opts ...JudgeOption) Judge {
 }
 
 func (j *claudeJudge) Score(ctx context.Context, in JudgeInput) (JudgeResult, error) {
+	if j.samples <= 1 {
+		return j.once(ctx, in)
+	}
+	var ok []JudgeResult
+	var cost float64
+	var firstErr error
+	for range j.samples {
+		if ctx.Err() != nil {
+			break
+		}
+		r, err := j.once(ctx, in)
+		cost += r.CostUSD
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		ok = append(ok, r)
+	}
+	if len(ok) == 0 {
+		if firstErr == nil {
+			firstErr = ctx.Err()
+		}
+		return JudgeResult{CostUSD: cost}, firstErr
+	}
+	out := medianVerdict(ok)
+	out.Pass = out.Score >= j.threshold
+	out.CostUSD = cost
+	return out, nil
+}
+
+// medianVerdict returns the median-scored sample (mean of the two middle
+// scores for an even count, keeping the lower middle's reason).
+func medianVerdict(rs []JudgeResult) JudgeResult {
+	sorted := slices.Clone(rs)
+	slices.SortStableFunc(sorted, func(a, b JudgeResult) int { return cmp.Compare(a.Score, b.Score) })
+	mid := (len(sorted) - 1) / 2
+	out := sorted[mid]
+	if len(sorted)%2 == 0 {
+		out.Score = (sorted[mid].Score + sorted[mid+1].Score) / 2
+	}
+	return out
+}
+
+func (j *claudeJudge) once(ctx context.Context, in JudgeInput) (JudgeResult, error) {
 	// The judge must not act: no tools at all (--tools ""), so injected
 	// instructions in the graded answer cannot run anything.
 	res, err := j.r.RunJSON(ctx, runner.Input{Prompt: judgePrompt(in), Model: j.model, Label: "eval-judge",
