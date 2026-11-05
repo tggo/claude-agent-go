@@ -295,6 +295,11 @@ st, report, err := run.Run(ctx, State{Task: task})
   `Run` returns `*graph.Interrupted[S]` with a JSON-serializable checkpoint, and
   `run.Resume(ctx, cp, answer)` continues from it, with the answer in `graph.Answer(ctx)`.
 - `AddParallel` fans branches out on copies of the state and merges them.
+- A node can publish files it produced (rendered images, a script, a JSON report) with
+  `graph.EmitArtifact(ctx, graph.Artifact{Name: "p03", Path: abs, Caption: "panel 3"})`.
+  An observer implementing `graph.ArtifactObserver` receives them; `graphweb` shows
+  images as thumbnails on the node and in a run-wide gallery (other files as links), live
+  and in replay. Runnable demo: `go run ./examples/artifacts`.
 - `report` holds per-node duration, cost and errors. `run.Mermaid()` draws the graph.
 
 ### Recording, replay and evals
