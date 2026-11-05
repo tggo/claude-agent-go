@@ -91,6 +91,7 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 #gal .gi .gl{padding:3px 6px 4px;font-family:var(--mono);font-size:10.5px;line-height:1.35;color:var(--muted);overflow:hidden;max-height:4.1em}
 #gal .gi .gl b{color:var(--text);font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #gal .gi .zoom{position:absolute;top:3px;right:3px;padding:0 6px;font-size:12px;line-height:18px;background:rgba(10,19,32,.8)}
+.node .prog{fill:var(--cyan)}
 .art{margin:0 0 14px;border:1px solid var(--line);border-radius:8px;background:var(--ink);padding:8px}
 .art img{display:block;max-width:100%;max-height:300px;margin:0 auto 6px;cursor:zoom-in;border-radius:4px;background:var(--ink-3)}
 .art .an{font-family:var(--mono);font-size:12px;color:var(--cyan)}
@@ -324,6 +325,8 @@ function apply(m, ev, fx){
     const k = nk(ev.node,ev.step); (m.agents[k]||(m.agents[k]=[])).push(ev); break; }
   case 'agent_input': {
     const k = nk(ev.node,ev.step); (m.inputs[k]||(m.inputs[k]=[])).push(ev.input); break; }
+  case 'progress':
+    if (ev.progress && !ev.parent) { const n=nodeOf(m,ev.node), v=visitOf(n,ev.step); if (v) v.prog=ev.progress; n.prog=ev.progress; } break;
   case 'artifact':
     if (ev.artifact) m.arts.push(Object.assign({seq:ev.seq,node:ev.node,step:ev.step,parent:ev.parent}, ev.artifact)); break;
   case 'interrupt':
@@ -872,8 +875,17 @@ function paint(){
       g.setAttribute('class',cls);
       if (nm && (n.kind!=='start'&&n.kind!=='end')){
         const last=nm.visits[nm.visits.length-1];
-        const bits=last&&last.dur!=null?[]:[n.kind]; if (last && last.dur!=null) bits.push(fmtDur(last.dur)); if (nm.cost>0) bits.push(fmtCost(nm.cost));
+        const running=last&&last.dur==null&&last.status==='running', pr=last&&last.prog;
+        const bits=last&&last.dur!=null?[]:(running&&pr?[]:[n.kind]); if (last && last.dur!=null) bits.push(fmtDur(last.dur));
+        if (running&&pr) bits.push(pr.done+'/'+pr.total+(pr.label?' '+clip(pr.label,11):''));
+        if (nm.cost>0) bits.push(fmtCost(nm.cost));
+        const mine=m.arts.filter(a=>a.node===n.id), ni=mine.filter(isImg).length, nt=mine.length-ni; if (ni) bits.push('🖼'+ni); if (nt) bits.push('📄'+nt);
         g.querySelector('.meta').textContent = bits.join(' · ');
+        let bar=g.querySelector('.prog'); const box=g.querySelector('.box');
+        if (running&&pr&&pr.total>0&&box){ const w=+box.getAttribute('width'), x=+box.getAttribute('x'), y=+box.getAttribute('y')+(+box.getAttribute('height'))-5;
+          if (!bar){ bar=el('rect',{class:'prog',height:3,rx:1.5}); g.append(bar); }
+          bar.setAttribute('x',x+8); bar.setAttribute('y',y); bar.setAttribute('width',Math.max(2,(w-16)*Math.min(1,pr.done/pr.total)));
+        } else if (bar) bar.remove();
         g.querySelector('.vis').textContent = nm.visits.filter(v=>!v.parent).length>1 || nm.visits.length>1 ? '×'+nm.visits.length : '';
       } else if (n.kind!=='start'&&n.kind!=='end'){ g.querySelector('.meta').textContent=n.kind; g.querySelector('.vis').textContent=''; }
       const bp=g.querySelector('.bp'); if (bp) bp.setAttribute('class','bp'+(S.bps.has(n.id)?' on':''));
@@ -1207,6 +1219,7 @@ function describe(e){
     if (st.type==='user') { const b=blocksOf(st)[0]||{}; return `${e.node}: ↳ ${clip(toolResultText(b.content).replace(/\s+/g,' '),120)}`; }
     if (st.type==='result') return `${e.node}: result ${fmtCost(st.total_cost_usd||st.cost_usd)}`; return `${e.node}: ${st.type}${st.subtype?'/'+st.subtype:''}`; }
   case 'agent_input': return `${e.node}: input · ${(e.input&&e.input.input&&e.input.input.model)||''} · prompt ${((e.input&&e.input.input&&e.input.input.prompt)||'').length} chars`;
+  case 'progress': { const p=e.progress||{}; return `${e.node}: ${p.done}/${p.total}${p.label?' · '+p.label:''}`; }
   case 'artifact': { const a=e.artifact||{}; return `${e.node}: 🖼 ${a.name||''}${a.caption?' · '+clip(a.caption,80):''}  ${a.mime||''}`; }
   case 'interrupt': return `${e.node}: ${e.items&&e.items.length?'['+e.items.length+' items to review] ':''}${clip((e.question||'').replace(/\s+/g,' '),140)}`;
   case 'resume': return `${e.node}: ${clip(e.answer,100)}`;

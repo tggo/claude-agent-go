@@ -75,6 +75,7 @@ const (
 	TypeBreakpointHit = "breakpoint_hit"
 	TypeArtifact      = "artifact"
 	TypeGraphEnd      = "graph_end"
+	TypeProgress      = "progress"
 )
 
 // maxDiffValue is the size beyond which a diff value is truncated.
@@ -117,6 +118,7 @@ type Event struct {
 	Input  json.RawMessage `json:"input,omitempty"`  // agent_input: graph.AgentInfo (effective, secret-free)
 
 	Artifact *graph.Artifact `json:"artifact,omitempty"` // artifact (served at /api/artifact/{seq})
+	Progress *graph.Progress `json:"progress,omitempty"` // progress
 
 	Question string             `json:"question,omitempty"` // interrupt
 	Items    []graph.ReviewItem `json:"items,omitempty"`    // interrupt: files to review (served at /api/review/{seq}/{n})
@@ -413,6 +415,11 @@ func (s *Server) Artifact(_ context.Context, i graph.StepInfo, a graph.Artifact)
 		}
 	}
 	s.emit(Event{Run: i.RunID, Type: TypeArtifact, Node: i.Node, Step: i.Step, Parent: i.Parent, Attempt: i.Attempt, Artifact: &a})
+}
+
+// Progress implements graph.ProgressObserver.
+func (s *Server) Progress(_ context.Context, i graph.StepInfo, p graph.Progress) {
+	s.emit(Event{Run: i.RunID, Type: TypeProgress, Node: i.Node, Step: i.Step, Parent: i.Parent, Attempt: i.Attempt, Progress: &p})
 }
 
 // Before implements graph.Gate: it blocks while a breakpoint on the node is

@@ -85,3 +85,29 @@ func EmitData(ctx context.Context, dir, file, name string, v any, md func() stri
 	EmitArtifact(ctx, a)
 	return nil
 }
+
+// Progress is how far a long node is through its own work (a loop over
+// items), for observers: graphweb draws it on the node card.
+type Progress struct {
+	Done  int    `json:"done"`
+	Total int    `json:"total"`
+	Label string `json:"label,omitempty"` // what it is doing now, e.g. "render p13"
+}
+
+// ProgressObserver is the optional Observer extension that receives progress.
+type ProgressObserver interface {
+	Progress(ctx context.Context, info StepInfo, p Progress)
+}
+
+// SetProgress reports a node's progress (done of total, plus what it is doing
+// now). Call it as often as useful; it is a no-op outside a run or when the
+// observer does not implement ProgressObserver.
+func SetProgress(ctx context.Context, done, total int, label string) {
+	sc, ok := ctx.Value(scopeKey{}).(*scope)
+	if !ok {
+		return
+	}
+	if po, ok := sc.obs.(ProgressObserver); ok {
+		po.Progress(ctx, sc.info, Progress{Done: done, Total: total, Label: label})
+	}
+}

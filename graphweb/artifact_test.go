@@ -224,3 +224,18 @@ func TestArtifactDataServed(t *testing.T) {
 	resp, _ = get(t, ts.URL+"/api/artifact/"+strconv.FormatInt(plain, 10)+"?data=1", "")
 	assert.Equal(t, 404, resp.StatusCode)
 }
+
+func TestProgressJournaled(t *testing.T) {
+	s := newSrv(t)
+	s.Progress(context.Background(), graph.StepInfo{Node: "panels", Step: 3}, graph.Progress{Done: 12, Total: 20, Label: "render p13"})
+	var got *Event
+	for _, ev := range s.Events() {
+		if ev.Type == TypeProgress {
+			e := ev
+			got = &e
+		}
+	}
+	require.NotNil(t, got)
+	assert.Equal(t, "panels", got.Node)
+	assert.Equal(t, graph.Progress{Done: 12, Total: 20, Label: "render p13"}, *got.Progress)
+}

@@ -114,3 +114,36 @@ func TestEmitData(t *testing.T) {
 		t.Fatal("unmarshalable value must fail")
 	}
 }
+
+type progObs struct {
+	plainObs
+	mu  sync.Mutex
+	got []Progress
+}
+
+func (o *progObs) Progress(_ context.Context, i StepInfo, p Progress) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if i.Node == "n" {
+		o.got = append(o.got, p)
+	}
+}
+
+func TestSetProgress(t *testing.T) {
+	SetProgress(context.Background(), 1, 2, "outside") // no run: no-op
+	obs := &progObs{}
+	g := New[int]("p").AddNode("n", func(ctx context.Context, _ *int) error {
+		SetProgress(ctx, 0, 3, "start")
+		SetProgress(ctx, 3, 3, "")
+		return nil
+	}).AddEdge(Start, "n").AddEdge("n", End)
+	r, err := g.Compile(WithObserver(obs))
+	require.NoError(t, err)
+	_, _, err = r.Run(context.Background(), 0)
+	require.NoError(t, err)
+	assert.Equal(t, []Progress{{0, 3, "start"}, {3, 3, ""}}, obs.got)
+	// an observer without the extension is fine
+	r2, _ := g.Compile(WithObserver(plainObs{}))
+	_, _, err = r2.Run(context.Background(), 0)
+	require.NoError(t, err)
+}
