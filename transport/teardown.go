@@ -10,6 +10,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/tggo/claude-agent-go/internal/procgroup"
 )
 
 // Terminator is implemented by transports whose remote process outlives the
@@ -96,19 +99,26 @@ func withRunEnv(opt CommandOpts) []string {
 }
 
 // runBounded runs cmd to completion, killing it if ctx ends first.
+//
+// The command runs in its own process group and the whole group is killed on
+// ctx end: killing only the direct child (e.g. sh) leaves grandchildren that
+// hold stdout open, and Wait would block until they exit. WaitDelay is the
+// backstop for anything outside the group still holding the pipes.
 func runBounded(ctx context.Context, cmd *exec.Cmd) (stdout, stderr []byte, err error) {
 	var so, se bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &so, &se
+	procgroup.Setup(cmd)
+	cmd.WaitDelay = time.Second
 	if err = cmd.Start(); err != nil {
 		return nil, nil, err
 	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	exited := make(chan struct{})
+	go func() { err = cmd.Wait(); close(exited) }()
 	select {
-	case err = <-done:
+	case <-exited:
 	case <-ctx.Done():
-		_ = cmd.Process.Kill()
-		<-done
+		procgroup.KillGraceful(cmd, 500*time.Millisecond, exited)
+		<-exited
 		err = ctx.Err()
 	}
 	return so.Bytes(), se.Bytes(), err

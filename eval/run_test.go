@@ -140,10 +140,11 @@ func TestCollectorManual(t *testing.T) {
 }
 
 func TestCollectorWithRunner(t *testing.T) {
-	// Real subprocess, real clock: the tool takes a measurable 150ms.
+	// Real subprocess, real clock: the tool takes a measurable 500ms (the
+	// bound is looser than the sleep: lines can arrive late on a loaded CI box).
 	script := `printf '%s\n' '{"type":"system","subtype":"init","session_id":"s9"}'
 printf '%s\n' '{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"sleep"}}],"usage":{"input_tokens":2,"output_tokens":3}}}'
-sleep 0.15
+sleep 0.5
 printf '%s\n' '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}'
 printf '%s\n' '{"type":"assistant","message":{"id":"m2","role":"assistant","content":[{"type":"text","text":"done"}]}}'
 printf '%s\n' '{"type":"result","subtype":"success","session_id":"s9","result":"done","total_cost_usd":0.01,"num_turns":2}'`
@@ -158,7 +159,7 @@ printf '%s\n' '{"type":"result","subtype":"success","session_id":"s9","result":"
 	assert.Equal(t, "done", run.Response)
 	require.Len(t, run.ToolCalls, 1)
 	assert.Equal(t, "ok", run.ToolCalls[0].Result)
-	assert.GreaterOrEqual(t, run.Metrics.ToolTime, 140*time.Millisecond)
+	assert.GreaterOrEqual(t, run.Metrics.ToolTime, 300*time.Millisecond)
 	assert.Greater(t, run.Metrics.Duration, run.Metrics.ToolTime)
 	assert.Equal(t, run.Metrics.Duration, run.Metrics.ToolTime+run.Metrics.ModelTime)
 	assert.Equal(t, 2, run.Metrics.Inferences)
