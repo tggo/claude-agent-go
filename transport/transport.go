@@ -198,7 +198,9 @@ func (s SSH) Command(ctx context.Context, args []string, opt CommandOpts) *exec.
 		b.WriteString(" && ")
 	}
 	for _, e := range withRunEnv(opt) {
-		if k, v, ok := strings.Cut(e, "="); ok {
+		// The key is spliced into the remote command unquoted, so anything
+		// that is not a plain shell identifier is dropped.
+		if k, v, ok := strings.Cut(e, "="); ok && envKey.MatchString(k) {
 			b.WriteString(k)
 			b.WriteString("=")
 			b.WriteString(shellQuote(v))

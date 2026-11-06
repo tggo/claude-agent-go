@@ -153,3 +153,15 @@ func TestShellQuote(t *testing.T) {
 		}
 	}
 }
+
+func TestSSHDropsUnsafeEnvKeys(t *testing.T) {
+	c := SSH{Host: "h"}.Command(ctx, []string{"--print"},
+		CommandOpts{Env: []string{"X;touch /tmp/pwn;Y=1", "$(id)=2", "OK_1=v"}})
+	remote := c.Args[len(c.Args)-1]
+	if strings.Contains(remote, "touch") || strings.Contains(remote, "$(id)") {
+		t.Fatalf("unsafe key spliced: %s", remote)
+	}
+	if !strings.Contains(remote, "OK_1='v' ") {
+		t.Fatalf("valid key dropped: %s", remote)
+	}
+}

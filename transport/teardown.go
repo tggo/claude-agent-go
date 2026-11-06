@@ -42,6 +42,9 @@ func NewRunID() string {
 
 var validID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
+// envKey is a POSIX shell variable name; SSH splices keys unquoted.
+var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 func pidFile(id string) string { return "/tmp/cag-run-" + id + ".pid" }
 
 // wrapScript runs on the remote side: $1 is the PID file, the rest is the real

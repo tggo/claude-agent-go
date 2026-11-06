@@ -325,6 +325,16 @@ func cutTornTail(fh *os.File) error {
 		}
 		end = start
 	}
+	// A tail that is a whole record missing only its newline was already
+	// visible to readers (and maybe to Recover/Fork): keep it, terminate it.
+	tail := make([]byte, st.Size()-keep)
+	if _, err := fh.ReadAt(tail, keep); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if json.Valid(tail) {
+		_, err := fh.Write([]byte{'\n'}) // O_APPEND: lands at the end
+		return err
+	}
 	return fh.Truncate(keep)
 }
 

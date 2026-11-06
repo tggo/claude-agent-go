@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-06
+
 ### Added
 - `graph`: typed execution graphs over runs and Go steps.
   - Static and conditional edges (loops), and parallel fan-out with merge (`WithClone` is required for reference-typed state).
@@ -84,6 +86,11 @@ Found by fuzzing:
 - `permissions`: `Remember` keys can no longer collide.
 - `RedactTokens` masks every occurrence of a token, not only the first.
 - Known limit: a Bash Deny rule does not see through wrappers such as `sudo`, `env` or `xargs`. Deny the wrapper too, or do not rely on Deny alone.
+
+Found in the release review:
+- `transport.SSH` drops env keys that are not plain shell identifiers (the key was spliced into the remote command unquoted).
+- `graph.FileStore`: a final record missing only its newline is kept and terminated instead of being cut on the next append.
+- Known limit: `cag web --replay` serves artifact paths straight from the journal; replay only journals you trust, and keep the default loopback bind.
 
 ## [0.2.1] - 2026-07-16
 
@@ -195,7 +202,8 @@ First public release. A Go SDK for building agents on top of the Claude Code CLI
   `tools`). >90% unit coverage on every substantive package; 18 integration tests
   assert behavior against the real binary.
 
-[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tggo/claude-agent-go/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/tggo/claude-agent-go/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tggo/claude-agent-go/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tggo/claude-agent-go/releases/tag/v0.1.0

@@ -207,6 +207,17 @@ func TestFileStoreTornTail(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, recs, 4)
 
+	// a whole record that lost only its newline was already readable: kept
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "nl.jsonl"),
+		[]byte(`{"v":1,"seq":1,"kind":"run_start","next":"a"}`), 0o600))
+	recs, err = st.Load(ctx, "nl")
+	require.NoError(t, err)
+	require.Len(t, recs, 1)
+	require.NoError(t, st.Append(ctx, "nl", Record{Seq: 2, Kind: KindRunEnd}))
+	recs, err = st.Load(ctx, "nl")
+	require.NoError(t, err)
+	assert.Equal(t, []string{KindRunStart, KindRunEnd}, durKinds(recs))
+
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "only.jsonl"), []byte(`{"kind":`), 0o600))
 	require.NoError(t, st.Append(ctx, "only", Record{Seq: 1, Kind: KindRunStart}))
 	recs, err = st.Load(ctx, "only")
