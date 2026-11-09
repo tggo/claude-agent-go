@@ -44,8 +44,8 @@ func (r *Runner) buildArgs(in Input, mode outputMode) []string {
 	args = append(args, "--max-turns", strconv.Itoa(r.cfg.MaxTurns))
 
 	// Budget is only meaningful in JSON/stream modes where we parse cost back.
-	if r.cfg.MaxBudgetUSD != "" && mode != modePlain {
-		args = append(args, "--max-budget-usd", r.cfg.MaxBudgetUSD)
+	if budget := r.attemptBudget(in); budget != "" && mode != modePlain {
+		args = append(args, "--max-budget-usd", budget)
 	}
 
 	// Partial-message and hook-event streaming only apply to stream mode.
@@ -92,4 +92,16 @@ func (r *Runner) buildArgs(in Input, mode outputMode) []string {
 	args = append(args, in.ExtraArgs...)
 
 	return args
+}
+
+// attemptBudget is the --max-budget-usd value for one invocation: the Runner's
+// per-invocation budget, lowered to what a retry's MaxSpendUSD has left.
+func (r *Runner) attemptBudget(in Input) string {
+	if in.spendLeft <= 0 {
+		return r.cfg.MaxBudgetUSD
+	}
+	if v, err := strconv.ParseFloat(r.cfg.MaxBudgetUSD, 64); err == nil && v > 0 && v <= in.spendLeft {
+		return r.cfg.MaxBudgetUSD
+	}
+	return strconv.FormatFloat(in.spendLeft, 'f', -1, 64)
 }

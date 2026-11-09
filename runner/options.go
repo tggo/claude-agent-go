@@ -238,6 +238,10 @@ type Input struct {
 	// Label names the run for observers and recordings (e.g. a graph node
 	// name). It is not sent to the CLI.
 	Label string
+
+	// spendLeft, set by the retry loop, lowers --max-budget-usd to what
+	// RetryPolicy.MaxSpendUSD has left. 0 = no retry cap.
+	spendLeft float64
 }
 
 // WithPreflight makes the Runner verify the target (claude present, version >=

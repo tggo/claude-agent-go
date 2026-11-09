@@ -13,6 +13,8 @@ package fleet
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
 	"sync"
 
 	"github.com/tggo/claude-agent-go/runner"
@@ -48,10 +50,14 @@ type Config struct {
 	// Workers is the pool; concurrency equals its length. At least one required.
 	Workers []Worker
 
-	// MaxSpendUSD is a soft cap on total spend across all tasks: once cumulative
-	// spend reaches it, workers stop claiming new tasks. It is best-effort —
-	// tasks already in flight (up to len(Workers)) still complete, so actual
-	// spend may overshoot by up to one wave. 0 disables the cap.
+	// MaxSpendUSD caps total spend across all tasks. A worker reserves a share
+	// of what is left before it runs a task, the task's own budget
+	// (--max-budget-usd, through a RetryPolicy MaxSpendUSD) is lowered to that
+	// share, and the unspent part is returned when the task ends. Concurrent
+	// tasks therefore cannot jointly overrun the cap by a wave of whole task
+	// budgets. When in-flight tasks hold the whole remainder, a worker waits
+	// for one to finish; when nothing is left, the remaining tasks are skipped.
+	// 0 disables the cap.
 	MaxSpendUSD float64
 
 	// Retry, when set, runs each task via RunJSONWithRetry with this policy.
@@ -101,17 +107,22 @@ func (f *Fleet) Run(ctx context.Context, tasks []Task) (*Report, error) {
 	tl := newTaskList(tasks)
 
 	var mu sync.Mutex
-	var spent float64
+	budgetFreed := sync.NewCond(&mu)
+	var spent, reserved float64
 	capped := false
 	results := make([]TaskResult, 0, len(tasks))
 
-	emit := func(tr TaskResult) {
+	// emit records a result and, in the same critical section, returns the
+	// task's reservation, so no waiter sees the refund before the spend.
+	emit := func(tr TaskResult, grant float64) {
 		mu.Lock()
 		if tr.Result != nil {
 			spent += tr.Result.TotalCostUSD
 		}
+		reserved -= grant
 		results = append(results, tr)
 		mu.Unlock()
+		budgetFreed.Broadcast()
 		if f.cfg.OnResult != nil {
 			f.cfg.OnResult(tr)
 		}
@@ -138,8 +149,38 @@ func (f *Fleet) Run(ctx context.Context, tasks []Task) (*Report, error) {
 				if !ok {
 					return
 				}
-				res, err := f.runTask(ctx, w, task)
-				emit(TaskResult{TaskID: task.ID, Worker: w.Name, Result: res, Err: err})
+				var grant float64
+				if f.cfg.MaxSpendUSD > 0 {
+					mu.Lock()
+					for {
+						// Rounded down to 1/100 cent, so a float remainder
+						// never becomes a "0" (= unlimited) CLI budget.
+						left := math.Floor((f.cfg.MaxSpendUSD-spent-reserved)*1e4) / 1e4
+						if left > 0 {
+							grant = left
+							if b := taskBudget(w); b > 0 && b < grant {
+								grant = b
+							}
+							reserved += grant
+							break
+						}
+						if reserved <= 0 {
+							break // spent: nothing in flight can give budget back
+						}
+						budgetFreed.Wait()
+					}
+					if grant == 0 {
+						capped = true
+						mu.Unlock()
+						emit(TaskResult{TaskID: task.ID, Worker: w.Name, Skipped: true,
+							Err: fmt.Errorf("skipped: fleet spend cap reached")}, 0)
+						tl.complete(task.ID, false)
+						return
+					}
+					mu.Unlock()
+				}
+				res, err := f.runTask(ctx, w, task, grant)
+				emit(TaskResult{TaskID: task.ID, Worker: w.Name, Result: res, Err: err}, grant)
 				tl.complete(task.ID, err == nil)
 			}
 		}(w)
@@ -153,7 +194,7 @@ func (f *Fleet) Run(ctx context.Context, tasks []Task) (*Report, error) {
 		if capped {
 			reason = "fleet spend cap reached"
 		}
-		emit(TaskResult{TaskID: id, Skipped: true, Err: fmt.Errorf("skipped: %s", reason)})
+		emit(TaskResult{TaskID: id, Skipped: true, Err: fmt.Errorf("skipped: %s", reason)}, 0)
 	}
 
 	rep := &Report{Results: results, TotalCostUSD: spent}
@@ -170,8 +211,21 @@ func (f *Fleet) Run(ctx context.Context, tasks []Task) (*Report, error) {
 	return rep, nil
 }
 
+// taskBudget is the worker's per-invocation budget (--max-budget-usd), 0 when
+// none is set.
+func taskBudget(w Worker) float64 {
+	v, err := strconv.ParseFloat(w.Runner.Effective(runner.Input{}).MaxBudgetUSD, 64)
+	if err != nil || v <= 0 {
+		return 0
+	}
+	return v
+}
+
 // runTask runs one task on a worker, in an isolated worktree when configured.
-func (f *Fleet) runTask(ctx context.Context, w Worker, t Task) (*runner.Result, error) {
+// A grant > 0 is the task's share of the fleet cap: it runs under a retry
+// policy whose MaxSpendUSD is at most the grant, which also lowers each
+// attempt's --max-budget-usd.
+func (f *Fleet) runTask(ctx context.Context, w Worker, t Task, grant float64) (*runner.Result, error) {
 	in := t.Input
 
 	if f.cfg.Workspace != nil && f.cfg.Repo != "" {
@@ -183,6 +237,16 @@ func (f *Fleet) runTask(ctx context.Context, w Worker, t Task) (*runner.Result, 
 		in.WorkDir = wt
 	}
 
+	if grant > 0 {
+		p := runner.RetryPolicy{MaxAttempts: 1}
+		if f.cfg.Retry != nil {
+			p = *f.cfg.Retry
+		}
+		if p.MaxSpendUSD <= 0 || p.MaxSpendUSD > grant {
+			p.MaxSpendUSD = grant
+		}
+		return w.Runner.RunJSONWithRetry(ctx, in, p)
+	}
 	if f.cfg.Retry != nil {
 		return w.Runner.RunJSONWithRetry(ctx, in, *f.cfg.Retry)
 	}

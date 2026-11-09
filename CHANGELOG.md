@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- `permissions`: an Allow or Ask rule for a shell tool now matches only plain-word commands (a whitelist), so expansions that run code without `$(`, backticks or redirections, such as `$[x]` with an `$'\044(...)'` subscript, zsh glob qualifiers `*(e:'cmd':)` and zsh `=(cmd)`, fall through to the default deny. Commands with unquoted globs, `$`, `~`, braces or backslashes now need their own rule or an Ask.
+- `permissions`: Deny rules see each segment normalized. Quotes and escapes are removed, tabs collapsed, and leading redirections, `NAME=value` assignments, keywords (`time`, `!`, `if`/`then`) and wrappers (`sudo`, `env`, `xargs`, `nohup`, `nice`, `timeout`, `command`, ...) dropped, with `/bin/rm` read as `rm`.
+- `permissions`: the `Monitor` tool, which runs a shell command, gets the same shell-aware matching as `Bash`.
+- `transport`: `DockerExec` and `DockerRun` no longer put env values on the `docker` argv, where any local user could read an API key in the process list. The argv carries `-e NAME`, and the value reaches the container through the docker CLI's environment.
+
+### Fixed
+- `client`: `Close` and `Wait` no longer hang after a `Query` was abandoned (context cancelled) while the CLI kept emitting more than 64 events. The stdout reader no longer blocks on an unread channel.
+- `runner`: `RetryPolicy.MaxSpendUSD` bounds each attempt. Every attempt runs with `--max-budget-usd` lowered to what the cap has left, so a single attempt can no longer be billed the Runner's whole per-invocation budget against a smaller cap. A cap too small for any attempt returns an error.
+- `fleet`: `MaxSpendUSD` is now a hard cap under concurrency. A worker reserves its task's share of what is left before running it, the task's budget is lowered to that share, and unspent budget is returned when it ends. In-flight tasks could previously overrun the cap by a wave of whole task budgets.
+
 ## [0.4.0] - 2026-11-09
 
 ### Added

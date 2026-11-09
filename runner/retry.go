@@ -26,7 +26,10 @@ type RetryPolicy struct {
 
 	// MaxSpendUSD caps cumulative spend across attempts: once the accumulated
 	// cost reaches it, no further retry is made (the last result/error is
-	// returned). 0 disables the cap. This is the guard against retries quietly
+	// returned), and every attempt runs with --max-budget-usd lowered to what
+	// the cap has left, so the CLI's own budget check bounds each attempt by the
+	// remaining cap instead of the Runner's whole per-invocation budget. 0
+	// disables the cap. This is the guard against retries quietly
 	// multiplying token spend.
 	//
 	// The CLI reports cost only in the result event, so an attempt cut off
@@ -255,6 +258,18 @@ func (r *Runner) withRetry(ctx context.Context, in Input, p RetryPolicy, run fun
 	attempts := 0
 
 	for attempt := 1; attempt <= p.MaxAttempts; attempt++ {
+		// Each attempt may spend only what the cap has left: the CLI enforces
+		// it through --max-budget-usd, so one attempt cannot overrun the cap
+		// by the Runner's whole per-invocation budget.
+		if p.MaxSpendUSD > 0 {
+			// Rounded down to 1/100 cent: a remainder that rounds to 0 is a
+			// spent cap, never a "0" budget the CLI could read as no limit.
+			left := math.Floor((p.MaxSpendUSD-guard)*1e4) / 1e4
+			if left <= 0 {
+				break
+			}
+			in.spendLeft = left
+		}
 		attempts = attempt
 		res, err := run(context.WithValue(ctx, attemptKey{}, attempt), in)
 		if res != nil {
@@ -305,6 +320,9 @@ func (r *Runner) withRetry(ctx context.Context, in Input, p RetryPolicy, run fun
 		}
 	}
 
+	if attempts == 0 {
+		return nil, fmt.Errorf("retry: MaxSpendUSD $%v leaves no budget for an attempt", p.MaxSpendUSD)
+	}
 	if last != nil {
 		last.TotalCostUSD = spent
 		last.Attempts = attempts
