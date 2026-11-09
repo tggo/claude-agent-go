@@ -46,8 +46,7 @@ func TestDockerExec(t *testing.T) {
 		"docker exec -i",
 		"-w /work",
 		"-u node",
-		"-e GH_TOKEN=x",
-		"-e A=b",
+		"-e GH_TOKEN -e A agent-box",
 		"agent-box claude --print --model haiku",
 	} {
 		if !strings.Contains(got, want) {
@@ -86,7 +85,7 @@ func TestDockerRun(t *testing.T) {
 		"--memory 512m",
 		"--cpus 1",
 		"-w /w",
-		"-e K=v",
+		"-e K -v",
 		"-v /h:/c:ro",
 		"myimg claude --print",
 	} {

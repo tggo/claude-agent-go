@@ -95,13 +95,32 @@ func (d DockerExec) Command(ctx context.Context, args []string, opt CommandOpts)
 	if d.User != "" {
 		a = append(a, "-u", d.User)
 	}
-	for _, e := range withRunEnv(opt) {
-		a = append(a, "-e", e)
+	names, env := dockerEnv(opt)
+	for _, n := range names {
+		a = append(a, "-e", n)
 	}
 	a = append(a, d.Container)
 	a = append(a, wrapArgv(opt.RunID, bin, args)...)
 	//nolint:gosec // container/args come from trusted config.
-	return exec.Command(docker, a...)
+	cmd := exec.Command(docker, a...)
+	cmd.Env = env
+	return cmd
+}
+
+// dockerEnv keeps env values out of the docker argv, where any local user
+// could read them in the process list: the argv gets "-e NAME" only, and the
+// docker CLI, which copies a name-only variable from its own environment, is
+// started with the host environment plus the extras.
+func dockerEnv(opt CommandOpts) (names, env []string) {
+	extra := withRunEnv(opt)
+	if len(extra) == 0 {
+		return nil, nil
+	}
+	for _, e := range extra {
+		name, _, _ := strings.Cut(e, "=")
+		names = append(names, name)
+	}
+	return names, append(os.Environ(), extra...)
 }
 
 // ---- Docker (ephemeral) ----
@@ -157,14 +176,17 @@ func (d DockerRun) Command(ctx context.Context, args []string, opt CommandOpts) 
 	if opt.WorkDir != "" {
 		a = append(a, "-w", opt.WorkDir)
 	}
-	for _, e := range withRunEnv(opt) {
-		a = append(a, "-e", e)
+	names, env := dockerEnv(opt)
+	for _, n := range names {
+		a = append(a, "-e", n)
 	}
 	a = append(a, d.Options...)
 	a = append(a, d.Image, bin)
 	a = append(a, args...)
 	//nolint:gosec // image/args come from trusted config.
-	return exec.Command(docker, a...)
+	cmd := exec.Command(docker, a...)
+	cmd.Env = env
+	return cmd
 }
 
 // ---- SSH ----

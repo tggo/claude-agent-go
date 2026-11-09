@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -64,12 +65,12 @@ func TestRunIDWiring(t *testing.T) {
 
 	de := DockerExec{Container: "c"}.Command(ctx, []string{"-p"}, CommandOpts{RunID: id})
 	j := strings.Join(de.Args, "\x00")
-	if !strings.Contains(j, "-e\x00CAG_RUN_ID=abc123\x00c\x00sh\x00-c\x00"+wrapScript+"\x00cag-run\x00"+pf+"\x00claude\x00-p") {
+	if !strings.Contains(j, "-e\x00CAG_RUN_ID\x00c\x00sh\x00-c\x00"+wrapScript+"\x00cag-run\x00"+pf+"\x00claude\x00-p") {
 		t.Errorf("docker exec args = %q", de.Args)
 	}
 
 	dr := DockerRun{Image: "img"}.Command(ctx, nil, CommandOpts{RunID: id})
-	if !strings.Contains(strings.Join(dr.Args, " "), "--name cag-abc123") || !strings.Contains(strings.Join(dr.Args, " "), "-e CAG_RUN_ID=abc123") {
+	if !strings.Contains(strings.Join(dr.Args, " "), "--name cag-abc123") || !strings.Contains(strings.Join(dr.Args, " "), "-e CAG_RUN_ID") || !slices.Contains(dr.Env, "CAG_RUN_ID=abc123") {
 		t.Errorf("docker run args = %q", dr.Args)
 	}
 	dr = DockerRun{Image: "img", Name: "mine"}.Command(ctx, nil, CommandOpts{RunID: id})
