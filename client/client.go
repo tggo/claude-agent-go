@@ -168,8 +168,17 @@ type Client struct {
 	waitOnce sync.Once
 	waitErr  error
 	done     chan struct{}
+	closing  chan struct{} // closed when Close starts; the pump then drops events
 	closed   atomic.Bool
-	runID    string // remote-teardown tag; "" for transports without Terminator
+
+	// The read loop never blocks on a consumer: it appends to q and pump
+	// forwards to events. An abandoned Query therefore cannot stall stdout,
+	// and the process can always be reaped.
+	qmu   sync.Mutex
+	qcond *sync.Cond
+	q     []*claudecli.StreamEvent
+	qeof  bool
+	runID string // remote-teardown tag; "" for transports without Terminator
 }
 
 const (
@@ -235,8 +244,11 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		pending:       make(map[string]chan *controlResponse),
 		hookCallbacks: make(map[string]HookCallback),
 		done:          make(chan struct{}),
+		closing:       make(chan struct{}),
 	}
+	c.qcond = sync.NewCond(&c.qmu)
 
+	go c.pump()
 	go c.readLoop(stdout)
 
 	// When permission/hook callbacks, inline agents, or a skills allowlist are
@@ -364,14 +376,49 @@ func (c *Client) readLoop(stdout io.Reader) {
 			continue
 		}
 		if ev := claudecli.ParseStreamLine(cp); ev != nil {
-			c.events <- ev
+			c.enqueue(ev)
 		}
 	}
 	werr := c.cmd.Wait()
 	c.waitOnce.Do(func() { c.waitErr = werr })
 	c.failPending(fmt.Errorf("process ended"))
-	close(c.events)
+	c.qmu.Lock()
+	c.qeof = true
+	c.qcond.Signal()
+	c.qmu.Unlock()
 	close(c.done)
+}
+
+func (c *Client) enqueue(ev *claudecli.StreamEvent) {
+	c.qmu.Lock()
+	c.q = append(c.q, ev)
+	c.qcond.Signal()
+	c.qmu.Unlock()
+}
+
+// pump forwards queued events to c.events in order and closes c.events once
+// the read loop has ended and the queue is drained. After Close starts it
+// drops events nobody will read.
+func (c *Client) pump() {
+	for {
+		c.qmu.Lock()
+		for len(c.q) == 0 && !c.qeof {
+			c.qcond.Wait()
+		}
+		if len(c.q) == 0 {
+			c.qmu.Unlock()
+			close(c.events)
+			return
+		}
+		ev := c.q[0]
+		c.q[0] = nil
+		c.q = c.q[1:]
+		c.qmu.Unlock()
+		select {
+		case c.events <- ev:
+		case <-c.closing:
+		}
+	}
 }
 
 // userMessage is the stdin envelope for a user turn.
@@ -453,6 +500,7 @@ func (c *Client) Close() error {
 	if c.closed.Swap(true) {
 		return nil
 	}
+	close(c.closing)
 	_ = c.stdin.Close()
 
 	select {
