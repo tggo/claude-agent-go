@@ -22,11 +22,21 @@
 // present, else the raw JSON). A trailing ":*" is the legacy prefix form:
 // "Bash(git:*)" matches "git" and "git <anything>".
 //
-// Shell commands are not trusted blindly: an Allow or Ask rule for Bash only
+// Shell commands are not trusted blindly. This applies to every tool whose
+// input is a shell command (Bash and Monitor). An Allow or Ask rule only
 // matches when every segment of a compound command ("a && b", "a | b", "a; b")
-// matches, and never when the command has command substitution, backticks or
-// redirections. Deny rules match when any segment matches, including commands
-// nested in substitutions, subshells and groups. For file tools (Read, Edit,
+// matches, and only when the command is made of plain words: outside quotes
+// it may hold letters, digits, whitespace and - _ . / : = , @ + % ^ plus the
+// separators; double-quoted text may not hold $, `, \ or !. Anything else
+// (expansions, globs, redirections, subshells, escapes) falls through to the
+// next rule, usually the default deny, so "ls *.go" needs its own rule or an
+// Ask. Deny rules match when any segment matches, including commands nested in
+// substitutions, subshells and groups, and see each segment normalized: quotes
+// and backslashes removed, whitespace collapsed, leading redirections,
+// assignments, keywords (time, !, if, then, ...), wrappers (sudo, env, xargs,
+// nohup, nice, timeout, command, exec, ...) and a command's directory
+// stripped, so "/bin/rm\t-rf x" is seen as "rm -rf x". Allow rules are not an
+// OS sandbox. For file tools (Read, Edit,
 // Write, ...) an Allow/Ask rule never matches a path containing "..", and a
 // Deny rule also sees the lexically cleaned path.
 package permissions
@@ -257,10 +267,10 @@ func primaryInput(tool string, raw json.RawMessage) string {
 	var m map[string]any
 	if json.Unmarshal(raw, &m) == nil {
 		fields := primaryFields
-		switch tool {
-		case "Bash":
+		switch {
+		case shellTools[tool]:
 			fields = []string{"command"}
-		case "Read", "Edit", "Write", "MultiEdit", "NotebookEdit":
+		case fileTools[tool]:
 			fields = []string{"file_path", "notebook_path"}
 		}
 		for _, f := range fields {
@@ -272,12 +282,15 @@ func primaryInput(tool string, raw json.RawMessage) string {
 	return strings.TrimSpace(string(raw))
 }
 
+// shellTools are the tools whose primary input is a shell command or script.
+var shellTools = map[string]bool{"Bash": true, "Monitor": true}
+
 func matchArg(pat, tool string, raw json.RawMessage, deny bool) bool {
 	in := primaryInput(tool, raw)
 	if fileTools[tool] {
 		return matchPath(pat, in, deny)
 	}
-	if tool != "Bash" {
+	if !shellTools[tool] {
 		return argGlob(pat, in)
 	}
 	if deny {
@@ -285,13 +298,13 @@ func matchArg(pat, tool string, raw json.RawMessage, deny bool) bool {
 			return true
 		}
 		for _, seg := range splitShellDeny(in) {
-			if argGlob(pat, seg) {
+			if argGlob(pat, seg) || argGlob(pat, normalizeSegment(seg)) {
 				return true
 			}
 		}
 		return false
 	}
-	if strings.ContainsAny(in, "`<>") || strings.Contains(in, "$(") {
+	if !plainShell(in) {
 		return false
 	}
 	segs := splitShell(in)
@@ -304,6 +317,151 @@ func matchArg(pat, tool string, raw json.RawMessage, deny bool) bool {
 		}
 	}
 	return true
+}
+
+// plainShell reports whether cmd is made only of plain words and separators,
+// so no part of it can expand, glob, redirect or evaluate nested code. It is a
+// whitelist: anything not provably inert is rejected.
+func plainShell(cmd string) bool {
+	const quote, dquote = '\'', '"'
+	var in rune // 0, quote or dquote
+	for _, c := range cmd {
+		switch in {
+		case quote:
+			if c == quote {
+				in = 0
+			}
+			continue
+		case dquote:
+			switch c {
+			case dquote:
+				in = 0
+			case '$', '`', '\\', '!':
+				return false
+			}
+			continue
+		}
+		switch {
+		case c == quote || c == dquote:
+			in = c
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case strings.ContainsRune(" \t-_./:=,@+%^&|;\n\r", c):
+		default:
+			return false
+		}
+	}
+	return in == 0
+}
+
+// shellPrefixes are words that run the rest of the segment as a command:
+// keywords, negation and wrappers. Their option words are skipped too.
+var shellPrefixes = map[string]bool{
+	"!": true, "time": true, "if": true, "then": true, "else": true, "elif": true,
+	"do": true, "while": true, "until": true, "exec": true, "command": true,
+	"builtin": true, "nohup": true, "nice": true, "sudo": true, "env": true,
+	"xargs": true, "timeout": true, "stdbuf": true, "doas": true, "setsid": true,
+	"noglob": true, "nocorrect": true, "coproc": true,
+}
+
+// wrapperValueFlags are wrapper options whose value is the next word.
+var wrapperValueFlags = map[string]bool{
+	"sudo -u": true, "sudo -g": true, "sudo -C": true, "sudo -h": true, "sudo -p": true, "sudo -D": true,
+	"doas -u": true, "doas -C": true, "env -u": true, "env -C": true, "env -S": true,
+	"nice -n": true, "timeout -s": true, "timeout -k": true,
+	"xargs -n": true, "xargs -I": true, "xargs -L": true, "xargs -P": true, "xargs -d": true,
+	"xargs -E": true, "xargs -s": true, "xargs -a": true,
+}
+
+// normalizeSegment rewrites one shell segment the way the shell will see the
+// command word: quotes and backslashes removed, whitespace collapsed, leading
+// redirections, NAME=value assignments, keywords and wrappers (with their
+// options) dropped, and the command's directory stripped.
+func normalizeSegment(seg string) string {
+	words := shellWords(seg)
+	i := 0
+	for i < len(words) {
+		w := words[i]
+		switch {
+		case w == "":
+			i++
+		case strings.ContainsAny(w[:1], "<>") || (len(w) > 1 && w[0] >= '0' && w[0] <= '9' && strings.ContainsAny(w, "<>")):
+			// A bare operator ("> file") consumes the next word as its target.
+			if strings.TrimLeft(w, "0123456789<>&|") == "" {
+				i++
+			}
+			i++
+		case isAssignment(w):
+			i++
+		case shellPrefixes[w]:
+			wrapper := w
+			i++
+			for i < len(words) && (strings.HasPrefix(words[i], "-") || isAssignment(words[i]) ||
+				(wrapper == "timeout" && strings.Trim(words[i], "0123456789.smhd") == "")) {
+				if wrapperValueFlags[wrapper+" "+words[i]] {
+					i++ // the flag's value
+				}
+				i++
+			}
+		default:
+			if j := strings.LastIndexByte(w, '/'); j >= 0 && j < len(w)-1 {
+				words[i] = w[j+1:]
+			}
+			return strings.Join(words[i:], " ")
+		}
+	}
+	return ""
+}
+
+func isAssignment(w string) bool {
+	eq := strings.IndexByte(w, '=')
+	if eq <= 0 {
+		return false
+	}
+	for k, c := range w[:eq] {
+		if c != '_' && !(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && (k == 0 || !(c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
+// shellWords splits seg on unquoted whitespace and removes quotes and
+// backslash escapes.
+func shellWords(seg string) []string {
+	var out []string
+	var b strings.Builder
+	var in rune
+	word, esc := false, false
+	for _, c := range seg {
+		switch {
+		case esc:
+			b.WriteRune(c)
+			esc, word = false, true
+		case in != 0:
+			if c == in {
+				in = 0
+			} else {
+				b.WriteRune(c)
+			}
+		case c == '\\':
+			esc, word = true, true
+		case c == '\'' || c == '"':
+			in, word = c, true
+		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+			if word {
+				out = append(out, b.String())
+				b.Reset()
+				word = false
+			}
+		default:
+			b.WriteRune(c)
+			word = true
+		}
+	}
+	if word {
+		out = append(out, b.String())
+	}
+	return out
 }
 
 // fileTools are the tools whose argument is a filesystem path.

@@ -111,7 +111,8 @@ that session via `--resume` instead of starting over.
 Transient failures (rate limits, `overloaded`, 5xx, timeouts) are retried with
 exponential backoff that honors `retry-after`. The cost of **every** attempt is
 accumulated into `Result.TotalCostUSD`, and `MaxSpendUSD` stops retrying once the
-cumulative spend hits the cap:
+cumulative spend hits the cap. Each attempt also runs with `--max-budget-usd`
+lowered to what the cap has left, so one attempt cannot spend past it:
 
 ```go
 res, err := r.RunJSONWithRetry(ctx, in, runner.RetryPolicy{
@@ -207,12 +208,19 @@ p := &permissions.Policy{
 c, _ := client.New(ctx, client.Config{CanUseTool: p.CanUseTool()})
 ```
 
-Allow and Ask rules for Bash match only when every segment of a compound command
-matches, and never with command substitution, backticks or redirections. Deny
-rules also see commands nested in `$()`, backticks, subshells and groups. For file
-tools, Allow never matches a path containing `..`, and Deny sees the cleaned path.
-**Known limit:** a Deny rule does not see through wrappers such as `sudo`, `env` or
-`xargs`, so deny the wrapper as well; do not make Deny your only barrier.
+Shell tools (`Bash` and `Monitor`) are matched with shell awareness. Allow and Ask
+rules match only when every segment of a compound command matches and the command
+is plain words: no `$`, backticks, backslashes, globs, braces, parentheses,
+redirections or `~` outside single quotes. Anything else falls through to the next
+rule, usually the default deny, so `ls *.go` needs an Ask. Deny rules also see
+commands nested in `$()`, backticks, subshells and groups, and see each segment
+normalized: quotes and escapes removed, tabs collapsed, and leading redirections,
+`NAME=value` assignments, keywords (`time`, `!`, `if`/`then`) and wrappers (`sudo`,
+`env`, `xargs`, `nohup`, `nice`, `timeout`, `command`, ...) dropped, with `/bin/rm`
+read as `rm`. For file tools, Allow never matches a path containing `..`, and Deny
+sees the cleaned path. **Known limit:** Deny is lexical. It does not see a command
+built at run time (`eval`, `sh -c "$x"`, aliases, functions), so do not make Deny
+your only barrier, and Allow rules are not an OS sandbox.
 
 Hooks run Go logic before or after a tool and can block it:
 
@@ -245,7 +253,7 @@ f, _ := fleet.New(fleet.Config{
         {Name: "host-b", Runner: runner.New(runner.WithTransport(transport.SSH{Host: "b"}))},
     },
     Workspace:   ws, Repo: repoDir,          // one isolated worktree per task
-    MaxSpendUSD: 5.00,                        // fleet-wide spend cap
+    MaxSpendUSD: 5.00,                        // fleet-wide cap; each task gets a reserved share
     Retry:       &runner.RetryPolicy{MaxAttempts: 3},
 })
 rep, _ := f.Run(ctx, []fleet.Task{
