@@ -413,8 +413,12 @@ final, res, err := temporal.<span class="fn">Wait</span>[State](ctx, run)
     <img src="img/graphweb.png" width="1440" height="860" loading="lazy" alt="graphweb replaying a 16-node video pipeline: grouped stages Research, Script and Casting, a revise loop between writer and editor with a x2 counter, a minimap, and a node inspector on the right.">
     <figcaption>Replay of a 16-node pipeline: stages, a revise loop with its counter, the minimap, per-node inspector and a timeline scrubber.</figcaption>
   </figure>
+  <figure class="shot" style="margin-top:24px">
+    <img src="img/graphweb-inspector.png" width="2200" height="1150" loading="lazy" alt="graphweb replaying a five-agent run: a metrics strip with duration, cost, tokens, model and tool calls and errors; agent cards with model, status, task and one gantt row per tool call; a dashed watch link from the inspector agent to the orchestrator.">
+    <figcaption>Run inspector (v0.4.0): a metrics strip, agent cards with one gantt row per tool call (click a row for its input and result), and a dashed <code>graph.Watch</code> link from an observer agent.</figcaption>
+  </figure>
   <div class="grid three" style="margin-top:24px">
-    <div class="card"><h3>See the run</h3><p>Topology with collapsible stages, per-node cost and time, loop counters, a follow camera and a minimap. Snake, LR and TB layouts.</p></div>
+    <div class="card"><h3>See the run</h3><p>Topology with collapsible stages, agent cards with per-tool-call timing, a run metrics strip, loop counters, observer links via <code>Watch</code>, a follow camera and a minimap. Snake, LR and TB layouts.</p></div>
     <div class="card"><h3>Inspect a node</h3><p>Agent events, state before/after as a diff, the effective runner config (secret-free), and artifacts as a gallery.</p></div>
     <div class="card"><h3>Steer it</h3><p>Set breakpoints, pause and step, and answer interrupts and reviews in the browser, via <code>RunInteractive</code>.</p></div>
   </div>
