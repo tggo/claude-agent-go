@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-09
+
+### Added
+- `graph.Watch(observer, targets...)` declares that a node only watches others, such as a budget guard or an inspector. Watch links show up in `Topology` as edges with `TopoEdge.Watch` set and in `Mermaid()` as `-. watches .-`. They change nothing about the run and are not part of the durable topology hash.
+- `graphweb`, a run inspector view:
+  - A metrics strip above the graph: duration, cost, tokens, model calls, tool calls, errors, and how many agents are running.
+  - Agent cards with the model, a status pill, the agent's task, and one row per tool call. Each row has a small gantt bar on the node's time axis; the bar of a call still in progress is animated.
+  - Click a row to see the call's result and input inside the card. One call per card is open at a time.
+  - Edges are drawn as right angles with rounded corners, with a port circle at each end. Watch links are dashed.
+
+### Fixed
+- `graphweb`: the gantt bars in node cards render in place in Safari/WebKit, which draws positioned elements inside an SVG `foreignObject` from the corner of the page.
+
 ## [0.3.0] - 2026-11-06
 
 ### Added
@@ -202,7 +215,8 @@ First public release. A Go SDK for building agents on top of the Claude Code CLI
   `tools`). >90% unit coverage on every substantive package; 18 integration tests
   assert behavior against the real binary.
 
-[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/tggo/claude-agent-go/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tggo/claude-agent-go/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/tggo/claude-agent-go/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/tggo/claude-agent-go/compare/v0.1.0...v0.2.0
