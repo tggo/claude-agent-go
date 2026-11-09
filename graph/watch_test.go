@@ -52,3 +52,15 @@ func TestWatchMermaid(t *testing.T) {
 	plain, _ := watchGraph(false).Compile()
 	assert.NotContains(t, plain.Mermaid(), "watches")
 }
+
+func TestWatchMermaidBranch(t *testing.T) {
+	nop := Func(func(*cnt) error { return nil })
+	g := New[cnt]("wb").
+		AddNode("lead", nop).AddNode("a", nop).AddNode("guard", nop).
+		AddParallel("team", []string{"a", "guard"}, func(*cnt, []cnt) error { return nil }).
+		AddEdge(Start, "lead").AddEdge("lead", "team").AddEdge("team", End).
+		Watch("guard", "lead")
+	r, err := g.Compile()
+	require.NoError(t, err)
+	assert.Contains(t, r.Mermaid(), "team__guard -. watches .- lead")
+}

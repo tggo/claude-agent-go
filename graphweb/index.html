@@ -579,7 +579,7 @@ function agentSteps(m, id, step){
     } else if (st.type==='user'){
       for (const b of blocksOf(st)) if (b.type==='tool_result' && by[b.tool_use_id]){
         const r=by[b.tool_use_id]; r.t1=ts; r.err=!!b.is_error; r.result=toolResultText(b.content); if (r.err) errs++; }
-    } else if (st.type==='result') { res=st; res.ts=ts; if (st.is_error) errs++; }
+    } else if (st.type==='result') { res=st; res.ts=ts; }
     lastTs=ts;
   }
   if (res){ // the final answer: model time after the last tool returned
@@ -589,7 +589,7 @@ function agentSteps(m, id, step){
   }
   const sumU = u => (u.input_tokens||0)+(u.output_tokens||0)+(u.cache_read_input_tokens||0)+(u.cache_creation_input_tokens||0);
   const tokens = res&&res.usage ? sumU(res.usage) : Object.values(usage).reduce((a,u)=>a+sumU(u),0);
-  const v = {steps, model, tokens, modelCalls:res&&res.num_turns||msgs.size, toolCalls:steps.filter(r=>!r.model).length, errors:errs, res};
+  const v = {steps, model, tokens, modelCalls:res&&res.num_turns||msgs.size, toolCalls:steps.filter(r=>!r.model).length, errors:errs, resErr:!!(res&&res.is_error), res};
   stepCache.set(ck, {n:evs.length, m, v}); return v;
 }
 function lastVisit(nm){ return nm && nm.visits.length ? nm.visits[nm.visits.length-1] : null; }
@@ -806,7 +806,7 @@ function buildGraph(keepView){
     if (a===b && a.kind==='cgroup') return;
     const rk=a.id+'|'+b.id+(e.back?'|b':'')+(e.watch?'|w':''); let x=merged[rk];
     if (!x) { x=merged[rk]={a,b,e,keys:[],back:!!e.back}; L.edgeList.push(x); }
-    x.keys.push(ekey(e.from,e.to)); L.edgeEls[ekey(e.from,e.to)]=x;
+    x.keys.push(ekey(e.from,e.to)); if (!e.watch) L.edgeEls[ekey(e.from,e.to)]=x;
   });
   L.edgeList.forEach(x=>{
     const e=x.e, one=x.keys.length===1, isBranch=e.label==='branch';
@@ -1041,8 +1041,8 @@ function paint(){
       if (n.kind==='func' && isAgentNode(m,n)) g.classList.add('agent'); // tagged at runtime
     });
     L.edgeList.forEach(x=>{
-      let n=0; for (const k of x.keys){ const e=m.edges[k]; if (e) n+=e.n; }
-      const hot = m.lastEdge && x.keys.includes(m.lastEdge.key) && (S.live && S.m.nsteps>0 && S.cursor===S.events.length) && Date.now()-S.lastEdgeWall<1200;
+      let n=0; if (!x.e.watch) for (const k of x.keys){ const e=m.edges[k]; if (e) n+=e.n; }
+      const hot = !x.e.watch && m.lastEdge && x.keys.includes(m.lastEdge.key) && (S.live && S.m.nsteps>0 && S.cursor===S.events.length) && Date.now()-S.lastEdgeWall<1200;
       const cond=x.keys.length===1&&x.e.conditional;
       x.g.setAttribute('class','edge'+(x.e.watch?' watch':'')+(cond?' cond':'')+(x.e.label==='branch'?' branch':'')+(n>0?' taken':'')+(hot?' hot':''));
       const show = n>0 && (x.back || n>1); x.badge.setAttribute('visibility',show?'visible':'hidden');
@@ -1119,6 +1119,7 @@ function runMetrics(m){
   for (const k of Object.keys(m.agents)){
     const i=k.lastIndexOf('#'), id=k.slice(0,i), a=agentSteps(m,id,+k.slice(i+1));
     r.tokens+=a.tokens; r.modelCalls+=a.modelCalls; r.toolCalls+=a.toolCalls; r.errors+=a.errors; agentNodes.add(id);
+    const v=m.nodes[id]&&visitOf(m.nodes[id],+k.slice(i+1)); if (a.resErr && !(v&&v.status==='failed')) r.errors++; // failed visits are counted below
   }
   for (const n of Object.values(m.nodes)) for (const v of n.visits) if (v.status==='failed') r.errors++;
   r.agents=agentNodes.size;

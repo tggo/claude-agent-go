@@ -93,9 +93,22 @@ func (r *Runnable[S]) Mermaid() string {
 			}
 		}
 	}
+	// A branch node is drawn inside its parallel node as <par>__<branch>; a
+	// watch link to or from one points at its first such copy.
+	drawn := func(name string) string {
+		if !r.branches[name] {
+			return ids[name]
+		}
+		for _, p := range r.order {
+			if n := r.nodes[p]; n.par != nil && slices.Contains(n.par.branches, name) {
+				return ids[p] + "__" + ids[name]
+			}
+		}
+		return ids[name]
+	}
 	for _, w := range r.watches {
-		if r.nodes[w[0]] != nil && r.nodes[w[1]] != nil && w[0] != w[1] && !r.branches[w[0]] && !r.branches[w[1]] {
-			fmt.Fprintf(&b, "    %s -. watches .- %s\n", ids[w[0]], ids[w[1]])
+		if r.nodes[w[0]] != nil && r.nodes[w[1]] != nil && w[0] != w[1] {
+			fmt.Fprintf(&b, "    %s -. watches .- %s\n", drawn(w[0]), drawn(w[1]))
 		}
 	}
 	return b.String()
