@@ -144,7 +144,7 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 .card .cn small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .spill{flex:none;font-size:11.5px;padding:2px 8px;border-radius:6px;background:var(--ink-3);color:var(--muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .spill.running{background:rgba(61,214,245,.12);color:var(--cyan)}
-.spill.running i{width:9px;height:9px;border:1.6px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .9s linear infinite}
+.spill.running i{width:7px;height:7px;border-radius:50%;background:currentColor;animation:blink 1s ease-in-out infinite}
 .spill.done{background:rgba(88,214,141,.12);color:var(--green)}
 .spill.failed{background:rgba(255,107,92,.14);color:var(--coral)}
 .spill.waiting,.spill.paused{background:rgba(242,193,78,.13);color:var(--amber)}
@@ -156,8 +156,8 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 .srow .si.model{color:#a59cf0}.srow .si.web{color:#6fb6ff}.srow .si.edit{color:var(--amber)}.srow .si.shell{color:var(--green)}.srow .si.mcp{color:var(--cyan)}.srow .si.agent{color:var(--coral)}
 .srow .sn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .srow .sn em{font-style:normal;color:var(--muted);font-family:var(--mono);font-size:11.5px}
-.srow .sg{position:relative;height:7px;border-radius:4px;background:rgba(132,153,171,.12)}
-.srow .sg span{position:absolute;top:0;bottom:0;border-radius:4px;min-width:3px;background:#3f8f9f}
+.srow .sg{display:flex;height:7px;border-radius:4px;background:rgba(132,153,171,.12);overflow:hidden}
+.srow .sg span{display:block;height:100%;flex:none;border-radius:4px;min-width:3px;background:#3f8f9f}
 .srow .sg span.model{background:#7b6fd6}.srow .sg span.err{background:var(--coral)}
 .srow .sg span.live{background:linear-gradient(90deg,#3f8f9f,#7fe3f5,#3f8f9f);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
 .srow .sd{font-family:var(--mono);font-size:11.5px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
@@ -178,7 +178,7 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 .edge .port{fill:var(--ink);stroke:#3a8aa0;stroke-width:1.4}
 .edge.watch path{stroke:#4a86a8;stroke-dasharray:4 4;marker-end:none}
 .edge.watch .port{stroke:#4a86a8}
-@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{50%{opacity:.25}}
 @keyframes shimmer{from{background-position:200% 0}to{background-position:0 0}}
 @media (prefers-reduced-motion:reduce){.spill.running i,.srow .sg span.live{animation:none}}
 /* svg */
@@ -852,7 +852,8 @@ function buildGraph(keepView){
     }
     g.addEventListener('click',ev=>{ if (ev.target.classList && ev.target.classList.contains('bp')) { toggleBp(n.id); return; }
       ev.stopPropagation();
-      const row=ev.target.closest&&ev.target.closest('[data-x]'); if (row){ const k=row.dataset.x; S.xp.has(k)?S.xp.delete(k):S.xp.add(k); paint(); return; }
+      const row=ev.target.closest&&ev.target.closest('[data-x]'); if (row){ const k=row.dataset.x, pre=k.slice(0,k.lastIndexOf('#')+1), was=S.xp.has(k);
+        [...S.xp].forEach(x=>{ if (x.startsWith(pre)) S.xp.delete(x); }); if (!was) S.xp.add(k); paint(); return; } // one open call per card
       if (ev.target.closest&&ev.target.closest('.smore')){ S.more.has(n.id)?S.more.delete(n.id):S.more.add(n.id); paint(); return; }
       selectNode(n.id); });
     g.addEventListener('dblclick',ev=>{ ev.stopPropagation(); zoomTo(r); });
@@ -1078,7 +1079,7 @@ function renderCard(m, n, g){
     rows.push(el('div',{class:'srow'+(S.xp.has(xk)?' open':''),'data-x':xk,title:(r.model?'final answer':r.name)+(det?' · '+det:'')},
       el('span',{class:'si '+r.kind[0],text:r.kind[1]}),
       el('span',{class:'sn'},r.model?'answer':shortTool(r.name),det?el('em',{text:' '+det}):null),
-      el('span',{class:'sg'},el('span',{class:(r.model?'model':'')+(r.err?' err':'')+(running?' live':''),style:`left:${left.toFixed(2)}%;width:${w.toFixed(2)}%`})),
+      el('span',{class:'sg'},el('span',{class:(r.model?'model':'')+(r.err?' err':'')+(running?' live':''),style:`margin-left:${left.toFixed(2)}%;width:${w.toFixed(2)}%`})),
       el('span',{class:'sd'+(r.err?' err':''),text:running?'…':fmtDur(t1-r.t0)})));
     if (c.xp===r){
       const inp=r.model?'':JSON.stringify(r.input||{});
