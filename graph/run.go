@@ -54,6 +54,7 @@ type Runnable[S any] struct {
 	cfg      options
 	clone    func(S) S
 	labels   map[[2]string]string
+	watches  [][2]string // presentation only (Graph.Watch)
 }
 
 // Run executes the graph from Start with init as the initial state. It returns

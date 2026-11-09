@@ -93,5 +93,10 @@ func (r *Runnable[S]) Mermaid() string {
 			}
 		}
 	}
+	for _, w := range r.watches {
+		if r.nodes[w[0]] != nil && r.nodes[w[1]] != nil && w[0] != w[1] && !r.branches[w[0]] && !r.branches[w[1]] {
+			fmt.Fprintf(&b, "    %s -. watches .- %s\n", ids[w[0]], ids[w[1]])
+		}
+	}
 	return b.String()
 }

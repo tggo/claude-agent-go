@@ -430,6 +430,15 @@ effective config of the runner (secret-free, from `runner.Effective`), costs, lo
 counters and artifacts. Live runs also take breakpoints and answer interrupts and
 reviews in the browser.
 
+Above the graph, a strip shows the run's duration, cost, tokens, model calls, tool
+calls and errors. Each agent node is a card with its model, a status pill, its
+task, and one row per tool call. Every row has a small gantt bar on the node's
+time axis, so you see both how long a call took and which calls overlapped. Click
+a row to see the call's result and input in the card. A node that only observes
+others (a budget guard, an inspector) can be declared with
+`g.Watch("inspector", "orchestrator")`: the UI links the two with a dashed line,
+and nothing changes for the run itself.
+
 ```go
 srv, _ := graphweb.New(graphweb.WithJournal("run.jsonl")) // the journal makes it replayable
 url, _ := srv.Start(ctx, "127.0.0.1:8799")

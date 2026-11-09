@@ -138,6 +138,9 @@ func (r *Runnable[S]) topoHash() string {
 		shape.Nodes = append(shape.Nodes, node{n.ID, n.Kind, n.Parent, n.Branches})
 	}
 	for _, e := range t.Edges {
+		if e.Watch {
+			continue // presentation only
+		}
 		shape.Edges = append(shape.Edges, edge{e.From, e.To, e.Conditional})
 	}
 	b, _ := json.Marshal(shape)

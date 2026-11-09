@@ -18,7 +18,7 @@
 html,body{height:100%;margin:0}
 body{background:var(--ink);color:var(--text);font-family:var(--disp);font-size:14px;overflow:hidden}
 button,input,select{font:inherit;color:inherit}
-.app{display:grid;grid-template-rows:auto 1fr auto;height:100vh}
+.app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh}
 header{display:flex;align-items:center;gap:18px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--ink-2);flex-wrap:wrap}
 .brand{font-family:var(--mono);font-weight:600;letter-spacing:-.02em}
 .brand b{color:var(--cyan)}
@@ -126,6 +126,61 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 .rfoot .row2{display:flex;gap:8px;justify-content:flex-end}
 .rthumbs{display:flex;gap:8px;overflow-x:auto;margin:0 0 8px}
 .rthumbs img{height:64px;border-radius:5px;cursor:zoom-in}
+/* run metrics strip */
+.metrics{display:flex;gap:0;border-bottom:1px solid var(--line);background:var(--ink);padding:0 8px;overflow-x:auto}
+.metrics .mc{padding:7px 18px 8px 8px;min-width:96px}
+.metrics .ml{font-size:11.5px;color:var(--muted)}
+.metrics .mv{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums;color:var(--text);margin-top:1px}
+.metrics .mv.bad{color:var(--coral)}
+.metrics .ag{margin-left:auto;align-self:center;font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap;padding:0 8px}
+.metrics .ag b{color:var(--cyan);font-weight:500}
+/* node cards (HTML inside foreignObject) */
+.card{width:100%;height:100%;padding:9px 11px 0;display:flex;flex-direction:column;overflow:hidden;font-family:var(--disp);color:var(--text);user-select:none}
+.card .ch{display:flex;align-items:flex-start;gap:8px;min-height:30px}
+.card .ci{flex:none;width:24px;height:24px;border-radius:6px;border:1px solid var(--line);display:grid;place-items:center;font-size:12px;color:var(--muted);background:var(--ink)}
+.node.agent .card .ci{color:var(--coral)}
+.card .cn{flex:1;min-width:0;line-height:1.2}
+.card .cn b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .cn small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spill{flex:none;font-size:11.5px;padding:2px 8px;border-radius:6px;background:var(--ink-3);color:var(--muted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.spill.running{background:rgba(61,214,245,.12);color:var(--cyan)}
+.spill.running i{width:9px;height:9px;border:1.6px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .9s linear infinite}
+.spill.done{background:rgba(88,214,141,.12);color:var(--green)}
+.spill.failed{background:rgba(255,107,92,.14);color:var(--coral)}
+.spill.waiting,.spill.paused{background:rgba(242,193,78,.13);color:var(--amber)}
+.card .ct{font-size:12.5px;color:#c4d2df;margin:3px 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;height:18px}
+.card .rows{margin:4px -6px 0;display:flex;flex-direction:column}
+.srow{display:grid;grid-template-columns:16px minmax(0,1fr) 78px 42px;align-items:center;gap:7px;height:24px;padding:0 6px;border-radius:6px;cursor:pointer;font-size:12.5px}
+.srow:hover,.srow.open{background:var(--ink-3)}
+.srow .si{font-size:11px;text-align:center;color:var(--muted)}
+.srow .si.model{color:#a59cf0}.srow .si.web{color:#6fb6ff}.srow .si.edit{color:var(--amber)}.srow .si.shell{color:var(--green)}.srow .si.mcp{color:var(--cyan)}.srow .si.agent{color:var(--coral)}
+.srow .sn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow .sn em{font-style:normal;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+.srow .sg{position:relative;height:7px;border-radius:4px;background:rgba(132,153,171,.12)}
+.srow .sg span{position:absolute;top:0;bottom:0;border-radius:4px;min-width:3px;background:#3f8f9f}
+.srow .sg span.model{background:#7b6fd6}.srow .sg span.err{background:var(--coral)}
+.srow .sg span.live{background:linear-gradient(90deg,#3f8f9f,#7fe3f5,#3f8f9f);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
+.srow .sd{font-family:var(--mono);font-size:11.5px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.srow .sd.err{color:var(--coral)}
+.sx{margin:1px 0 3px;padding:6px 9px;border-radius:7px;background:var(--ink);border:1px solid var(--line);height:76px;overflow:hidden;font-family:var(--mono);font-size:11.5px;line-height:1.45}
+.sx .sxh{display:flex;justify-content:space-between;color:var(--muted)}
+.sx .sxr{color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;margin-top:2px}
+.sx .sxr.err{color:var(--coral)}
+.sx .sxi{color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.sx .sxi b{color:var(--muted);font-weight:400;font-family:var(--disp)}
+.smore{font-size:12px;color:var(--muted);padding:2px 6px;height:20px;cursor:pointer}
+.smore:hover{color:var(--cyan)}
+.card .cf{margin-top:auto;height:28px;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.card .cf b{color:var(--text);font-weight:500}
+.card .cf .sp{flex:1}
+.card .cf .pb{width:70px;height:4px;border-radius:2px;background:rgba(132,153,171,.15);overflow:hidden}
+.card .cf .pb span{display:block;height:100%;background:var(--cyan)}
+.edge .port{fill:var(--ink);stroke:#3a8aa0;stroke-width:1.4}
+.edge.watch path{stroke:#4a86a8;stroke-dasharray:4 4;marker-end:none}
+.edge.watch .port{stroke:#4a86a8}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){.spill.running i,.srow .sg span.live{animation:none}}
 /* svg */
 .node rect.box{fill:var(--ink-2);stroke:var(--line);stroke-width:1.5}
 .node.agent rect.box{fill:#0f2233;stroke:#27506a}
@@ -213,6 +268,7 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
     <button id="galbtn" class="btn" hidden aria-pressed="true">gallery</button>
     <button id="pausebtn" class="btn warn" hidden>Pause before next</button>
   </header>
+  <div id="metrics" class="metrics" aria-label="run metrics"></div>
   <main>
     <section id="stage" aria-label="graph">
       <div class="toolbar" id="toolbar">
@@ -261,7 +317,7 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
 <script>
 'use strict';
 const BOOT = window.GRAPHWEB || {token:'', readOnly:true};
-const SVGT = new Set(['svg','g','path','rect','circle','text','line','tspan']);
+const SVGT = new Set(['svg','g','path','rect','circle','text','line','tspan','foreignObject']);
 function el(tag, attrs, ...kids){
   const e = SVGT.has(tag) ? document.createElementNS('http://www.w3.org/2000/svg', tag) : document.createElement(tag);
   for (const k in (attrs||{})) { const v = attrs[k]; if (v==null||v===false) continue;
@@ -279,7 +335,7 @@ const nk = (n,s) => n+'#'+s;
 // ---------------- state ----------------
 const S = { events:[], cursor:0, follow:true, playing:false, speed:1, runs:[], topo:{}, curRun:null,
   sel:null, selAuto:true, tab:'timeline', bps:new Set(), drawn:null, m:null, initial:true,
-  showAgent:false, draft:{}, lbCustom:null, gal:true, lb:null, open:new Set(), txt:{}, aview:{}, lastSeq:0, view:{x:0,y:0,k:1}, layout:null };
+  showAgent:false, xp:new Set(), more:new Set(), draft:{}, lbCustom:null, gal:true, lb:null, open:new Set(), txt:{}, aview:{}, lastSeq:0, view:{x:0,y:0,k:1}, layout:null };
 
 // ---------------- model (fold) ----------------
 function newModel(run){
@@ -306,7 +362,7 @@ function apply(m, ev, fx){
   case 'node_end': {
     const n = nodeOf(m,ev.node); let v = visitOf(n,ev.step);
     if (!v){ v={step:ev.step,attempt:ev.attempt,parent:ev.parent,status:'running',startSeq:ev.seq,startTs:ts,cost:0}; n.visits.push(v); }
-    v.endSeq=ev.seq; v.dur=ev.duration_ms; v.cost+=ev.cost_usd||0; v.err=ev.err; v.state=ev.state; v.diff=ev.diff; v.paused=!!ev.paused;
+    v.endSeq=ev.seq; v.endTs=ts; v.dur=ev.duration_ms; v.cost+=ev.cost_usd||0; v.err=ev.err; v.state=ev.state; v.diff=ev.diff; v.paused=!!ev.paused;
     v.status = ev.err ? 'failed' : ev.paused ? 'waiting' : 'done';
     n.cost += ev.cost_usd||0; m.cost += ev.cost_usd||0;
     n.status = n.visits.some(x=>x.status==='running') ? 'running' : v.status;
@@ -415,7 +471,7 @@ function autoGroups(topo){
   const real = topo.nodes.filter(n=>n.kind!=='start'&&n.kind!=='end'&&!n.parent);
   const ids = real.map(n=>n.id), idx = {}; ids.forEach((id,i)=>idx[id]=i);
   const out = {}; ids.forEach(i=>out[i]=[]);
-  topo.edges.forEach(e=>{ if (e.from in idx && e.to in idx && e.from!==e.to) out[e.from].push(e.to); });
+  topo.edges.forEach(e=>{ if (!e.watch && e.from in idx && e.to in idx && e.from!==e.to) out[e.from].push(e.to); });
   // Tarjan SCC: a loop cluster is an SCC of size > 1
   let counter=0; const low={}, num={}, onst={}, st=[], comp={}, comps=[];
   (function(){ function go(v){
@@ -476,10 +532,98 @@ function forcedSet(m, G){
   return s;
 }
 
+// ---------------- agent steps (one row per tool call) ----------------
+const stepCache = new Map();
+const shortTool = n => String(n||'').replace(/^mcp__([^_]+(?:_[^_]+)*?)__/, '$1·');
+function toolKind(name){
+  const n=String(name||'');
+  if (/^mcp__/.test(n)) return ['mcp', n.split('__')[1].slice(0,1).toUpperCase()||'·'];
+  if (n==='Bash'||n==='BashOutput'||n==='KillShell') return ['shell','›'];
+  if (/^(Edit|MultiEdit|Write|NotebookEdit)$/.test(n)) return ['edit','✎'];
+  if (/^(Read|Grep|Glob|LS)$/.test(n)) return ['read','⌕'];
+  if (/^Web(Fetch|Search)$/.test(n)) return ['web','◍'];
+  if (n==='Task'||n==='Agent') return ['agent','✦'];
+  if (n==='TodoWrite') return ['read','☑'];
+  return ['read','•'];
+}
+function toolDetail(name, inp){
+  inp = inp||{}; const base = p => String(p||'').split('/').filter(Boolean).pop()||'';
+  switch (name){
+  case 'Bash': return inp.description||inp.command||'';
+  case 'Read': case 'Edit': case 'MultiEdit': case 'Write': case 'NotebookEdit': return base(inp.file_path||inp.notebook_path);
+  case 'Grep': case 'Glob': return inp.pattern||'';
+  case 'WebFetch': try { return new URL(inp.url).host; } catch(e){ return inp.url||''; }
+  case 'WebSearch': return inp.query||'';
+  case 'Task': case 'Agent': return inp.description||'';
+  }
+  for (const k of ['query','name','path','url','title','id']) if (typeof inp[k]==='string') return inp[k];
+  return '';
+}
+// agentSteps folds one agent visit's stream into tool-call rows plus run metrics.
+function agentSteps(m, id, step){
+  const evs = m.agents[nk(id,step)]||[];
+  const ck = m.run+'|'+nk(id,step), hit = stepCache.get(ck);
+  if (hit && hit.n===evs.length && hit.m===m) return hit.v;
+  const steps=[], by={}, msgs=new Set(), usage={};
+  let model='', res=null, lastTs=null, errs=0;
+  for (const e of evs){
+    const st=e.stream||{}, ts=Date.parse(e.ts);
+    if (st.type==='system' && st.subtype==='init' && st.model) model=st.model;
+    else if (st.type==='assistant'){
+      const mm=st.message||{}, mid=mm.id||('s'+e.seq);
+      if (mm.model && !model) model=mm.model;
+      msgs.add(mid); if (mm.usage) usage[mid]=mm.usage;
+      for (const b of blocksOf(st)) if (b.type==='tool_use' && b.id && !by[b.id]){
+        const r={id:b.id, name:b.name, input:b.input, t0:ts, t1:null, kind:toolKind(b.name)};
+        by[b.id]=r; steps.push(r); }
+    } else if (st.type==='user'){
+      for (const b of blocksOf(st)) if (b.type==='tool_result' && by[b.tool_use_id]){
+        const r=by[b.tool_use_id]; r.t1=ts; r.err=!!b.is_error; r.result=toolResultText(b.content); if (r.err) errs++; }
+    } else if (st.type==='result') { res=st; res.ts=ts; if (st.is_error) errs++; }
+    lastTs=ts;
+  }
+  if (res){ // the final answer: model time after the last tool returned
+    const prev=steps.reduce((t,r)=>Math.max(t,r.t1||r.t0), -Infinity);
+    steps.push({id:'result', name:'answer', model:true, t0:isFinite(prev)?prev:(evs.length?Date.parse(evs[0].ts):res.ts), t1:res.ts,
+      err:!!res.is_error, result:res.result||'', kind:['model','✦']});
+  }
+  const sumU = u => (u.input_tokens||0)+(u.output_tokens||0)+(u.cache_read_input_tokens||0)+(u.cache_creation_input_tokens||0);
+  const tokens = res&&res.usage ? sumU(res.usage) : Object.values(usage).reduce((a,u)=>a+sumU(u),0);
+  const v = {steps, model, tokens, modelCalls:res&&res.num_turns||msgs.size, toolCalls:steps.filter(r=>!r.model).length, errors:errs, res};
+  stepCache.set(ck, {n:evs.length, m, v}); return v;
+}
+function lastVisit(nm){ return nm && nm.visits.length ? nm.visits[nm.visits.length-1] : null; }
+function nowFor(m){ return (S.live && S.cursor===S.events.length && !m.end) ? Date.now() : (m.tLast||Date.now()); }
+const CARD = {w:308, head:40, task:21, row:24, more:20, xp:82, foot:30, max:5};
+function isAgentNode(m, n){ return n.kind==='agent' || !!(m && Object.keys(m.agents).some(k=>k.startsWith(n.id+'#'))); }
+// cardModel describes what the node's card shows; its size feeds the layout.
+function cardModel(n){
+  const m=S.m, nm=m&&m.nodes[n.id], v=lastVisit(nm), agent=isAgentNode(m,n);
+  const topo=S.topo[S.curRun]||{edges:[]};
+  const watches=topo.edges.filter(e=>e.watch&&e.from===n.id).map(e=>e.to);
+  const c={id:n.id, agent, nm, v, watches, steps:[], shown:[], hidden:0, xp:null, task:'', model:''};
+  if (!agent) return c;
+  const ins = v && m.inputs[nk(n.id,v.step)]; const ai = ins&&ins.length ? (ins[ins.length-1].input||{}) : null;
+  c.task = ai && ai.prompt ? (String(ai.prompt).split('\n').find(l=>l.trim())||'').trim() : '';
+  if (v){ const a=agentSteps(m,n.id,v.step); c.steps=a.steps; c.run=a; c.model=a.model; }
+  c.model = c.model || (ai&&ai.model) || (n.runner&&n.runner.model) || '';
+  const all = S.more.has(n.id);
+  c.shown = all ? c.steps.slice(-40) : c.steps.slice(-CARD.max);
+  c.hidden = c.steps.length - c.shown.length;
+  c.xp = v ? c.shown.find(r=>S.xp.has(nk(n.id,v.step)+'#'+r.id)) || null : null;
+  return c;
+}
+function cardHeight(c){
+  if (!c.agent) return CARD.head+CARD.foot+4;
+  return CARD.head+(c.task?CARD.task:0)+(c.shown.length?6:0)+c.shown.length*CARD.row+((c.hidden||S.more.has(c.id))&&c.steps.length>CARD.max?CARD.more:0)+(c.xp?CARD.xp:0)+CARD.foot;
+}
+
 // ---------------- layout ----------------
 function nodeSize(n){
   if (n.kind==='start'||n.kind==='end') return {w:34,h:34};
-  return {w:Math.max(148, Math.round(n.id.length*8.6+34)), h:56};
+  const c=cardModel(n);
+  if (!c.agent) return {w:Math.max(200, Math.round(n.id.length*8.2+136)), h:cardHeight(c)};
+  return {w:CARD.w, h:cardHeight(c)};
 }
 function rankLayout(units, edges, dir, o){
   const pos = {}; if (!units.length) return pos;
@@ -563,6 +707,8 @@ function recFor(L,G,id){ return L.recs[id] || (G.of[id] ? L.recs['g:'+G.of[id]] 
 
 // ---------------- edge routing ----------------
 function roundedPath(pts, r){
+  pts = pts.filter((p,i)=>!i || Math.hypot(p[0]-pts[i-1][0],p[1]-pts[i-1][1])>0.5);
+  if (pts.length<2) return 'M'+pts[0][0]+','+pts[0][1];
   let d='M'+pts[0][0]+','+pts[0][1];
   for (let i=1;i<pts.length-1;i++){ const p=pts[i], a=pts[i-1], b=pts[i+1];
     const l1=Math.hypot(p[0]-a[0],p[1]-a[1]), l2=Math.hypot(b[0]-p[0],b[1]-p[1]), rr=Math.min(r,l1/2,l2/2);
@@ -579,17 +725,29 @@ function arcPath(a,b,C){
   const at=a.y-a.h/2, bt=b.y-b.h/2, lift=34+(C.bi++%5)*18+Math.min(56,Math.abs(a.x-b.x)/9);
   return `M${a.x},${at} C${a.x},${at-lift} ${b.x},${bt-lift} ${b.x},${bt}`;
 }
+// watchPath links an observer card to the card it watches, side to side.
+function watchPath(a,b){
+  const dx=b.x-a.x, dy=b.y-a.y;
+  if (Math.abs(dx) >= (a.w+b.w)/2) { const s=Math.sign(dx), sx=a.x+s*a.w/2, tx=b.x-s*b.w/2, mx=(sx+tx)/2;
+    return roundedPath([[sx,a.y],[mx,a.y],[mx,b.y],[tx,b.y]],12); }
+  if (Math.abs(dx) > b.w/2+10) { // L-shape: out of the observer's top/bottom, into the target's side
+    const s=Math.sign(dy)||1, sy=a.y+s*a.h/2, tx=b.x+Math.sign(-dx)*b.w/2;
+    return roundedPath([[a.x,sy],[a.x,b.y],[tx,b.y]],12); }
+  const s=Math.sign(dy)||1, sy=a.y+s*a.h/2, ty=b.y-s*b.h/2, my=(sy+ty)/2;
+  return roundedPath([[a.x,sy],[a.x,my],[b.x,my],[b.x,ty]],12);
+}
 function routeEdge(e,a,b,C){
+  if (e.watch) return watchPath(a,b);
   if (a===b) { const y=a.y-a.h/2; return `M${a.x-22},${y} C${a.x-34},${y-48} ${a.x+34},${y-48} ${a.x+22},${y}`; }
   if (C.orient==='V') {
-    if (!e.back) { const ay=a.y+a.h/2, by=b.y-b.h/2, my=(ay+by)/2; return `M${a.x},${ay} C${a.x},${my} ${b.x},${my} ${b.x},${by}`; }
+    if (!e.back) { const ay=a.y+a.h/2, by=b.y-b.h/2, my=(ay+by)/2; return roundedPath([[a.x,ay],[a.x,my],[b.x,my],[b.x,by]],12); }
     const lift=44+(C.bi++%5)*20, ax=a.x+a.w/2, bx=b.x+b.w/2, mx=Math.max(ax,bx)+lift;
     return `M${ax},${a.y} C${mx},${a.y} ${mx},${b.y} ${bx},${b.y}`;
   }
   const same=a.row===b.row;
   if (same && !e.back && a.dir===b.dir && (b.x-a.x)*a.dir>0 && !blocked(a,b,C)) {
-    const sx=a.x+a.dir*a.w/2, tx=b.x-a.dir*b.w/2, k=Math.max(22,Math.abs(tx-sx)/2);
-    return `M${sx},${a.y} C${sx+a.dir*k},${a.y} ${tx-a.dir*k},${b.y} ${tx},${b.y}`;
+    const sx=a.x+a.dir*a.w/2, tx=b.x-a.dir*b.w/2, mx=(sx+tx)/2;
+    return roundedPath([[sx,a.y],[mx,a.y],[mx,b.y],[tx,b.y]],12);
   }
   if (same) return arcPath(a,b,C);
   if (e.back) { // loop spanning rows: swing out sideways between the two nodes
@@ -609,7 +767,8 @@ function routeEdge(e,a,b,C){
 const stageW = () => $('svg').clientWidth||800, stageH = () => $('svg').clientHeight||500;
 function layoutKeyOf(topo){
   const G=groupsFor(topo), force=forcedSet(S.m,G);
-  return [S.curRun, P.layout, Math.round(stageW()/40), G.list.map(g=>g.id+(isCollapsed(g,force)?'1':'0')).join(',')].join('|');
+  const sizes=topo.nodes.filter(n=>n.kind!=='start'&&n.kind!=='end').map(n=>nodeSize(n).h).join(',');
+  return [S.curRun, P.layout, Math.round(stageW()/40), G.list.map(g=>g.id+(isCollapsed(g,force)?'1':'0')).join(','), sizes].join('|');
 }
 function buildGraph(keepView){
   const topo = S.topo[S.curRun]; S.drawn = S.curRun;
@@ -645,7 +804,7 @@ function buildGraph(keepView){
   topo.edges.forEach(e=>{
     const a=recFor(L,G,e.from), b=recFor(L,G,e.to); if (!a||!b) return;
     if (a===b && a.kind==='cgroup') return;
-    const rk=a.id+'|'+b.id+(e.back?'|b':''); let x=merged[rk];
+    const rk=a.id+'|'+b.id+(e.back?'|b':'')+(e.watch?'|w':''); let x=merged[rk];
     if (!x) { x=merged[rk]={a,b,e,keys:[],back:!!e.back}; L.edgeList.push(x); }
     x.keys.push(ekey(e.from,e.to)); L.edgeEls[ekey(e.from,e.to)]=x;
   });
@@ -653,7 +812,9 @@ function buildGraph(keepView){
     const e=x.e, one=x.keys.length===1, isBranch=e.label==='branch';
     const g=el('g',{class:'edge'}); x.g=g; x.d=routeEdge(e,x.a,x.b,C);
     const p=el('path',{d:x.d}); g.append(p); x.p=p; x.len=safeLen(p); $('edges').append(g);
-    const mid=x.len?p.getPointAtLength(x.len/2):{x:0,y:0}; const lab=one&&e.label&&!isBranch?e.label:'';
+    if (x.len && !x.back && x.a!==x.b) { const p0=p.getPointAtLength(0); g.append(el('circle',{class:'port',cx:p0.x,cy:p0.y,r:3.6}));
+      if (e.watch) { const p1=p.getPointAtLength(x.len); g.append(el('circle',{class:'port',cx:p1.x,cy:p1.y,r:3.6})); } }
+    const mid=x.len?p.getPointAtLength(x.len/2):{x:0,y:0}; const lab=one&&e.label&&!isBranch&&!e.watch?e.label:'';
     if (lab){ const w=lab.length*6.6+10; g.append(el('rect',{class:'lbg',x:mid.x-w/2,y:mid.y-9,width:w,height:17,rx:4}), el('text',{x:mid.x,y:mid.y+4,'text-anchor':'middle',text:lab})); }
     x.badge=el('g',{class:'badge',visibility:'hidden'}, el('rect',{x:mid.x-18,y:mid.y-10-(lab?19:0),width:36,height:19,rx:9.5}), el('text',{x:mid.x,y:mid.y+3.5-(lab?19:0),'text-anchor':'middle',text:'×0'}));
     g.append(x.badge);
@@ -685,14 +846,15 @@ function buildGraph(keepView){
     if (n.kind==='start'||n.kind==='end'){
       g.append(el('circle',{r:15}), n.kind==='end'?el('circle',{class:'in',r:7}):el('path',{d:'M-4,-6 L7,0 L-4,6 z',fill:'#8499AB'}), el('text',{y:31,'text-anchor':'middle',text:n.kind}));
     } else {
-      g.append(el('rect',{class:'box',x:-r.w/2,y:-r.h/2,width:r.w,height:r.h,rx:12}),
-        el('rect',{class:'accent',x:-r.w/2,y:-r.h/2+10,width:3.5,height:r.h-20,rx:2}),
-        el('text',{class:'name',x:0,y:-3,'text-anchor':'middle',text:n.id}),
-        el('text',{class:'meta',x:0,y:15,'text-anchor':'middle',text:n.kind}),
-        el('text',{class:'vis',x:r.w/2-8,y:-r.h/2+15,'text-anchor':'end',text:''}));
+      const fo=el('foreignObject',{x:-r.w/2,y:-r.h/2,width:r.w,height:r.h});
+      g.append(el('rect',{class:'box',x:-r.w/2,y:-r.h/2,width:r.w,height:r.h,rx:12}), fo);
       if (!BOOT.readOnly) g.append(el('circle',{class:'bp',cx:-r.w/2+4,cy:-r.h/2+4,r:6,'data-bp':n.id}));
     }
-    g.addEventListener('click',ev=>{ if (ev.target.classList && ev.target.classList.contains('bp')) { toggleBp(n.id); return; } selectNode(n.id); ev.stopPropagation(); });
+    g.addEventListener('click',ev=>{ if (ev.target.classList && ev.target.classList.contains('bp')) { toggleBp(n.id); return; }
+      ev.stopPropagation();
+      const row=ev.target.closest&&ev.target.closest('[data-x]'); if (row){ const k=row.dataset.x; S.xp.has(k)?S.xp.delete(k):S.xp.add(k); paint(); return; }
+      if (ev.target.closest&&ev.target.closest('.smore')){ S.more.has(n.id)?S.more.delete(n.id):S.more.add(n.id); paint(); return; }
+      selectNode(n.id); });
     g.addEventListener('dblclick',ev=>{ ev.stopPropagation(); zoomTo(r); });
     L.nodeEls[n.id]=g; $('nodes').append(g);
   });
@@ -873,30 +1035,15 @@ function paint(){
       let cls='node '+status+' '+n.kind+(sel&&sel.node===n.id?' sel':'');
       if (n.kind==='end'){ const r=(m.edges&&Object.keys(m.edges).some(k=>k.endsWith('|__end__')&&m.edges[k].n>0)); if (r) cls+=' reached'; if (r&&(m.status==='failed'||m.status==='error')) cls+=' bad'; }
       g.setAttribute('class',cls);
-      if (nm && (n.kind!=='start'&&n.kind!=='end')){
-        const last=nm.visits[nm.visits.length-1];
-        const running=last&&last.dur==null&&last.status==='running', pr=last&&last.prog;
-        const bits=last&&last.dur!=null?[]:(running&&pr?[]:[n.kind]); if (last && last.dur!=null) bits.push(fmtDur(last.dur));
-        if (running&&pr) bits.push(pr.done+'/'+pr.total+(pr.label?' '+clip(pr.label,11):''));
-        if (nm.cost>0) bits.push(fmtCost(nm.cost));
-        const mine=m.arts.filter(a=>a.node===n.id), ni=mine.filter(isImg).length, nt=mine.length-ni; if (ni) bits.push('🖼'+ni); if (nt) bits.push('📄'+nt);
-        g.querySelector('.meta').textContent = bits.join(' · ');
-        let bar=g.querySelector('.prog'); const box=g.querySelector('.box');
-        if (running&&pr&&pr.total>0&&box){ const w=+box.getAttribute('width'), x=+box.getAttribute('x'), y=+box.getAttribute('y')+(+box.getAttribute('height'))-5;
-          if (!bar){ bar=el('rect',{class:'prog',height:3,rx:1.5}); g.append(bar); }
-          bar.setAttribute('x',x+8); bar.setAttribute('y',y); bar.setAttribute('width',Math.max(2,(w-16)*Math.min(1,pr.done/pr.total)));
-        } else if (bar) bar.remove();
-        g.querySelector('.vis').textContent = nm.visits.filter(v=>!v.parent).length>1 || nm.visits.length>1 ? '×'+nm.visits.length : '';
-      } else if (n.kind!=='start'&&n.kind!=='end'){ g.querySelector('.meta').textContent=n.kind; g.querySelector('.vis').textContent=''; }
+      if (n.kind!=='start'&&n.kind!=='end') renderCard(m,n,g);
       const bp=g.querySelector('.bp'); if (bp) bp.setAttribute('class','bp'+(S.bps.has(n.id)?' on':''));
-      // agent nodes detected at runtime when the topology did not tag them
-      if (nm && n.kind==='func' && Object.keys(m.agents).some(k=>k.startsWith(n.id+'#'))) g.classList.add('agent');
+      if (n.kind==='func' && isAgentNode(m,n)) g.classList.add('agent'); // tagged at runtime
     });
     L.edgeList.forEach(x=>{
       let n=0; for (const k of x.keys){ const e=m.edges[k]; if (e) n+=e.n; }
       const hot = m.lastEdge && x.keys.includes(m.lastEdge.key) && (S.live && S.m.nsteps>0 && S.cursor===S.events.length) && Date.now()-S.lastEdgeWall<1200;
       const cond=x.keys.length===1&&x.e.conditional;
-      x.g.setAttribute('class','edge'+(cond?' cond':'')+(x.e.label==='branch'?' branch':'')+(n>0?' taken':'')+(hot?' hot':''));
+      x.g.setAttribute('class','edge'+(x.e.watch?' watch':'')+(cond?' cond':'')+(x.e.label==='branch'?' branch':'')+(n>0?' taken':'')+(hot?' hot':''));
       const show = n>0 && (x.back || n>1); x.badge.setAttribute('visibility',show?'visible':'hidden');
       if (show) x.badge.lastChild.textContent='×'+n;
     });
@@ -904,20 +1051,99 @@ function paint(){
     $('empty').hidden=true;
     followCam();
   }
+  paintMetrics(m);
   paintBanners(m,st);
   paintScrub();
   paintPanel();
   paintLog();
   paintGallery();
 }
+const PILL = {running:'Running', done:'Done', failed:'Failed', waiting:'Waiting', paused:'Paused', idle:'Idle'};
+const trimCost = c => fmtCost(c).replace(/(\.\d\d\d*?)0+$/,'$1');
+// renderCard fills a node's card: header (name, model, status), the agent's task, one row per
+// tool call with a mini gantt on the visit's time axis, the expanded call, and a cost/time footer.
+function renderCard(m, n, g){
+  const fo=g.querySelector('foreignObject'); if (!fo) return;
+  const c=cardModel(n), nm=c.nm, v=c.v;
+  let status = nm ? nm.status : 'idle'; if (m.paused && m.paused.node===n.id) status='paused';
+  const now=nowFor(m), live=v&&v.status==='running';
+  const lo=v?v.startTs:0, hi=v?(v.endTs||now):1, span=Math.max(1,hi-lo);
+  const arts=m.arts.filter(a=>a.node===n.id), ni=arts.filter(isImg).length, nt=arts.length-ni;
+  const sub = c.agent ? (c.model || 'agent') : c.watches.length ? 'watches '+c.watches.join(', ') : n.kind;
+  const rows=[];
+  c.shown.forEach(r=>{
+    const xk=nk(n.id,v.step)+'#'+r.id, running=r.t1==null&&live, t1=r.t1!=null?r.t1:(running?now:r.t0);
+    const left=Math.max(0,Math.min(100,(r.t0-lo)/span*100)), w=Math.max(2.5,Math.min(100-left,(t1-r.t0)/span*100));
+    const det=r.model?'':toolDetail(r.name,r.input);
+    rows.push(el('div',{class:'srow'+(S.xp.has(xk)?' open':''),'data-x':xk,title:(r.model?'final answer':r.name)+(det?' · '+det:'')},
+      el('span',{class:'si '+r.kind[0],text:r.kind[1]}),
+      el('span',{class:'sn'},r.model?'answer':shortTool(r.name),det?el('em',{text:' '+det}):null),
+      el('span',{class:'sg'},el('span',{class:(r.model?'model':'')+(r.err?' err':'')+(running?' live':''),style:`left:${left.toFixed(2)}%;width:${w.toFixed(2)}%`})),
+      el('span',{class:'sd'+(r.err?' err':''),text:running?'…':fmtDur(t1-r.t0)})));
+    if (c.xp===r){
+      const inp=r.model?'':JSON.stringify(r.input||{});
+      rows.push(el('div',{class:'sx'},
+        el('div',{class:'sxh'},el('span',{text:r.model?'result':r.name}),el('span',{text:running?'Running':r.err?'Error':'Done'})),
+        el('div',{class:'sxr'+(r.err?' err':''),text:running?'…':clip(r.result||'(empty)',220)}),
+        r.model?null:el('div',{class:'sxi'},el('b',{text:'Called with '}),clip(inp,200))));
+    }
+  });
+  if (c.steps.length>CARD.max) rows.push(el('div',{class:'smore',text:S.more.has(n.id)?'show less':'+'+c.hidden+' earlier'}));
+  const dur = v ? (v.dur!=null ? v.dur : live ? now-v.startTs : null) : null;
+  const pr = live && v.prog && v.prog.total>0 ? v.prog : null;
+  const cost = nm ? nm.cost : 0;
+  const visits = nm ? nm.visits.length : 0;
+  const foot=el('div',{class:'cf'},
+    cost>0?el('b',{text:trimCost(cost)}):null, cost>0&&dur!=null?' · ':null, dur!=null?fmtDur(dur):(nm?'':'not run'),
+    el('span',{class:'sp'}),
+    pr?el('span',{text:pr.done+'/'+pr.total+(pr.label?' '+clip(pr.label,10):'')}):null,
+    pr?el('span',{class:'pb'},el('span',{style:`width:${Math.min(100,pr.done/pr.total*100).toFixed(1)}%`})):null,
+    ni?el('span',{text:'🖼'+ni}):null, nt?el('span',{text:'📄'+nt}):null,
+    visits>1?el('span',{text:'×'+visits}):null);
+  const card=el('div',{class:'card'},
+    el('div',{class:'ch'},
+      el('span',{class:'ci',text:c.agent?'✦':n.kind==='parallel'?'⑃':c.watches.length?'◉':'ƒ'}),
+      el('div',{class:'cn'},el('b',{text:n.id}),el('small',{text:sub})),
+      el('span',{class:'spill '+status},status==='running'?el('i'):null,status==='done'?'✓ ':status==='failed'?'✕ ':'',PILL[status]||status)),
+    c.task?el('div',{class:'ct',title:c.task,text:c.task}):null,
+    rows.length?el('div',{class:'rows'},rows):null,
+    foot);
+  fo.replaceChildren(card);
+}
 S.live = !BOOT.readOnly; S.lastEdgeWall = 0;
+// paintMetrics: the run-wide strip (duration, cost, tokens, model/tool calls, errors, agents).
+function runMetrics(m){
+  const r={tokens:0, modelCalls:0, toolCalls:0, errors:0, agents:0, running:0};
+  const agentNodes=new Set();
+  for (const k of Object.keys(m.agents)){
+    const i=k.lastIndexOf('#'), id=k.slice(0,i), a=agentSteps(m,id,+k.slice(i+1));
+    r.tokens+=a.tokens; r.modelCalls+=a.modelCalls; r.toolCalls+=a.toolCalls; r.errors+=a.errors; agentNodes.add(id);
+  }
+  for (const n of Object.values(m.nodes)) for (const v of n.visits) if (v.status==='failed') r.errors++;
+  r.agents=agentNodes.size;
+  agentNodes.forEach(id=>{ const n=m.nodes[id]; if (n&&n.status==='running') r.running++; });
+  return r;
+}
+const fmtTok = t => t>=1e6 ? (t/1e6).toFixed(1)+'M' : t>=1e3 ? (t/1e3).toFixed(t>=1e4?0:1)+'k' : String(t);
+const fmtLong = ms => ms<60000 ? fmtDur(ms) : Math.floor(ms/60000)+'m '+Math.round(ms%60000/1000)+'s';
+function paintMetrics(m){
+  const box=$('metrics'); if (!m || m.t0==null){ box.replaceChildren(); return; }
+  const r=runMetrics(m), t1=m.end?m.tEnd:nowFor(m);
+  const cells=[['Duration',fmtLong(t1-m.t0)],['Cost',trimCost(m.cost)],['Tokens',fmtTok(r.tokens)],['Model calls',r.modelCalls],['Tool calls',r.toolCalls],['Errors',r.errors,r.errors>0]];
+  const sig=cells.map(c=>c[1]).join('|')+'|'+r.agents+'|'+r.running;
+  if (box.dataset.sig===sig) return; box.dataset.sig=sig;
+  box.replaceChildren(...cells.map(([l,v,bad])=>el('div',{class:'mc'},el('div',{class:'ml',text:l}),el('div',{class:'mv'+(bad?' bad':''),text:v}))),
+    r.agents?el('span',{class:'ag'},r.agents+' agent'+(r.agents>1?'s':''),r.running?[' · ',el('b',{text:r.running+' running'})]:null):null);
+}
 function updateElapsed(){
   const m=S.m; if(!m||m.t0==null){ $('elapsed').textContent='0.0s'; return; }
   const running = !m.end && S.cursor===S.events.length && S.live;
   const t1 = m.end ? m.tEnd : running ? Date.now() : m.tLast;
   $('elapsed').textContent = ((t1-m.t0)/1000).toFixed(1)+'s';
 }
-setInterval(()=>{ if (S.m && !S.m.end) updateElapsed(); },250);
+setInterval(()=>{ if (!S.m || S.m.end) return; updateElapsed(); paintMetrics(S.m);
+  if (S.live && S.cursor===S.events.length && S.layout && S.topo[S.curRun]) S.topo[S.curRun].nodes.forEach(n=>{
+    const nm=S.m.nodes[n.id], g=S.layout.nodeEls[n.id]; if (g && nm && nm.status==='running') renderCard(S.m,n,g); }); },250);
 
 function paintBanners(m,st){
   const bpb=$('bpb'), ask=$('ask');

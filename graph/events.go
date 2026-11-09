@@ -147,6 +147,9 @@ type TopoEdge struct {
 	Conditional bool   `json:"conditional,omitempty"`
 	Label       string `json:"label,omitempty"`
 	Back        bool   `json:"back,omitempty"`
+	// Watch marks a presentation-only link from an observer node to the node
+	// it watches (Graph.Watch). The run never takes it.
+	Watch bool `json:"watch,omitempty"`
 }
 
 // Topology describes the compiled graph: nodes (agent nodes are those tagged
@@ -231,6 +234,14 @@ func (r *Runnable[S]) Topology() Topology {
 		color[n] = black
 	}
 	dfs(Start)
+
+	// Watch links are appended after the loop detection: they are not part of
+	// the flow, so they must not mark a real edge as a back-edge.
+	for _, w := range r.watches {
+		if r.nodes[w[0]] != nil && r.nodes[w[1]] != nil && w[0] != w[1] {
+			t.Edges = append(t.Edges, TopoEdge{From: w[0], To: w[1], Watch: true})
+		}
+	}
 	return t
 }
 

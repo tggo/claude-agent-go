@@ -44,7 +44,7 @@ func TestPageScriptsPinnedAndParse(t *testing.T) {
 	require.NotEmpty(t, inline)
 	js := inline[len(inline)-1][1]
 	assert.NotRegexp(t, `https?://`, regexp.MustCompile(`'http://www\.w3\.org/2000/svg'`).ReplaceAllString(js, ""), "inline JS must not reference external hosts")
-	for _, want := range []string{"layoutBlock", "autoGroups", "graphweb:ui:", "buildMini"} {
+	for _, want := range []string{"layoutBlock", "autoGroups", "graphweb:ui:", "buildMini", "renderCard", "agentSteps", "watchPath", "paintMetrics"} {
 		assert.Contains(t, js, want)
 	}
 
@@ -94,4 +94,32 @@ func TestReplayLongChainJournals(t *testing.T) {
 			assert.Equal(t, 22, kinds[TypeNodeStart])
 		})
 	}
+}
+
+// The inspector fixture carries agent tool calls and a Watch link; the replay
+// must serve its topology with the watch edge intact.
+func TestReplayInspectorJournal(t *testing.T) {
+	s, err := NewReplay(filepath.Join("testdata", "inspector.jsonl"))
+	require.NoError(t, err)
+	var topo *graph.Topology
+	tools := 0
+	for _, e := range s.Events() {
+		if e.Topology != nil {
+			topo = e.Topology
+		}
+		if e.Type == TypeAgentEvent && regexp.MustCompile(`"tool_use"`).Match(e.Stream) {
+			tools++
+		}
+	}
+	require.NotNil(t, topo)
+	var watch []graph.TopoEdge
+	for _, e := range topo.Edges {
+		if e.Watch {
+			watch = append(watch, e)
+		}
+	}
+	assert.Equal(t, []graph.TopoEdge{{From: "inspector", To: "orchestrator", Watch: true}}, watch)
+	assert.Equal(t, 21, tools)
+	b, _ := json.Marshal(topo)
+	assert.Contains(t, string(b), `"watch":true`)
 }

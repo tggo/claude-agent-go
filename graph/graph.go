@@ -86,6 +86,7 @@ type Graph[S any] struct {
 	labels  map[[2]string]string
 	agents  map[string]bool
 	runners map[string]*runner.Runner
+	watches [][2]string
 	groups  []*groupDef
 	errs    []error
 }
@@ -145,6 +146,18 @@ func (g *Graph[S]) AddAgentNode(name string, fn NodeFunc[S]) *Graph[S] {
 func (g *Graph[S]) MarkAgent(names ...string) *Graph[S] {
 	for _, n := range names {
 		g.agents[n] = true
+	}
+	return g
+}
+
+// Watch declares that node observer watches the given target nodes (a budget
+// guard, a reviewer, an inspector). It changes nothing about execution: the
+// pairs show up in Topology as edges with Watch set, which viewers draw as a
+// dashed side link instead of a step of the flow. Watch edges do not count
+// towards the durable topology hash. Unknown names are ignored by Topology.
+func (g *Graph[S]) Watch(observer string, targets ...string) *Graph[S] {
+	for _, t := range targets {
+		g.watches = append(g.watches, [2]string{observer, t})
 	}
 	return g
 }
@@ -382,6 +395,7 @@ func (g *Graph[S]) Compile(opts ...CompileOption) (*Runnable[S], error) {
 		cfg:      cfg,
 		clone:    g.clone,
 		labels:   maps.Clone(g.labels),
+		watches:  slices.Clone(g.watches),
 	}
 	for k, v := range g.nodes {
 		v.agent = v.agent || g.agents[k]
