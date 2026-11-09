@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/stretchr/testify v1.11.1
-	github.com/tggo/claude-agent-go v0.4.0
+	github.com/tggo/claude-agent-go v0.5.0
 	go.temporal.io/sdk v1.50.0
 )
 

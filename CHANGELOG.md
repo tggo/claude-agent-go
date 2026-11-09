@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-09
+
 ### Security
 - `permissions`: an Allow or Ask rule for a shell tool now matches only plain-word commands (a whitelist), so expansions that run code without `$(`, backticks or redirections, such as `$[x]` with an `$'\044(...)'` subscript, zsh glob qualifiers `*(e:'cmd':)` and zsh `=(cmd)`, fall through to the default deny. Commands with unquoted globs, `$`, `~`, braces or backslashes now need their own rule or an Ask.
 - `permissions`: Deny rules see each segment normalized. Quotes and escapes are removed, tabs collapsed, and leading redirections, `NAME=value` assignments, keywords (`time`, `!`, `if`/`then`) and wrappers (`sudo`, `env`, `xargs`, `nohup`, `nice`, `timeout`, `command`, ...) dropped, with `/bin/rm` read as `rm`.
@@ -226,7 +228,8 @@ First public release. A Go SDK for building agents on top of the Claude Code CLI
   `tools`). >90% unit coverage on every substantive package; 18 integration tests
   assert behavior against the real binary.
 
-[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/tggo/claude-agent-go/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tggo/claude-agent-go/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tggo/claude-agent-go/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/tggo/claude-agent-go/compare/v0.2.0...v0.2.1
