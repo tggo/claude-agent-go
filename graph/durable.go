@@ -186,7 +186,7 @@ func (r *Runnable[S]) logCommit(ctx context.Context, rec *recorder, n *node[S], 
 // their own record already tells the story) and calls the RunObserver. A failure to
 // write run_end fails an otherwise successful run.
 func (r *Runnable[S]) finish(ctx context.Context, info RunInfo, rec *recorder, s S, rep *Report, err error) error {
-	if ck := rec.ck; ck != nil && ck.started && !errors.Is(err, ErrInterrupt) && !errors.Is(err, ErrPaused) {
+	if ck := rec.ck; ck != nil && ck.started && !errors.Is(err, ErrInterrupt) && !ownPause(err, rec.runID) {
 		end := Record{Kind: KindRunEnd, State: snapshot(&s)}
 		if err != nil {
 			end.Err = err.Error()
@@ -251,6 +251,8 @@ func replayLog(recs []Record) (*replay, error) {
 			p.steps = append(p.steps, Step{Node: r.Node, Started: r.Time.Add(-time.Duration(r.DurationMS) * time.Millisecond),
 				Duration: time.Duration(r.DurationMS) * time.Millisecond, CostUSD: r.CostUSD, Paused: true, Question: r.Question})
 			p.path = append(p.path, r.Node)
+		case KindRecover:
+			p.endErr = "" // the error that ended the earlier segment is history now
 		case KindResume:
 			if p.pending != nil {
 				p.answer = r
@@ -365,16 +367,20 @@ func (r *Runnable[S]) Recover(ctx context.Context, runID string) (S, *Report, er
 			return s, nil, fmt.Errorf("%w: run %q continues at node %q, which this graph does not have", ErrTopologyChanged, runID, cur)
 		}
 	}
-	if p.paused && r.cfg.pause != nil {
-		if err := r.cfg.pause.ClearPause(ctx, runID); err != nil {
-			return s, rec.report(), fmt.Errorf("graph %q: recover %q: clear pause: %w", r.name, runID, err)
-		}
-	}
 	if p.sessNode == cur && p.sessStep == step+1 && p.sessID != "" {
 		rec.recNode, rec.recSession = cur, p.sessID
 	}
 	if err := rec.ck.append(ctx, Record{Kind: KindRecover, Node: cur, Step: step + 1, Err: p.endErr, SessionID: rec.recSession}); err != nil {
 		return s, rec.report(), err
+	}
+	// Recover is the order to continue: a pause requested before it (while
+	// the run was paused, failed or crashed) is withdrawn, or the run would
+	// stop again at once.
+	if r.cfg.pause != nil {
+		if err := r.cfg.pause.ClearPause(ctx, runID); err != nil {
+			err = fmt.Errorf("graph %q: recover %q: clear pause: %w", r.name, runID, err)
+			return s, rec.report(), r.finish(ctx, info, rec, s, rec.report(), err)
+		}
 	}
 	if ro, ok := r.cfg.obs.(RunObserver); ok {
 		ro.RunStart(ctx, info)

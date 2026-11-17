@@ -65,6 +65,7 @@ func TestBabysitterActions(t *testing.T) {
 	ctx := context.Background()
 	fc := &fakeControl{}
 	s := newSrv(t, WithBabysitter(fc))
+	s.Babysitter("r1", BabysitterEvent{Kind: BabysitterWoke})
 	for _, c := range []struct{ action, kind string }{
 		{"pause", BabysitterPauseRequested},
 		{"continue", BabysitterContinueRequested},
@@ -95,6 +96,8 @@ func TestBabysitterActions(t *testing.T) {
 	assert.ErrorContains(t, s.BabysitterAct(ctx, "r1", "reboot", "", ""), "unknown babysitter action")
 	assert.ErrorContains(t, s.BabysitterAct(ctx, "r1", "answer", "", "x"), "question id")
 	assert.ErrorContains(t, s.BabysitterAct(ctx, "r1", "answer", "q1", ""), "non-empty answer")
+	assert.ErrorContains(t, s.BabysitterAct(ctx, "r1", "answer", "q1", strings.Repeat("x", MaxBabysitterAnswer+1)), "limited to")
+	assert.ErrorContains(t, s.BabysitterAct(ctx, "r9", "pause", "", ""), "no events of", "a run the server never saw")
 	assert.Len(t, fc.calls, calls)
 
 	// No control: the panel has no buttons.
@@ -104,6 +107,7 @@ func TestBabysitterActions(t *testing.T) {
 func TestBabysitterEndpoint(t *testing.T) {
 	fc := &fakeControl{}
 	s := newSrv(t, WithBabysitter(fc))
+	s.Babysitter("r1", BabysitterEvent{Kind: BabysitterWoke})
 	ts := newTS(t, s)
 	hdr := map[string]string{"X-Graphweb-Token": s.Token(), "Content-Type": "application/json"}
 	post := func(body string, h map[string]string) (int, string) {

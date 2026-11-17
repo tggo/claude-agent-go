@@ -76,7 +76,9 @@ Keep these for a person:
    or `pause` record) and the error.
 3. It fixes the node's code and rebuilds the binary.
 4. The **new** binary calls `Recover(ctx, runID)` on the same store. `n1` and
-   `n2` do not run again; `n3` runs with the fix; a pause marker is removed.
+   `n2` do not run again; `n3` runs with the fix. Recover withdraws any pause
+   request made before it, so a run paused while it was failed does not stop
+   again at once.
 
 `graph/debugbin_test.go` tests exactly this with two real builds of
 `graph/testdata/debugbin` (`n3` broken by default, fixed with `-tags fixed`),
@@ -172,7 +174,14 @@ srv, _ := graphweb.New(graphweb.WithBabysitter(control{sig: graph.FilePause{Dir:
 ```
 
 `Continue` should return quickly: start `Recover` in a goroutine or another
-process, and let the run's own events show the progress.
+process, under your harness's context rather than the request's, and let the
+run's own events show the progress. Two rules for every method:
+
+- **Check `runID`.** It comes from the page. Act only on runs your harness
+  looks after. graphweb already refuses run IDs it has no events of.
+- **One Recover per run at a time.** Refuse `Continue` while the babysitter or
+  an earlier click is still recovering that run, because two Recovers append
+  to the same log. The SDK has no lock for it.
 
 A runnable demo, with a scripted stand-in for the agent and no model:
 `go run ./examples/babysitter`, then open the printed URL. The run fails, the

@@ -10,7 +10,9 @@ import (
 )
 
 // ErrPaused matches (errors.Is) the error Run, Resume and Recover return when
-// the run stopped between nodes because its PauseSignal asked it to.
+// the run stopped between nodes because its PauseSignal asked it to. A node
+// that runs another graph can fail with that graph's pause wrapped inside, so
+// errors.Is also holds then; IsPauseOf(err, runID) tells the two apart.
 var ErrPaused = errors.New("graph: paused")
 
 // PausedError is the error a run returns when it stopped on a pause request.
@@ -33,8 +35,9 @@ func (e *PausedError) Is(target error) bool { return target == ErrPaused }
 // PauseSignal lets something outside the run (a person, a babysitter, another
 // process) stop it cleanly between two nodes. The run asks PauseRequested
 // before every top-level node; when it says yes, the run logs a pause record
-// and returns *PausedError instead of failing. Recover of a paused run calls
-// ClearPause first, then continues.
+// and returns *PausedError instead of failing. Recover calls ClearPause
+// before it continues any run (paused, failed or crashed): continuing is the
+// answer to every earlier pause request.
 //
 // A node that is already running is not interrupted: the pause takes effect
 // after it commits. A PauseRequested error fails the run (Recover retries it).
@@ -51,7 +54,9 @@ func WithPauseSignal(sig PauseSignal) CompileOption {
 }
 
 // FilePause is a PauseSignal backed by marker files: a pause for runID is
-// requested while <Dir>/<runID>.pause exists. Any process that sees Dir can
+// requested while <Dir>/<runID>.pause exists as a regular file (a symlink
+// there does not count). Keep Dir private to the user (FileStore creates it
+// 0700). Any process that sees Dir can
 // request one (Request, or `touch`), so it works across processes on one
 // machine. Dir may be a FileStore's directory.
 type FilePause struct {
@@ -74,7 +79,17 @@ func (f FilePause) Request(runID string) error {
 	if err := os.MkdirAll(f.Dir, 0o700); err != nil {
 		return fmt.Errorf("graph: pause: %w", err)
 	}
-	return os.WriteFile(p, nil, 0o600)
+	// O_EXCL never follows or truncates whatever is at p: a marker that
+	// already exists is a pause already requested (PauseRequested decides
+	// whether it counts).
+	fh, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("graph: pause: %w", err)
+	}
+	return fh.Close()
 }
 
 // PauseRequested implements PauseSignal.
@@ -83,10 +98,10 @@ func (f FilePause) PauseRequested(_ context.Context, runID string) (bool, error)
 	if err != nil {
 		return false, err
 	}
-	_, err = os.Stat(p)
+	info, err := os.Lstat(p) // a symlink planted at p is not a pause request
 	switch {
 	case err == nil:
-		return true, nil
+		return info.Mode().IsRegular(), nil
 	case errors.Is(err, os.ErrNotExist):
 		return false, nil
 	default:
@@ -141,6 +156,18 @@ func (m *MemPause) ClearPause(_ context.Context, runID string) error {
 	delete(m.runs, runID)
 	return nil
 }
+
+// ownPause reports whether err is this run's own pause: the *PausedError the
+// loop returns, unwrapped. A node's error that wraps a pause of another run (a
+// graph run inside a node) is an ordinary failure of this one.
+func ownPause(err error, runID string) bool {
+	pe, ok := err.(*PausedError)
+	return ok && pe.RunID == runID
+}
+
+// IsPauseOf reports whether err (from Run, Resume or Recover of runID) means
+// that run paused, as opposed to a node failing with a nested run's pause.
+func IsPauseOf(err error, runID string) bool { return ownPause(err, runID) }
 
 // checkPause is called by the run loop before node cur. It returns a
 // *PausedError (after logging the pause record) when a pause was requested.

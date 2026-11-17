@@ -42,7 +42,11 @@ type BabysitterEvent struct {
 // that runs the babysitter. graphweb never runs one itself: it calls these
 // and journals the person's action when the call succeeds. Every method gets
 // the request's context and should return quickly (start long work, such as
-// Recover, in the background).
+// Recover, in the background, under the harness's own context).
+//
+// runID comes from the page: check that it is a run your harness looks after,
+// and refuse Continue while a Recover of that run is already going (two
+// Recovers would append to one log). examples/babysitter does both.
 type BabysitterControl interface {
 	// Pause asks the run to stop before its next node (e.g. FilePause.Request).
 	Pause(ctx context.Context, runID string) error
@@ -65,6 +69,10 @@ func WithBabysitter(c BabysitterControl) Option {
 func (s *Server) Babysitter(runID string, ev BabysitterEvent) {
 	s.emit(Event{Run: runID, Type: TypeBabysitter, Babysitter: &ev})
 }
+
+// MaxBabysitterAnswer bounds a person's answer to the babysitter: it is
+// journaled and handed to the harness.
+const MaxBabysitterAnswer = 16 << 10
 
 // errNoBabysitter: a babysitter action arrived but no BabysitterControl is set.
 var errNoBabysitter = errors.New("graphweb: no babysitter is connected (graphweb.WithBabysitter)")
@@ -92,6 +100,12 @@ func (s *Server) BabysitterAct(ctx context.Context, runID, action, questionID, a
 	if runID == "" {
 		return errors.New("graphweb: babysitter action needs a run")
 	}
+	s.mu.Lock()
+	known := s.seen[runID]
+	s.mu.Unlock()
+	if !known {
+		return fmt.Errorf("graphweb: babysitter action for run %q, which this server has no events of", runID)
+	}
 	const by = "graphweb"
 	var ev BabysitterEvent
 	var err error
@@ -108,6 +122,9 @@ func (s *Server) BabysitterAct(ctx context.Context, runID, action, questionID, a
 	case "answer":
 		if questionID == "" || answer == "" {
 			return errors.New("graphweb: an answer needs the question id and a non-empty answer")
+		}
+		if len(answer) > MaxBabysitterAnswer {
+			return fmt.Errorf("graphweb: an answer is limited to %d bytes", MaxBabysitterAnswer)
 		}
 		ev = BabysitterEvent{Kind: BabysitterAnswered, ID: questionID, Text: answer, By: by}
 		err = c.Answer(ctx, runID, questionID, answer)

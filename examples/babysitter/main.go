@@ -80,10 +80,15 @@ type harness struct {
 	asking   bool // q1 is open: Answer is accepted
 	runID    string
 	done     chan error // the result of the last Recover
+	// ctx is the harness's lifetime: a Recover the panel started stops with it.
+	ctx context.Context
+	// recovering guards the run against two Recovers at once (the babysitter's
+	// and a person's Continue, or two clicks): both would append to one log.
+	recovering bool
 }
 
 func newHarness(dir string, step time.Duration) (*harness, error) {
-	h := &harness{think: 2 * step, sig: &graph.MemPause{}, answers: make(chan string, 1), done: make(chan error, 1)}
+	h := &harness{think: 2 * step, sig: &graph.MemPause{}, answers: make(chan string, 1), done: make(chan error, 1), ctx: context.Background()}
 	var err error
 	if h.store, err = graph.FileStore(dir); err != nil {
 		return nil, err
@@ -132,6 +137,9 @@ func newHarness(dir string, step time.Duration) (*harness, error) {
 // demo runs the graph once and, when it fails, lets the babysitter handle it.
 func (h *harness) demo(ctx context.Context, auto bool) error {
 	time.Sleep(h.think) // let a browser connect first
+	h.mu.Lock()
+	h.ctx = ctx
+	h.mu.Unlock()
 	_, rep, err := h.run.Run(ctx, State{})
 	h.mu.Lock()
 	h.runID = rep.RunID
@@ -189,6 +197,11 @@ func (h *harness) babysit(ctx context.Context, runErr error, auto bool) error {
 	h.say(graphweb.BabysitterDoing, "patch transform; go build ./...")
 	time.Sleep(h.think)
 	h.fixed.Store(true)
+	if !h.startRecover() {
+		h.say(graphweb.BabysitterHandover, "Someone is already continuing this run; leaving it to them.")
+		return nil
+	}
+	defer h.endRecover()
 	h.say(graphweb.BabysitterDoing, "Recover "+h.runID)
 	_, _, err := h.run.Recover(ctx, h.runID)
 	if err != nil {
@@ -201,14 +214,55 @@ func (h *harness) babysit(ctx context.Context, runErr error, auto bool) error {
 
 // ---- graphweb.BabysitterControl ----
 
+// ours refuses a run id this harness does not run: the panel sends the id of
+// the run it shows, and a harness must not act on another run because of it.
+func (h *harness) ours(runID string) error {
+	if id := h.runIDSafe(); runID == "" || runID != id {
+		return fmt.Errorf("run %q is not this harness's run", runID)
+	}
+	return nil
+}
+
+func (h *harness) startRecover() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.recovering {
+		return false
+	}
+	h.recovering = true
+	return true
+}
+
+func (h *harness) endRecover() {
+	h.mu.Lock()
+	h.recovering = false
+	h.mu.Unlock()
+}
+
 func (h *harness) Pause(_ context.Context, runID string) error {
+	if err := h.ours(runID); err != nil {
+		return err
+	}
 	h.sig.Request(runID)
 	return nil
 }
 
+// Continue recovers the run in the background, under the harness's context
+// (not the request's, which ends with the HTTP call). It refuses while a
+// Recover is already going.
 func (h *harness) Continue(_ context.Context, runID string) error {
+	if err := h.ours(runID); err != nil {
+		return err
+	}
+	if !h.startRecover() {
+		return errors.New("the run is already being continued")
+	}
+	h.mu.Lock()
+	ctx := h.ctx
+	h.mu.Unlock()
 	go func() {
-		_, _, err := h.run.Recover(context.Background(), runID)
+		defer h.endRecover()
+		_, _, err := h.run.Recover(ctx, runID)
 		select {
 		case h.done <- err:
 		default:
@@ -217,7 +271,10 @@ func (h *harness) Continue(_ context.Context, runID string) error {
 	return nil
 }
 
-func (h *harness) TakeOver(_ context.Context, _ string) error {
+func (h *harness) TakeOver(_ context.Context, runID string) error {
+	if err := h.ours(runID); err != nil {
+		return err
+	}
 	h.mu.Lock()
 	h.takenOut = true
 	wasAsking := h.asking
@@ -229,7 +286,10 @@ func (h *harness) TakeOver(_ context.Context, _ string) error {
 	return nil
 }
 
-func (h *harness) Answer(_ context.Context, _, id, answer string) error {
+func (h *harness) Answer(_ context.Context, runID, id, answer string) error {
+	if err := h.ours(runID); err != nil {
+		return err
+	}
 	if id != "q1" {
 		return fmt.Errorf("no open question %q", id)
 	}

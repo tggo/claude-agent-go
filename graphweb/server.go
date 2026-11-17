@@ -187,6 +187,7 @@ type Server struct {
 	open    int
 
 	babysitter BabysitterControl // nil: the panel has no buttons
+	seen       map[string]bool   // run ids that have events: babysitter actions are limited to them
 }
 
 // New returns a live server. It fails only when the journal file cannot be
@@ -266,6 +267,12 @@ func (s *Server) emit(ev Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ev.Seq = int64(len(s.events)) + 1
+	if ev.Run != "" {
+		if s.seen == nil {
+			s.seen = map[string]bool{}
+		}
+		s.seen[ev.Run] = true
+	}
 	line, err := json.Marshal(ev)
 	if err != nil {
 		// Cannot happen for our own types unless a raw field is invalid JSON.
@@ -341,7 +348,7 @@ func (s *Server) RunStart(_ context.Context, info graph.RunInfo) {
 // pause request) emits nothing: the run is not over, Resume or Recover
 // continues it in the same journal.
 func (s *Server) RunEnd(_ context.Context, info graph.RunInfo, rep *graph.Report, err error) {
-	if errors.Is(err, graph.ErrInterrupt) || errors.Is(err, graph.ErrPaused) {
+	if errors.Is(err, graph.ErrInterrupt) || graph.IsPauseOf(err, info.RunID) {
 		return
 	}
 	ev := Event{Run: info.RunID, Type: TypeGraphEnd, Status: "ok"}

@@ -54,7 +54,16 @@ func TestDemoHandsOverThenPersonContinues(t *testing.T) {
 	assert.Equal(t, graph.StatusFailed, status(t, h))
 
 	assert.Error(t, h.Answer(ctx, h.runID, "q9", "x"), "unknown question")
+	for _, act := range []func() error{
+		func() error { return h.Pause(ctx, "other") }, func() error { return h.Continue(ctx, "other") },
+		func() error { return h.TakeOver(ctx, "other") }, func() error { return h.Answer(ctx, "other", "q1", "x") },
+	} {
+		assert.ErrorContains(t, act(), "not this harness's run")
+	}
 	h.fixed.Store(true)
+	require.True(t, h.startRecover(), "simulate a Recover in flight")
+	assert.ErrorContains(t, h.Continue(ctx, h.runID), "already being continued")
+	h.endRecover()
 	require.NoError(t, h.srv.BabysitterAct(ctx, h.runID, "continue", "", ""))
 	require.NoError(t, <-h.done)
 	assert.Equal(t, graph.StatusDone, status(t, h))

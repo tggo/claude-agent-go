@@ -384,3 +384,118 @@ func (m *fakePause) ClearPause(_ context.Context, id string) error {
 	m.set(id, false)
 	return nil
 }
+
+// A pause requested while the run was failed is withdrawn by Recover: the
+// fixed run goes on instead of stopping at once (review finding).
+func TestRecoverClearsPauseRequestedWhileFailed(t *testing.T) {
+	ctx := context.Background()
+	st := MemStore()
+	sig := &fakePause{}
+	c := &durCounter{}
+	broken := func(context.Context, *durState) error { return errors.New("boom") }
+	_, _, err := pauseGraph(t, c, nil, broken, WithCheckpointStore(st), WithPauseSignal(sig)).Run(ctx, durState{})
+	require.ErrorContains(t, err, "boom")
+	id := durOnlyRun(t, st)
+	sig.set(id, true) // e.g. `cag pause` on the failed run
+
+	out, _, err := pauseGraph(t, c, nil, workOK, WithCheckpointStore(st), WithPauseSignal(sig)).Recover(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pre", "work", "post"}, out.Trail)
+	assert.False(t, sig.get(id))
+}
+
+// The recover record after a pause carries no error from an earlier failure.
+func TestRecoverRecordForgetsOldError(t *testing.T) {
+	ctx := context.Background()
+	st := MemStore()
+	sig := &fakePause{}
+	c := &durCounter{}
+	broken := func(context.Context, *durState) error { return errors.New("boom") }
+	_, _, err := pauseGraph(t, c, nil, broken, WithCheckpointStore(st), WithPauseSignal(sig)).Run(ctx, durState{})
+	require.Error(t, err)
+	id := durOnlyRun(t, st)
+	pauseInWork := func(ctx context.Context, s *durState) error { sig.set(RunID(ctx), true); return workOK(ctx, s) }
+	_, _, err = pauseGraph(t, c, nil, pauseInWork, WithCheckpointStore(st), WithPauseSignal(sig)).Recover(ctx, id)
+	require.ErrorIs(t, err, ErrPaused)
+	_, _, err = pauseGraph(t, c, nil, workOK, WithCheckpointStore(st), WithPauseSignal(sig)).Recover(ctx, id)
+	require.NoError(t, err)
+
+	recs, _ := st.Load(ctx, id)
+	var errs []string
+	for _, r := range recs {
+		if r.Kind == KindRecover {
+			errs = append(errs, r.Err)
+		}
+	}
+	assert.Equal(t, []string{"graph \"pausable\": node \"work\": boom", ""}, errs)
+}
+
+// A node that runs another graph which pauses fails this run; it is not this
+// run's pause (review finding): the log gets a run_end, the status is failed.
+func TestNestedPauseIsAFailure(t *testing.T) {
+	ctx := context.Background()
+	innerStore, outerStore := MemStore(), MemStore()
+	inner := pauseGraph(t, &durCounter{}, nil, workOK, WithCheckpointStore(innerStore), WithPauseSignal(&fakePause{all: true}))
+	outer, err := New[durState]("outer").
+		AddNode("call", func(ctx context.Context, s *durState) error { _, _, err := inner.Run(ctx, *s); return err }).
+		AddEdge(Start, "call").AddEdge("call", End).
+		Compile(WithCheckpointStore(outerStore), WithPauseSignal(&fakePause{}))
+	require.NoError(t, err)
+	_, rep, err := outer.Run(ctx, durState{})
+	require.ErrorIs(t, err, ErrPaused, "the inner pause is still visible in the chain")
+	assert.False(t, IsPauseOf(err, rep.RunID))
+	l, _ := outerStore.List(ctx)
+	assert.Equal(t, StatusFailed, l[0].Status)
+	var pe *PausedError
+	require.ErrorAs(t, err, &pe)
+	assert.True(t, IsPauseOf(pe, pe.RunID))
+}
+
+// gatePauser is a Gate that requests a pause while it holds the run, the way
+// a person presses Pause while a breakpoint waits.
+type gatePauser struct {
+	sig  *fakePause
+	node string
+}
+
+func (g *gatePauser) NodeStart(context.Context, StepInfo)      {}
+func (g *gatePauser) NodeEnd(context.Context, StepInfo, error) {}
+func (g *gatePauser) Before(_ context.Context, i StepInfo) error {
+	if i.Node == g.node {
+		g.sig.set(i.RunID, true)
+	}
+	return nil
+}
+
+// A pause requested while the gate held the run stops it before that node.
+func TestPauseRequestedAtGateStopsBeforeThatNode(t *testing.T) {
+	ctx := context.Background()
+	sig := &fakePause{}
+	c := &durCounter{}
+	_, _, err := pauseGraph(t, c, nil, workOK, WithCheckpointStore(MemStore()), WithPauseSignal(sig),
+		WithObserver(&gatePauser{sig: sig, node: "work"})).Run(ctx, durState{})
+	var pe *PausedError
+	require.ErrorAs(t, err, &pe)
+	assert.Equal(t, "work", pe.Node)
+	assert.Zero(t, c.get("work"))
+}
+
+// A symlink at the marker path is not a pause, and Request does not follow it.
+func TestFilePauseIgnoresSymlinks(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	target := filepath.Join(t.TempDir(), "victim")
+	require.NoError(t, os.WriteFile(target, []byte("keep me"), 0o600))
+	if err := os.Symlink(target, filepath.Join(dir, "r1.pause")); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	f := FilePause{Dir: dir}
+	ok, err := f.PauseRequested(ctx, "r1")
+	require.NoError(t, err)
+	assert.False(t, ok)
+	require.NoError(t, f.Request("r1"))
+	b, _ := os.ReadFile(target)
+	assert.Equal(t, "keep me", string(b), "the target was not truncated")
+	require.NoError(t, f.Request("r2"))
+	require.NoError(t, f.Request("r2"), "requesting twice is fine")
+}

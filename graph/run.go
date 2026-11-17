@@ -152,13 +152,15 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 		}
 		n := r.nodes[cur]
 		if !hasAnswer {
-			if err := r.checkPause(ctx, rec, &s, cur, step); err != nil {
-				return s, rec.report(), err
-			}
 			if g, ok := r.cfg.obs.(Gate); ok {
 				if err := g.Before(ctx, StepInfo{RunID: rec.runID, Graph: r.name, Node: cur, Step: step + 1}); err != nil {
 					return s, rec.report(), err
 				}
+			}
+			// After the gate: a pause requested while a breakpoint held the
+			// run takes effect before this node, not after it.
+			if err := r.checkPause(ctx, rec, &s, cur, step); err != nil {
+				return s, rec.report(), err
 			}
 		}
 		step++
