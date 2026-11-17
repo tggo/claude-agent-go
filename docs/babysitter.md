@@ -149,7 +149,7 @@ srv.Babysitter(runID, graphweb.BabysitterEvent{Kind: graphweb.BabysitterIdle, Te
 | `answered` | A person answered `ID` (graphweb emits it after a successful answer) | working |
 | `handover` | It gives the decision to a person, with a note | handed over |
 | `takeover` | A person took the decision away (graphweb emits it) | taken over |
-| `pause_requested`, `continue_requested` | A person pressed the button (graphweb emits them) | (feed) |
+| `pause_requested`, `continue_requested` | A person pressed the button (graphweb emits them); the panel state does not change, the run's own events show what happens | (feed) |
 | `idle` | Its session ended until the next wake | idle |
 
 The events are journaled like every other event, so `cag web --replay` shows
@@ -173,3 +173,9 @@ srv, _ := graphweb.New(graphweb.WithBabysitter(control{sig: graph.FilePause{Dir:
 
 `Continue` should return quickly: start `Recover` in a goroutine or another
 process, and let the run's own events show the progress.
+
+A runnable demo, with a scripted stand-in for the agent and no model:
+`go run ./examples/babysitter`, then open the printed URL. The run fails, the
+babysitter asks you in the panel, and on "yes" it patches the node and recovers
+the run. On "no" it hands the run over to you, and "Continue run" recovers it
+yourself. `-auto` runs it headless.

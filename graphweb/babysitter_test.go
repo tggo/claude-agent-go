@@ -27,9 +27,13 @@ func (f *fakeControl) record(c string) error {
 	return f.fail
 }
 
-func (f *fakeControl) Pause(_ context.Context, run string) error    { return f.record("pause " + run) }
-func (f *fakeControl) Continue(_ context.Context, run string) error { return f.record("continue " + run) }
-func (f *fakeControl) TakeOver(_ context.Context, run string) error { return f.record("takeover " + run) }
+func (f *fakeControl) Pause(_ context.Context, run string) error { return f.record("pause " + run) }
+func (f *fakeControl) Continue(_ context.Context, run string) error {
+	return f.record("continue " + run)
+}
+func (f *fakeControl) TakeOver(_ context.Context, run string) error {
+	return f.record("takeover " + run)
+}
 func (f *fakeControl) Answer(_ context.Context, run, id, a string) error {
 	return f.record("answer " + run + " " + id + " " + a)
 }

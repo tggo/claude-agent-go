@@ -39,7 +39,7 @@ Module: `github.com/tggo/claude-agent-go` · Go 1.27.
 | `cmd/cag` | The CLI: `run`, `fleet`, `trace`, `web --replay`, `runs`, `pause`, `version`. |
 | `otel/` (separate module) | OpenTelemetry adapters for `runner.Observer` and `graph.Observer`. |
 | `temporal/` (separate module, Temporal SDK v1.50) | Graphs as Temporal workflows, one activity per node (`Register`, `Start`, `Wait`, `Answer`, `PendingQuestion`); built on `graph.Runnable.Step`. Integration tests need `temporal server start-dev`. |
-| `examples/` | Runnable demos, incl. `pipeline`, `pizza` (durable `-store`/`-recover`), `artifacts`, `pgstore` (Postgres `CheckpointStore`). |
+| `examples/` | Runnable demos, incl. `pipeline`, `pizza` (durable `-store`/`-recover`), `artifacts`, `pgstore` (Postgres `CheckpointStore`), `babysitter` (graphweb babysitter panel with a scripted agent). |
 | `internal/trace` | HTML rendering for `cag trace`. |
 | `internal/procgroup` | Cross-platform process-group setup/kill. |
 | `internal/readmetest` | Parses every ```` ```go ```` fence of README.md; keep it green when editing the README. |

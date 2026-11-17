@@ -45,7 +45,7 @@ main{display:grid;grid-template-columns:1fr 440px;min-height:0}
 aside{border-left:1px solid var(--line);background:var(--ink-2);display:flex;flex-direction:column;min-height:0}
 .ph{padding:12px 14px 6px;border-bottom:1px solid var(--line)}
 .ph h2{margin:0;font-size:16px;font-weight:600}
-.ph .sub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.ph .sub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
 .tabs{display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line)}
 .tab{white-space:nowrap;padding:6px 9px;border:0;background:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--mono);font-size:12.5px}
 .tab.on{color:var(--cyan);border-bottom-color:var(--cyan)}
@@ -57,6 +57,19 @@ aside{border-left:1px solid var(--line);background:var(--ink-2);display:flex;fle
 .ev.err{border-color:var(--coral)} .ev.result{border-color:var(--green)} .ev.marker{border-color:var(--amber)}
 .ev pre,.val{margin:4px 0 0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;line-height:1.5}
 .ev .tool{font-family:var(--mono);color:var(--amber);font-size:12.5px}
+.pill.bs{cursor:pointer;background:none}
+.pill.bs:hover{border-color:var(--cyan)}
+.bshead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pill.bs[aria-pressed="true"]{background:var(--ink-3)}
+.bsacts{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.bsq{border:1px solid var(--amber);border-radius:10px;padding:10px 12px;margin:0 0 14px}
+.bsq .bsk{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
+.bsq .q{margin:4px 0 8px;white-space:pre-wrap;word-break:break-word}
+.bsq .row2{display:flex;gap:8px}
+.bsq input{flex:1;min-width:0;background:var(--ink-3);border:1px solid var(--line);border-radius:7px;padding:6px 10px}
+.bserr{color:var(--coral);font-family:var(--mono);font-size:12px;margin:0 0 10px;word-break:break-word}
+.ev.bs-woke,.ev.bs-continue_requested{border-color:var(--cyan)} .ev.bs-doing{border-color:var(--amber)}
+.ev.bs-asked,.ev.bs-handover,.ev.bs-takeover,.ev.bs-pause_requested{border-color:var(--amber)} .ev.bs-answered{border-color:var(--green)}
 details>summary{cursor:pointer;color:var(--muted);font-family:var(--mono);font-size:12px}
 .kv{margin:0 0 14px}
 .kv .key{font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:2px}
@@ -267,6 +280,7 @@ footer{border-top:1px solid var(--line);background:var(--ink-2)}
     <span id="mode" class="stat"></span>
     <button id="galbtn" class="btn" hidden aria-pressed="true">gallery</button>
     <button id="pausebtn" class="btn warn" hidden>Pause before next</button>
+    <button id="bsbtn" class="pill bs" hidden aria-pressed="false" title="the babysitter that looks after this run">babysitter</button>
   </header>
   <div id="metrics" class="metrics" aria-label="run metrics"></div>
   <main>
@@ -339,7 +353,7 @@ const S = { events:[], cursor:0, follow:true, playing:false, speed:1, runs:[], t
 
 // ---------------- model (fold) ----------------
 function newModel(run){
-  return { run, topo:S.topo[run]||null, nodes:{}, edges:{}, agents:{}, inputs:{}, diffs:{}, arts:[], answers:{}, pending:null, paused:null,
+  return { run, topo:S.topo[run]||null, nodes:{}, edges:{}, agents:{}, inputs:{}, diffs:{}, arts:[], answers:{}, pending:null, paused:null, bs:null,
     status: S.topo[run] ? 'idle' : 'idle', cost:0, t0:null, tEnd:null, tLast:null, path:[], lastEdge:null, initial:null, end:null, nsteps:0 };
 }
 function nodeOf(m,id){ return m.nodes[id] || (m.nodes[id]={id, visits:[], status:'idle', cost:0}); }
@@ -391,6 +405,8 @@ function apply(m, ev, fx){
     m.pending = null; m.answers[nk(ev.node,ev.step)] = ev.answer; m.lastAnswer = {node:ev.node, answer:ev.answer}; break;
   case 'breakpoint_hit':
     m.paused = {node:ev.node, step:ev.step, seq:ev.seq}; break;
+  case 'babysitter':
+    bsApply(m, ev); break;
   case 'graph_end':
     m.status = ev.status==='ok' ? 'done' : ev.status==='error' ? 'failed' : ev.status; m.end=ev; m.tEnd=ts; m.pending=null;
     if (ev.total_cost_usd) m.cost = ev.total_cost_usd; break;
@@ -1027,6 +1043,7 @@ function paint(){
   $('cost').textContent = fmtCost(m.cost);
   $('path').replaceChildren(...m.path.slice(-14).flatMap((p,i)=>(i?[el('i',{text:' → '})]:[]).concat([document.createTextNode(p)])));
   $('pausebtn').hidden = BOOT.readOnly || st!=='running';
+  paintBsButton(m);
   updateElapsed();
   // nodes
   const sel = S.sel;
@@ -1135,7 +1152,7 @@ function paintMetrics(m){
   const sig=cells.map(c=>c[1]).join('|')+'|'+r.agents+'|'+r.running;
   if (box.dataset.sig===sig) return; box.dataset.sig=sig;
   box.replaceChildren(...cells.map(([l,v,bad])=>el('div',{class:'mc'},el('div',{class:'ml',text:l}),el('div',{class:'mv'+(bad?' bad':''),text:v}))),
-    r.agents?el('span',{class:'ag'},r.agents+' agent'+(r.agents>1?'s':''),r.running?[' · ',el('b',{text:r.running+' running'})]:null):null);
+    ...(r.agents?[el('span',{class:'ag'},r.agents+' agent'+(r.agents>1?'s':''),r.running?[' · ',el('b',{text:r.running+' running'})]:null)]:[]));
 }
 function updateElapsed(){
   const m=S.m; if(!m||m.t0==null){ $('elapsed').textContent='0.0s'; return; }
@@ -1194,9 +1211,110 @@ function reviewView(p,live){
     el('button',{class:'btn primary',text:'Approve all',onclick:()=>send(true)}),el('button',{class:'btn warn',text:'Send comments',onclick:()=>send(false)})))];
 }
 
+// ---------------- babysitter ----------------
+// A run's babysitter (docs/babysitter.md): the harness reports what it does
+// (babysitter events), and with graphweb.WithBabysitter the person's buttons
+// reach the harness through POST /api/babysitter.
+const BS_STATE = {woke:'working', answered:'working', asked:'asking', handover:'handed over', takeover:'taken over', idle:'idle'};
+const BS_PILL = {working:'running', asking:'waiting', 'handed over':'paused', 'taken over':'paused', idle:''};
+function bsApply(m, ev){
+  const b = ev.babysitter || {};
+  const s = m.bs || (m.bs = {state:'idle', feed:[], question:null, doing:'', wakes:0, seq:0});
+  s.seq = ev.seq;
+  s.feed.push({seq:ev.seq, ts:ev.ts, kind:b.kind, reason:b.reason, text:b.text, id:b.id, by:b.by});
+  if (b.kind==='woke') s.wakes++;
+  if (b.kind==='doing') s.doing = b.text||'';
+  if (b.kind==='said' || b.kind==='idle' || b.kind==='handover' || b.kind==='takeover') s.doing = '';
+  if (b.kind==='asked') s.question = {id:b.id, text:b.text, seq:ev.seq};
+  if ((b.kind==='answered' && s.question && s.question.id===b.id) || b.kind==='takeover' || b.kind==='idle') s.question = null;
+  if (BS_STATE[b.kind]) s.state = BS_STATE[b.kind];
+}
+function bsLabel(f){
+  switch (f.kind){
+  case 'woke': return 'woke'+(f.reason?': '+f.reason:'');
+  case 'said': return 'said';
+  case 'doing': return 'running';
+  case 'asked': return 'asked you';
+  case 'answered': return 'answered'+(f.by==='graphweb'?' in the UI':f.by?' by '+f.by:'');
+  case 'handover': return 'handed over to a person';
+  case 'takeover': return 'taken over'+(f.by==='graphweb'?' in the UI':f.by?' by '+f.by:'');
+  case 'pause_requested': return 'pause requested';
+  case 'continue_requested': return 'continue requested';
+  case 'idle': return 'idle';
+  }
+  return f.kind||'event';
+}
+function paintBsButton(m){
+  const b = $('bsbtn'), bs = m.bs, live = !BOOT.readOnly && S.cursor===S.events.length;
+  b.hidden = !bs && !(BOOT.babysitter && !BOOT.readOnly);
+  if (b.hidden){ if (S.bsOpen){ S.bsOpen=false; panelSig=''; } return; }
+  // A new question opens the panel once, unless the person is inspecting a node.
+  const q = bs && bs.question;
+  if (q && live && S.bsSeenQ!==q.id){ S.bsSeenQ=q.id; if (S.selAuto && !S.bsOpen){ S.bsOpen=true; panelSig=''; } }
+  const state = bs ? bs.state : 'idle';
+  b.textContent = 'babysitter · '+state+(S.bsOpen?' ▴':' ▾');
+  b.className = 'pill bs '+(BS_PILL[state]||'');
+  b.setAttribute('aria-pressed', S.bsOpen?'true':'false');
+}
+function bsClose(){ S.bsOpen=false; S.bsErr=''; S.bsConfirm=false; panelSig=''; paint(); }
+// bsAct posts a person's action. While it is in flight the buttons are off;
+// a failure keeps the typed answer (S.bsDraft) and puts focus back on it.
+function bsAct(action, extra){
+  S.bsErr = ''; S.bsBusy = true; S.bsConfirm = false; panelSig=''; paintPanel();
+  const done = (err)=>{ S.bsBusy = false; S.bsErr = err||''; S.bsFocus = !!err && action==='answer'; panelSig=''; paintPanel(); return !err; };
+  return postJSON('/api/babysitter', Object.assign({run:S.curRun, action}, extra||{})).then(r=>{
+    if (!r.ok) return r.text().then(t=>done(t.trim()||('HTTP '+r.status)));
+    if (action==='answer' && extra) delete S.bsDraft[extra.id];
+    return done('');
+  }).catch(e=>done(String(e)));
+}
+function bsView(m, ph, tabs, panel){
+  const bs = m.bs, live = !BOOT.readOnly && S.cursor===S.events.length, can = live && BOOT.babysitter;
+  const state = bs ? bs.state : 'idle', run = derivedStatus(m), busy = !!S.bsBusy;
+  ph.replaceChildren(
+    el('div',{class:'bshead'}, el('h2',{text:'Babysitter'}), el('button',{class:'btn',text:'close','aria-label':'close the babysitter panel',title:'back to the node inspector (Esc)',onclick:bsClose})),
+    el('div',{class:'sub',text:[state, bs&&bs.wakes?bs.wakes+(bs.wakes>1?' wakes':' wake'):'', bs&&bs.doing?'now: '+bs.doing:''].filter(Boolean).join(' · ')}));
+  tabs.replaceChildren();
+  const out = [];
+  if (S.bsErr) out.push(el('div',{class:'bserr',role:'alert',text:S.bsErr}));
+  let input = null;
+  if (bs && bs.question){
+    const q = bs.question, card = el('div',{class:'bsq',role:'status','aria-live':'polite'}, el('div',{class:'bsk',text:'the babysitter asks'}), el('p',{class:'q',text:q.text||''}));
+    if (can){
+      input = el('input',{type:'text',placeholder:'your answer…','aria-label':'answer to the babysitter',disabled:busy});
+      input.value = S.bsDraft[q.id]||'';
+      input.addEventListener('input',()=>{ S.bsDraft[q.id] = input.value; });
+      const send = ()=>{ const v=input.value.trim(); if (v && !S.bsBusy) bsAct('answer',{id:q.id, answer:v}); };
+      input.addEventListener('keydown',e=>{ if (e.key==='Enter' && !e.isComposing) send(); });
+      card.append(el('div',{class:'row2'}, input, el('button',{class:'btn primary',text:'send',disabled:busy,onclick:send})));
+    }
+    out.push(card);
+  }
+  if (can){
+    const ended = run==='done' || run==='failed' || run==='cancelled' || run==='max_steps';
+    const take = S.bsConfirm
+      ? [el('span',{class:'muted',text:'Stop the babysitter for this run?'}),
+         el('button',{class:'btn warn',text:'yes, take over',disabled:busy,onclick:()=>bsAct('takeover')}),
+         el('button',{class:'btn',text:'cancel',onclick:()=>{ S.bsConfirm=false; panelSig=''; paintPanel(); }})]
+      : [el('button',{class:'btn',text:'Take over',title:'stop the babysitter; the decision is yours',disabled:busy||state==='taken over',onclick:()=>{ S.bsConfirm=true; panelSig=''; paintPanel(); }})];
+    out.push(el('div',{class:'bsacts'},
+      el('button',{class:'btn warn',text:'Pause run',title:ended?'the run is not running':'stop the run before its next node',disabled:busy||ended,onclick:()=>bsAct('pause')}),
+      el('button',{class:'btn primary',text:'Continue run',title:run==='running'?'the run is running':'continue a stopped run (Recover)',disabled:busy||run==='running',onclick:()=>bsAct('continue')}),
+      ...take));
+  } else if (!BOOT.readOnly && !BOOT.babysitter){
+    out.push(el('div',{class:'muted',text:'Buttons are off: the harness did not connect graphweb.WithBabysitter.'}));
+  }
+  if (!bs || !bs.feed.length) out.push(el('div',{class:'muted',text:'Nothing from the babysitter for this run yet.'}));
+  else out.push(...bs.feed.slice().reverse().map(f=>el('div',{class:'ev bs-'+f.kind},
+    el('div',{class:'k',text:bsLabel(f)+' · '+new Date(f.ts).toLocaleTimeString()}),
+    f.text ? el('pre',{text:f.text}) : null)));
+  panel.replaceChildren(...out);
+  if (input && S.bsFocus){ S.bsFocus=false; input.focus(); }
+}
+
 // ---------------- selection + panel ----------------
 function selectNode(id,step){
-  S.selAuto=false; S.sel={node:id, step:step||null}; paint();
+  S.bsOpen=false; S.bsErr=''; S.bsConfirm=false; S.selAuto=false; S.sel={node:id, step:step||null}; paint();
 }
 $('stage').addEventListener('click',e=>{ if (e.target===$('svg')||e.target.id==='stage'){ S.sel=null; S.selAuto=true; paint(); } });
 function curSel(m){
@@ -1220,7 +1338,11 @@ function paintPanel(){
   if (tab==='artifacts' && !nArts.length) tab = 'timeline';
   const nin = s ? (m.inputs[nk(s.node,s.step)]||[]).length : 0;
   const sig=[S.curRun,s&&s.node,s&&s.step,tab,nin,S.cursor,ags,v&&v.status,n&&n.visits.length,m.pending&&m.pending.seq,nArts.length,S.open.size,Object.keys(S.txt).length].join('|');
-  if (sig===panelSig) return; panelSig=sig;
+  // The babysitter view repaints only on its own events, so an answer being
+  // typed is not wiped by the run's other events.
+  const key = S.bsOpen ? ['bs',S.curRun,m.bs?m.bs.seq:0,S.bsErr||'',!!S.bsBusy,!!S.bsConfirm,derivedStatus(m),!BOOT.readOnly&&S.cursor===S.events.length].join('|') : sig;
+  if (key===panelSig) return; panelSig=key;
+  if (S.bsOpen){ bsView(m,ph,tabs,panel); return; }
   if (!s){
     ph.replaceChildren(el('h2',{text:'Run overview'}), el('div',{class:'sub',text:'click a node to inspect it'}));
     tabs.replaceChildren(); const t=S.topo[S.curRun];
@@ -1452,6 +1574,7 @@ function describe(e){
   case 'interrupt': return `${e.node}: ${e.items&&e.items.length?'['+e.items.length+' items to review] ':''}${clip((e.question||'').replace(/\s+/g,' '),140)}`;
   case 'resume': return `${e.node}: ${clip(e.answer,100)}`;
   case 'breakpoint_hit': return `before ${e.node} #${e.step}`;
+  case 'babysitter': { const b=e.babysitter||{}; return `${bsLabel(b)}${b.text?': '+clip(b.text.replace(/\s+/g,' '),140):''}`; }
   case 'graph_end': return `${e.status} ${fmtCost(e.total_cost_usd)} ${fmtDur(e.duration_ms)}${e.err?' '+clip(e.err,100):''}`;
   }
   return '';
@@ -1530,9 +1653,12 @@ function playFx(fx){
 // ---------------- controls ----------------
 function postJSON(url,body){ return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Graphweb-Token':BOOT.token},body:JSON.stringify(body)}); }
 function control(a){ postJSON('/api/control',{action:a}); }
+S.bsDraft = {};
+$('bsbtn').onclick = ()=>{ if (S.bsOpen) bsClose(); else { S.bsOpen=true; S.bsErr=''; panelSig=''; paint(); } };
+document.addEventListener('keydown',e=>{ if (e.key==='Escape' && S.bsOpen && S.lb==null) bsClose(); });
 function toggleBp(id){ if (S.bps.has(id)) S.bps.delete(id); else S.bps.add(id); paint(); postJSON('/api/breakpoints',{nodes:[...S.bps]}).then(r=>r.json()).then(j=>{ S.bps=new Set(j.nodes); paint(); }); }
 $('pausebtn').onclick=()=>control('pause');
-$('runsel').onchange=e=>{ S.curRun=e.target.value; S.follow=false; $('follow').checked=false; S.cursor=S.events.length; S.sel=null; S.selAuto=true; rebuild(); panelSig=''; paint(); };
+$('runsel').onchange=e=>{ S.bsErr=''; S.bsConfirm=false; S.curRun=e.target.value; S.follow=false; $('follow').checked=false; S.cursor=S.events.length; S.sel=null; S.selAuto=true; rebuild(); panelSig=''; paint(); };
 const _paint=paint; paint=function(){ _paint();
   const rs=$('runsel'); if (S.runs.length>1){ rs.hidden=false; if (rs.options.length!==S.runs.length){ rs.replaceChildren(...S.runs.map((r,i)=>el('option',{value:r,text:'run '+(i+1)+' · '+r.slice(4,10)}))); } rs.value=S.curRun; } };
 
