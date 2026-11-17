@@ -63,6 +63,8 @@ aside{border-left:1px solid var(--line);background:var(--ink-2);display:flex;fle
 .pill.bs[aria-pressed="true"]{background:var(--ink-3)}
 .bsacts{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
 .bsq{border:1px solid var(--amber);border-radius:10px;padding:10px 12px;margin:0 0 14px}
+.ev[class*="bs-"] .k{color:var(--muted)}
+#bshead:focus{outline:none}
 .bsq .bsk{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
 .bsq .q{margin:4px 0 8px;white-space:pre-wrap;word-break:break-word}
 .bsq .row2{display:flex;gap:8px}
@@ -1261,7 +1263,7 @@ function bsClose(){ S.bsOpen=false; S.bsErr=''; S.bsConfirm=false; panelSig=''; 
 // a failure keeps the typed answer (S.bsDraft) and puts focus back on it.
 function bsAct(action, extra){
   S.bsErr = ''; S.bsBusy = true; S.bsConfirm = false; panelSig=''; paintPanel();
-  const done = (err)=>{ S.bsBusy = false; S.bsErr = err||''; S.bsFocus = !!err && action==='answer'; panelSig=''; paintPanel(); return !err; };
+  const done = (err)=>{ S.bsBusy = false; S.bsErr = err||''; S.bsFocus = action==='answer' ? (err ? 'input' : 'head') : ''; panelSig=''; paintPanel(); return !err; };
   return postJSON('/api/babysitter', Object.assign({run:S.curRun, action}, extra||{})).then(r=>{
     if (!r.ok) return r.text().then(t=>done(t.trim()||('HTTP '+r.status)));
     if (action==='answer' && extra) delete S.bsDraft[extra.id];
@@ -1271,8 +1273,11 @@ function bsAct(action, extra){
 function bsView(m, ph, tabs, panel){
   const bs = m.bs, live = !BOOT.readOnly && S.cursor===S.events.length, can = live && BOOT.babysitter;
   const state = bs ? bs.state : 'idle', run = derivedStatus(m), busy = !!S.bsBusy;
+  // A repaint replaces every element: keep focus on the heading or the input.
+  const act = document.activeElement, keep = act && (act.id==='bshead' || act.id==='bsinput') ? act.id : '';
+  const caret = keep==='bsinput' ? act.selectionStart : null;
   ph.replaceChildren(
-    el('div',{class:'bshead'}, el('h2',{text:'Babysitter'}), el('button',{class:'btn',text:'close','aria-label':'close the babysitter panel',title:'back to the node inspector (Esc)',onclick:bsClose})),
+    el('div',{class:'bshead'}, el('h2',{text:'Babysitter',tabindex:'-1',id:'bshead'}), el('button',{class:'btn',text:'close','aria-label':'close the babysitter panel',title:'back to the node inspector (Esc)',onclick:bsClose})),
     el('div',{class:'sub',text:[state, bs&&bs.wakes?bs.wakes+(bs.wakes>1?' wakes':' wake'):'', bs&&bs.doing?'now: '+bs.doing:''].filter(Boolean).join(' · ')}));
   tabs.replaceChildren();
   const out = [];
@@ -1281,7 +1286,7 @@ function bsView(m, ph, tabs, panel){
   if (bs && bs.question){
     const q = bs.question, card = el('div',{class:'bsq',role:'status','aria-live':'polite'}, el('div',{class:'bsk',text:'the babysitter asks'}), el('p',{class:'q',text:q.text||''}));
     if (can){
-      input = el('input',{type:'text',placeholder:'your answer…','aria-label':'answer to the babysitter',disabled:busy});
+      input = el('input',{id:'bsinput',type:'text',placeholder:'your answer…','aria-label':'answer to the babysitter',disabled:busy});
       input.value = S.bsDraft[q.id]||'';
       input.addEventListener('input',()=>{ S.bsDraft[q.id] = input.value; });
       const send = ()=>{ const v=input.value.trim(); if (v && !S.bsBusy) bsAct('answer',{id:q.id, answer:v}); };
@@ -1309,7 +1314,10 @@ function bsView(m, ph, tabs, panel){
     el('div',{class:'k',text:bsLabel(f)+' · '+new Date(f.ts).toLocaleTimeString()}),
     f.text ? el('pre',{text:f.text}) : null)));
   panel.replaceChildren(...out);
-  if (input && S.bsFocus){ S.bsFocus=false; input.focus(); }
+  const want = S.bsFocus==='input' ? 'bsinput' : S.bsFocus==='head' ? 'bshead' : keep;
+  S.bsFocus = '';
+  const f = want && $(want);
+  if (f){ f.focus(); if (want==='bsinput' && caret!=null) f.setSelectionRange(caret, caret); }
 }
 
 // ---------------- selection + panel ----------------
