@@ -76,6 +76,7 @@ const (
 	TypeArtifact      = "artifact"
 	TypeGraphEnd      = "graph_end"
 	TypeProgress      = "progress"
+	// TypeBabysitter: see babysitter.go.
 )
 
 // maxDiffValue is the size beyond which a diff value is truncated.
@@ -124,6 +125,8 @@ type Event struct {
 	Items    []graph.ReviewItem `json:"items,omitempty"`    // interrupt: files to review (served at /api/review/{seq}/{n})
 	Answer   string             `json:"answer,omitempty"`   // resume
 
+	Babysitter *BabysitterEvent `json:"babysitter,omitempty"` // babysitter
+
 	Status       string   `json:"status,omitempty"` // graph_end: ok | error | cancelled | max_steps
 	TotalCostUSD float64  `json:"total_cost_usd,omitempty"`
 	Path         []string `json:"path,omitempty"`
@@ -132,6 +135,7 @@ type Event struct {
 type config struct {
 	journal      string
 	allowedHosts []string
+	babysitter   BabysitterControl
 }
 
 // Option configures New.
@@ -181,6 +185,8 @@ type Server struct {
 
 	answers chan string
 	open    int
+
+	babysitter BabysitterControl // nil: the panel has no buttons
 }
 
 // New returns a live server. It fails only when the journal file cannot be
@@ -195,6 +201,7 @@ func New(opts ...Option) (*Server, error) {
 		return nil, err
 	}
 	s := newServer(hex.EncodeToString(tok[:]), cfg.allowedHosts)
+	s.babysitter = cfg.babysitter
 	if cfg.journal != "" {
 		f, err := os.OpenFile(cfg.journal, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, 0o600)
 		if err != nil {

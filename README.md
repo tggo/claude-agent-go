@@ -411,7 +411,8 @@ if errors.Is(err, graph.ErrPaused) {
 `graph.FilePause` works across processes on one machine; `graph.MemPause` is
 the in-process one (a UI handler or a supervisor goroutine calls
 `Request(runID)`). `graph.PauseSignal` is a two-method interface, so a pause can
-also come from a database or a queue.
+also come from a database or a queue. To have an agent look after runs (wake on a failure,
+fix, recover, or hand over to a person), see [docs/babysitter.md](./docs/babysitter.md).
 Examples: [`examples/pizza`](./examples/pizza) with `-store DIR` and
 `-recover last`, and [`examples/pgstore`](./examples/pgstore), a Postgres
 `CheckpointStore` over `database/sql`.

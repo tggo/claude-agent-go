@@ -37,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/answer", s.post(s.handleAnswer))
 	mux.HandleFunc("POST /api/breakpoints", s.post(s.handleSetBreakpoints))
 	mux.HandleFunc("POST /api/control", s.post(s.handleControl))
+	mux.HandleFunc("POST /api/babysitter", s.post(s.handleBabysitter))
 	return s.hostGuard(mux)
 }
 
@@ -122,7 +123,7 @@ func (s *Server) post(h func(http.ResponseWriter, *http.Request)) http.HandlerFu
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
-	boot, _ := json.Marshal(map[string]any{"token": s.token, "readOnly": s.readOnly})
+	boot, _ := json.Marshal(map[string]any{"token": s.token, "readOnly": s.readOnly, "babysitter": s.babysitter != nil})
 	page := bytes.Replace(indexHTML, []byte("/*GRAPHWEB_BOOT*/null"), boot, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
