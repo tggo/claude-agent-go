@@ -63,6 +63,7 @@ cag fleet examples/cag/fleet.yaml        # a batch across a worker pool, from YA
 cag trace runs/ --open                   # HTML view of recorded runs
 cag web --replay runs/journal.jsonl      # graph debugger on a recorded run
 cag runs ./checkpoints                   # durable graph runs: running/crashed/paused/done
+cag pause ./checkpoints <runID>          # stop a run before its next node (Recover continues it)
 ```
 
 Both need the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI on
@@ -389,6 +390,28 @@ Recover and Fork refuse a graph that changed since the run started
 (`graph.ErrTopologyChanged`) unless you compile with `graph.AllowTopologyChange()`.
 A parallel node commits as a whole, so a crash inside a fan-out re-runs every
 branch. `cag runs <dir>` lists runs as running, crashed, paused or done.
+
+**Pause** a run from outside, between two nodes, to debug it. The node that is
+running finishes and commits, then the run stops with `graph.ErrPaused` and a
+`pause` record instead of failing. Fix the code, rebuild, and `Recover` continues
+the same run with the new binary. The nodes before the pause do not run again,
+and the node after it runs with the fix (a change to the graph's shape still
+needs `AllowTopologyChange`):
+
+```go
+run, _ := g.Compile(graph.WithCheckpointStore(store),
+    graph.WithPauseSignal(graph.FilePause{Dir: "./checkpoints"}))
+// elsewhere: `cag pause ./checkpoints <runID>`, or graph.FilePause{...}.Request(runID)
+_, _, err := run.Run(ctx, State{Task: task})
+if errors.Is(err, graph.ErrPaused) {
+    // inspect `cag runs ./checkpoints <runID>`, fix, rebuild, then: run.Recover(ctx, runID)
+}
+```
+
+`graph.FilePause` works across processes on one machine; `graph.MemPause` is
+the in-process one (a UI handler or a supervisor goroutine calls
+`Request(runID)`). `graph.PauseSignal` is a two-method interface, so a pause can
+also come from a database or a queue.
 Examples: [`examples/pizza`](./examples/pizza) with `-store DIR` and
 `-recover last`, and [`examples/pgstore`](./examples/pgstore), a Postgres
 `CheckpointStore` over `database/sql`.

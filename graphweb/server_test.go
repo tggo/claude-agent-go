@@ -509,7 +509,25 @@ func TestGraphEndStatuses(t *testing.T) {
 	_, _, err = r2.Run(context.Background(), st{})
 	require.ErrorIs(t, err, graph.ErrMaxSteps)
 	assert.Equal(t, "max_steps", s2.Events()[len(s2.Events())-1].Status)
+
+	// A pause request ends the segment, not the run: no graph_end.
+	s3 := newSrv(t)
+	dir := t.TempDir()
+	store, err := graph.FileStore(dir)
+	require.NoError(t, err)
+	r3, err := graph.New[st]("pausing").AddNode("a", graph.Func(func(*st) error { return nil })).
+		AddEdge(graph.Start, "a").AddEdge("a", graph.End).
+		Compile(graph.WithObserver(s3), graph.WithCheckpointStore(store), graph.WithPauseSignal(alwaysPause{}))
+	require.NoError(t, err)
+	_, _, err = r3.Run(context.Background(), st{})
+	require.ErrorIs(t, err, graph.ErrPaused)
+	assert.NotContains(t, types(s3.Events()), TypeGraphEnd)
 }
+
+type alwaysPause struct{}
+
+func (alwaysPause) PauseRequested(context.Context, string) (bool, error) { return true, nil }
+func (alwaysPause) ClearPause(context.Context, string) error             { return nil }
 
 func TestAgentEventsJournaled(t *testing.T) {
 	s := newSrv(t)

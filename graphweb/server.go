@@ -330,10 +330,11 @@ func (s *Server) RunStart(_ context.Context, info graph.RunInfo) {
 	s.emit(Event{Run: info.RunID, Type: TypeGraphStart, Topology: &topo, State: info.State})
 }
 
-// RunEnd implements graph.RunObserver. A paused segment (interrupt) emits
-// nothing: the interrupt event already told the UI.
+// RunEnd implements graph.RunObserver. A paused segment (interrupt, or a
+// pause request) emits nothing: the run is not over, Resume or Recover
+// continues it in the same journal.
 func (s *Server) RunEnd(_ context.Context, info graph.RunInfo, rep *graph.Report, err error) {
-	if errors.Is(err, graph.ErrInterrupt) {
+	if errors.Is(err, graph.ErrInterrupt) || errors.Is(err, graph.ErrPaused) {
 		return
 	}
 	ev := Event{Run: info.RunID, Type: TypeGraphEnd, Status: "ok"}

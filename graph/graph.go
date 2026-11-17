@@ -253,6 +253,9 @@ func (g *Graph[S]) Compile(opts ...CompileOption) (*Runnable[S], error) {
 	if cfg.nodeTimeout < 0 {
 		bad("WithNodeTimeout: must not be negative")
 	}
+	if cfg.pause != nil && cfg.store == nil {
+		bad("WithPauseSignal: needs WithCheckpointStore (a paused run is continued from its log)")
+	}
 
 	errs = append(errs, g.bindGroups()...)
 
@@ -421,6 +424,7 @@ type options struct {
 	nodeTimeout time.Duration
 	store       CheckpointStore
 	allowTopo   bool
+	pause       PauseSignal
 }
 
 // WithMaxSteps bounds the number of node executions in one run (default 100).

@@ -182,11 +182,11 @@ func (r *Runnable[S]) logCommit(ctx context.Context, rec *recorder, n *node[S], 
 	return rec.ck.append(ctx, Record{Kind: KindEdge, From: n.name, Node: next, Step: step})
 }
 
-// finish ends a segment: it writes run_end (not for a pause: the interrupt
-// record already tells the story) and calls the RunObserver. A failure to
+// finish ends a segment: it writes run_end (not for an interrupt or a pause:
+// their own record already tells the story) and calls the RunObserver. A failure to
 // write run_end fails an otherwise successful run.
 func (r *Runnable[S]) finish(ctx context.Context, info RunInfo, rec *recorder, s S, rep *Report, err error) error {
-	if ck := rec.ck; ck != nil && ck.started && !errors.Is(err, ErrInterrupt) {
+	if ck := rec.ck; ck != nil && ck.started && !errors.Is(err, ErrInterrupt) && !errors.Is(err, ErrPaused) {
 		end := Record{Kind: KindRunEnd, State: snapshot(&s)}
 		if err != nil {
 			end.Err = err.Error()
@@ -211,6 +211,7 @@ type replay struct {
 	last     int // seq of the last record
 	ended    bool
 	endErr   string
+	paused   bool    // the log ends on a pause request
 	pending  *Record // unanswered interrupt
 	answer   *Record // resume following pending
 	sessNode string
@@ -226,6 +227,7 @@ func replayLog(recs []Record) (*replay, error) {
 		if r.Kind != KindRunEnd {
 			p.ended = false
 		}
+		p.paused = r.Kind == KindPause
 		switch r.Kind {
 		case KindRunStart:
 			if p.start == nil {
@@ -298,6 +300,9 @@ func decodeState[S any](raw json.RawMessage) (S, error) {
 //     caller can Resume it with the answer;
 //   - failed (run_end with an error) or crashed: the run is retried from the
 //     last commit under the same run id and step numbers;
+//   - paused on a PauseSignal request: the pause is cleared and the run
+//     continues at the node it stopped before. The graph may be a new build
+//     (a fixed node function); a changed topology needs AllowTopologyChange;
 //   - unknown run: ErrRunNotFound.
 //
 // A graph that differs from the logged one is refused with ErrTopologyChanged
@@ -358,6 +363,11 @@ func (r *Runnable[S]) Recover(ctx context.Context, runID string) (S, *Report, er
 	if cur != End {
 		if _, ok := r.nodes[cur]; !ok || r.branches[cur] {
 			return s, nil, fmt.Errorf("%w: run %q continues at node %q, which this graph does not have", ErrTopologyChanged, runID, cur)
+		}
+	}
+	if p.paused && r.cfg.pause != nil {
+		if err := r.cfg.pause.ClearPause(ctx, runID); err != nil {
+			return s, rec.report(), fmt.Errorf("graph %q: recover %q: clear pause: %w", r.name, runID, err)
 		}
 	}
 	if p.sessNode == cur && p.sessStep == step+1 && p.sessID != "" {

@@ -159,3 +159,55 @@ func TestWebReplaysCheckpointStore(t *testing.T) {
 	err := webRun(ctx, []string{"--replay", txt}, io.Discard, io.Discard)
 	assert.True(t, err != nil && strings.Contains(err.Error(), "not a journal"), "%v", err)
 }
+
+func TestPauseCommand(t *testing.T) {
+	dir, ids := storeWith(t)
+	var out bytes.Buffer
+	require.NoError(t, pauseRun([]string{dir, ids["failed"]}, &out, io.Discard))
+	assert.Contains(t, out.String(), "pause requested: "+ids["failed"])
+	ok, err := graph.FilePause{Dir: dir}.PauseRequested(context.Background(), ids["failed"])
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	// The marker file is not listed as a run.
+	out.Reset()
+	require.NoError(t, runsRun([]string{dir}, &out, io.Discard))
+	assert.Equal(t, 4, strings.Count(out.String(), "\n"), out.String()) // header + 3 runs
+
+	assert.ErrorContains(t, pauseRun([]string{dir, ids["done"]}, &out, io.Discard), "already finished")
+	assert.ErrorContains(t, pauseRun([]string{dir, "nope"}, &out, io.Discard), "not found")
+	assert.ErrorContains(t, pauseRun([]string{dir, "../x"}, &out, io.Discard), "invalid run id")
+	assert.ErrorAs(t, pauseRun([]string{dir}, &out, io.Discard), new(usageError))
+	assert.Error(t, pauseRun([]string{"--nope"}, &out, io.Discard))
+}
+
+// A run compiled with the FilePause signal stops on `cag pause` and continues
+// on Recover.
+func TestPauseCommandStopsRun(t *testing.T) {
+	dir := t.TempDir()
+	store, err := graph.FileStore(dir)
+	require.NoError(t, err)
+	mk := func(onA func(ctx context.Context)) *graph.Runnable[wst] {
+		r, err := graph.New[wst]("w").
+			AddNode("a", func(ctx context.Context, s *wst) error { onA(ctx); s.N++; return nil }).
+			AddNode("b", graph.Func(func(s *wst) error { s.N += 10; return nil })).
+			AddEdge(graph.Start, "a").AddEdge("a", "b").AddEdge("b", graph.End).
+			Compile(graph.WithCheckpointStore(store), graph.WithPauseSignal(graph.FilePause{Dir: dir}))
+		require.NoError(t, err)
+		return r
+	}
+	_, _, err = mk(func(ctx context.Context) {
+		require.NoError(t, pauseRun([]string{dir, graph.RunID(ctx)}, io.Discard, io.Discard))
+	}).Run(context.Background(), wst{})
+	var pe *graph.PausedError
+	require.ErrorAs(t, err, &pe)
+	assert.Equal(t, "b", pe.Node)
+
+	var out bytes.Buffer
+	require.NoError(t, runsRun([]string{dir}, &out, io.Discard))
+	assert.Contains(t, out.String(), "paused")
+
+	s, _, err := mk(func(context.Context) {}).Recover(context.Background(), pe.RunID)
+	require.NoError(t, err)
+	assert.Equal(t, 11, s.N)
+}

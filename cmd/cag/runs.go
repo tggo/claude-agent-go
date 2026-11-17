@@ -144,3 +144,55 @@ func detail(r graph.Record) string {
 	}
 	return strings.Join(p, " ")
 }
+
+const pauseUsage = "usage: cag pause <checkpoint store dir> <runID>"
+
+func pauseCmd(args []string) {
+	if err := pauseRun(args, os.Stdout, os.Stderr); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
+		var ue usageError
+		if errors.As(err, &ue) {
+			fmt.Fprintln(os.Stderr, pauseUsage)
+			os.Exit(2)
+		}
+		die("pause: %v", err)
+	}
+}
+
+// pauseRun asks a run of a graph.FileStore dir to stop before its next node:
+// it writes the graph.FilePause marker next to the run's log. The run must
+// be compiled with WithPauseSignal(graph.FilePause{Dir: dir}); Recover
+// continues it and removes the marker.
+func pauseRun(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("pause", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() { fmt.Fprintln(stderr, pauseUsage) }
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 2 {
+		return usageError{}
+	}
+	dir, id := fs.Arg(0), fs.Arg(1)
+	store, err := graph.FileStore(dir)
+	if err != nil {
+		return err
+	}
+	recs, err := store.Load(context.Background(), id)
+	if err != nil {
+		return err
+	}
+	if len(recs) == 0 {
+		return fmt.Errorf("run %q not found in %s", id, dir)
+	}
+	if s := graph.Summarize(id, recs, time.Now()); s.Status == graph.StatusDone {
+		return fmt.Errorf("run %q already finished", id)
+	}
+	if err := (graph.FilePause{Dir: dir}).Request(id); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "pause requested: %s stops before its next node; Recover continues it\n", id)
+	return nil
+}

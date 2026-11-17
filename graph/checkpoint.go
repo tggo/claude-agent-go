@@ -49,6 +49,10 @@ const (
 	// KindFork is the first record of a forked run after its copied prefix:
 	// the (possibly edited) state to continue from.
 	KindFork = "fork"
+	// KindPause: the run stopped before Node on a PauseSignal request; State
+	// is the state of the last commit and Next (= Node) is where Recover
+	// continues. No run_end follows.
+	KindPause = "pause"
 	// KindRunEnd closes the log. Err == "" means the run finished; a non-empty
 	// Err is a failed run, which Recover retries from the last commit.
 	KindRunEnd = "run_end"
@@ -112,7 +116,7 @@ type CheckpointStore interface {
 const (
 	StatusRunning = "running" // no run_end, last record younger than StaleAfter
 	StatusCrashed = "crashed" // no run_end, nothing written for StaleAfter: the process died
-	StatusPaused  = "paused"  // waiting for an interrupt answer
+	StatusPaused  = "paused"  // waiting for an interrupt answer, or stopped on a pause request (Question empty)
 	StatusDone    = "done"
 	StatusFailed  = "failed" // ended with an error; Recover retries it
 )
@@ -170,6 +174,8 @@ func Summarize(runID string, recs []Record, now time.Time) RunSummary {
 		s.Status, s.Err = StatusFailed, last.Err
 	case last.Kind == KindInterrupt:
 		s.Status, s.Question = StatusPaused, last.Question
+	case last.Kind == KindPause:
+		s.Status = StatusPaused
 	case now.Sub(last.Time) > StaleAfter:
 		s.Status = StatusCrashed
 	default:
