@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-17
+
+### Added
+- `graph`: pause a run from outside, between two nodes.
+  - `WithPauseSignal(PauseSignal)` checks for a pause request before every top-level node. The node in flight finishes and commits first.
+  - A paused run logs a `pause` record instead of `run_end`, returns `*PausedError` (`ErrPaused`), and is listed as `paused`.
+  - `Recover` continues it, also from a rebuilt binary with a fixed node function. The nodes before the pause do not run again. `graph/debugbin_test.go` builds a test program twice (broken and `-tags fixed`) to prove it for a failed run and for a run paused from another process.
+  - `FilePause` keeps a marker file next to a `FileStore`'s logs and works across processes. It never follows a symlink. `MemPause` is in-process.
+  - `IsPauseOf(err, runID)` tells a run's own pause from a node that failed with a nested graph's pause.
+- `cag pause <store dir> <runID>` asks a durable run to stop before its next node.
+- `docs/babysitter.md`: how to build a babysitter, an agent that looks after durable runs, on the SDK. It covers which statuses to wake it for, the verbs it may use (`Recover`, `Fork`, pause, `Resume`, fix and rebuild), what to leave to a person, and how to show it in graphweb. The SDK does not run a babysitter itself.
+- `graphweb`: a babysitter panel.
+  - The harness reports what its babysitter does with `Server.Babysitter(runID, BabysitterEvent)`.
+  - `WithBabysitter(BabysitterControl)` connects the panel's Pause run, Continue run, Take over and answer buttons through `POST /api/babysitter`. The endpoint needs the page token, accepts only runs the server has events of, and caps answers at 16 KiB.
+  - The panel shows the babysitter's question with an answer box and a feed of what it did. A new question opens the panel.
+- `examples/babysitter`: the whole loop in graphweb with a scripted stand-in for the agent and no model. The run fails, the babysitter asks in the panel, then patches and recovers the same run, or hands it over.
+- `graphweb`: a Tools tab for every agent step, to review an agent's work.
+  - It shows the permission mode and allowlist, and the tools that were called, failures first.
+  - Each tool says why it was allowed: by the allowlist, only for a pattern, by the mode, or not at all.
+  - Each call is marked failed, denied by the CLI (`permission_denials`) or, for `Bash`, outside its `Bash(prefix:*)` patterns. Its input and result are shown.
+  - The tools announced but not used are folded by MCP server.
+  - The run overview lists every tool any agent called, with links to the step.
+
+### Changed
+- `graph`: `Recover` withdraws any pause request made before it (`PauseSignal.ClearPause`), whatever state the run was in, since continuing answers it.
+- `graphweb`: a paused segment emits no `graph_end`, the same as an interrupt, because `Recover` continues the run in the same journal.
+
+### Fixed
+- `graphweb`: the metrics row and the run overview printed `null` when a run had no agents or no error.
+
 ## [0.5.0] - 2026-11-09
 
 ### Security
@@ -228,7 +258,8 @@ First public release. A Go SDK for building agents on top of the Claude Code CLI
   `tools`). >90% unit coverage on every substantive package; 18 integration tests
   assert behavior against the real binary.
 
-[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/tggo/claude-agent-go/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/tggo/claude-agent-go/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tggo/claude-agent-go/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/tggo/claude-agent-go/compare/v0.2.1...v0.3.0
