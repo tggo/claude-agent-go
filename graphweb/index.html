@@ -46,7 +46,7 @@ aside{border-left:1px solid var(--line);background:var(--ink-2);display:flex;fle
 .ph{padding:12px 14px 6px;border-bottom:1px solid var(--line)}
 .ph h2{margin:0;font-size:16px;font-weight:600}
 .ph .sub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
-.tabs{display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
 .tab{white-space:nowrap;padding:6px 9px;border:0;background:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--mono);font-size:12.5px}
 .tab.on{color:var(--cyan);border-bottom-color:var(--cyan)}
 #panel{overflow:auto;padding:12px 14px;flex:1;min-height:0}
@@ -57,6 +57,29 @@ aside{border-left:1px solid var(--line);background:var(--ink-2);display:flex;fle
 .ev.err{border-color:var(--coral)} .ev.result{border-color:var(--green)} .ev.marker{border-color:var(--amber)}
 .ev pre,.val{margin:4px 0 0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;line-height:1.5}
 .ev .tool{font-family:var(--mono);color:var(--amber);font-size:12.5px}
+.tlg{display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-family:var(--mono);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tlg .pill{font-size:10.5px;padding:1px 7px}
+.tl{border-bottom:1px solid var(--line);padding:5px 0}
+.tl>summary,.tl.unused{display:flex;align-items:baseline;gap:10px;font-family:var(--mono);font-size:12.5px;list-style:none}
+.tl>summary::-webkit-details-marker{display:none}
+.tl>summary::before{content:'▸';color:var(--faint)} .tl[open]>summary::before{content:'▾'}
+.tl.bad>summary{border-left:2px solid var(--coral);padding-left:6px}
+.tl>summary:focus-visible{outline:1px solid var(--cyan);outline-offset:2px}
+.tallow{font-family:var(--mono);font-size:12px;margin:6px 0 0 18px;color:var(--muted)}
+.tallow.no{color:var(--amber)} .tallow.yes{color:var(--green)}
+.tl-unused>summary{color:var(--muted)}
+.tug{margin:0 0 6px 18px}
+.tchips{display:flex;flex-wrap:wrap;gap:4px}
+.tchip{font-family:var(--mono);font-size:11.5px;padding:1px 7px;border:1px solid var(--line);border-radius:6px;color:var(--muted);overflow-wrap:anywhere}
+.tchip.off{border-style:dashed}
+.tmode{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tl .ev{margin:8px 0 8px 18px}
+.tn{overflow-wrap:anywhere;min-width:0}
+.tc{margin-left:auto;color:var(--muted);white-space:nowrap}
+.tc.bad{color:var(--coral)}
+.rt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:6px 0;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12.5px}
+.rt .rn{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px}
+.rt .rn .btn{padding:1px 8px;font-size:11.5px}
 .pill.bs{cursor:pointer;background:none}
 .pill.bs:hover{border-color:var(--cyan)}
 .bshead{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1344,6 +1367,7 @@ function paintPanel(){
   const nArts = s ? m.arts.filter(a=>a.node===s.node) : [];
   let tab = (!n || !n.visits.length) && ['timeline','state','diff'].includes(S.tab) ? 'config' : S.tab;
   if (tab==='artifacts' && !nArts.length) tab = 'timeline';
+  if (tab==='tools' && !ags) tab = 'timeline';
   const nin = s ? (m.inputs[nk(s.node,s.step)]||[]).length : 0;
   const sig=[S.curRun,s&&s.node,s&&s.step,tab,nin,S.cursor,ags,v&&v.status,n&&n.visits.length,m.pending&&m.pending.seq,nArts.length,S.open.size,Object.keys(S.txt).length].join('|');
   // The babysitter view repaints only on its own events, so an answer being
@@ -1354,20 +1378,26 @@ function paintPanel(){
   if (!s){
     ph.replaceChildren(el('h2',{text:'Run overview'}), el('div',{class:'sub',text:'click a node to inspect it'}));
     tabs.replaceChildren(); const t=S.topo[S.curRun];
-    panel.replaceChildren(
+    panel.replaceChildren(...[ // replaceChildren prints null as text: drop the empty rows
       el('div',{class:'kv'},el('div',{class:'key',text:'path'}),el('div',{class:'val',text:m.path.join(' → ')||'(not started)'})),
       m.initial?el('div',{class:'kv'},el('div',{class:'key',text:'initial state'}),valBlock(m.initial)):null,
       m.end&&m.end.err?el('div',{class:'kv'},el('div',{class:'key',text:'error'}),el('div',{class:'val',text:m.end.err})):null,
-      t?el('div',{class:'muted',text:'Tip: click a node’s dot to set a breakpoint.'}):null);
+      ...runToolsView(m),
+      t?el('div',{class:'muted',text:'Tip: click a node’s dot to set a breakpoint.'}):null].filter(Boolean));
     return;
   }
   ph.replaceChildren(el('h2',{text:s.node}), el('div',{class:'sub',text:[(S.topo[S.curRun]?.nodes.find(x=>x.id===s.node)||{}).kind, s.step!=null?'step '+s.step:'', v?v.status:'not run yet', v&&v.dur!=null?fmtDur(v.dur):'', v&&v.cost?fmtCost(v.cost):''].filter(Boolean).join(' · ')}));
   const defs=[['config','Config'],['timeline','Timeline'],['state','State'],['diff','Diff'],['steps','Steps'+(n&&n.visits.length?` (${n.visits.length})`:'')]];
   if (nArts.length) defs.splice(1,0,['artifacts','Artifacts ('+nArts.length+')']);
+  if (ags) defs.splice(2,0,['tools',toolsTabLabel(m,s)]);
   tabs.replaceChildren(...defs.map(([id,l])=>el('button',{class:'tab'+(tab===id?' on':''),text:l,onclick:()=>{S.tab=id;panelSig='';paintPanel();}})));
+  // The tools tab keeps its scroll position across the repaints of a live run.
+  const visit = s.node+'#'+s.step, keepY = tab==='tools' && S.toolsScroll===visit ? panel.scrollTop : 0;
+  S.toolsScroll = tab==='tools' ? visit : '';
   panel.replaceChildren(); const out=[];
   if (tab==='config'){ panel.append(...configView(m,s,v)); return; }
   if (tab==='artifacts'){ panel.append(...nArts.map(artCard)); return; }
+  if (tab==='tools'){ panel.append(...toolsView(m,s)); panel.scrollTop=keepY; return; }
   if (!n){ panel.append(el('div',{class:'muted',text:'This node has not run yet at this point in time.'})); return; }
   if (tab==='timeline') out.push(...timeline(m,s,v));
   else if (tab==='state') out.push(v&&v.state?valBlock(v.state):el('div',{class:'muted',text:'No state snapshot for this step yet.'}));
@@ -1388,6 +1418,144 @@ function effRows(e){
   return rows;
 }
 function kvRows(rows){ return rows.map(([k,v])=>el('div',{class:'kv'},el('div',{class:'key',text:k}),el('div',{class:'val',text:v}))); }
+// ---------------- tools: what each agent could use, and what it used ----------------
+// agentTools folds one agent visit: the tools its CLI announced (system/init),
+// its MCP servers, the configured allowlist and permission mode (agent_input),
+// every call grouped per tool (agentSteps), and the calls the CLI denied
+// (result.permission_denials). Cached per visit like agentSteps.
+const toolsCache = new Map();
+const EDIT_TOOLS = /^(Edit|MultiEdit|Write|NotebookEdit)$/;
+function agentTools(m, id, step){
+  const evs=m.agents[nk(id,step)]||[], ins=m.inputs[nk(id,step)]||[];
+  const ck=m.run+'|'+nk(id,step), hit=toolsCache.get(ck);
+  if (hit && hit.n===evs.length && hit.i===ins.length && hit.m===m) return hit.v;
+  let avail=null, servers=[], initMode='';
+  for (const e of evs){ const st=e.stream||{};
+    if (st.type==='system' && st.subtype==='init'){ avail=st.tools||[]; servers=st.mcp_servers||[]; initMode=st.permissionMode||''; } }
+  const inp=(ins[ins.length-1]||{}).input||{}, mode=inp.permission_mode||initMode, skip=!!inp.skip_permissions;
+  const allowed=(inp.allowed_tools||[]).map(p=>{ const i=p.indexOf('('); return {pat:p, name:i<0?p:p.slice(0,i), arg:i<0?null:p.slice(i+1,-1)}; });
+  const ag=agentSteps(m,id,step), denied=new Set(), deniedNames={};
+  for (const d of ((ag.res&&ag.res.permission_denials)||[])){ if (d.tool_use_id) denied.add(d.tool_use_id); deniedNames[d.tool_name]=(deniedNames[d.tool_name]||0)+1; }
+  const calls={};
+  for (const r of ag.steps) if (!r.model){ r.denied=denied.has(r.id); r.outside=outsideAllow(r, allowed); (calls[r.name]||(calls[r.name]=[])).push(r); }
+  const names=new Set([...(avail||[]), ...Object.keys(calls)]);
+  const rows=[...names].map(n=>{ const cs=calls[n]||[];
+    cs.sort((x,y)=>(y.err-x.err)||(x.t0-y.t0)); // failed calls first
+    return {name:n, calls:cs, errors:cs.filter(r=>r.err).length, denied:cs.filter(r=>r.denied).length||deniedNames[n]||0,
+      outside:cs.filter(r=>r.outside).length, announced:!avail||avail.includes(n), allow:allowVerdict(n, allowed, mode, skip)}; });
+  rows.sort((a,b)=>(b.errors+b.denied)-(a.errors+a.denied) || b.calls.length-a.calls.length || a.name.localeCompare(b.name));
+  const v={rows, avail, servers, mode, initMode, skip, allowed, used:rows.filter(r=>r.calls.length),
+    calls:rows.reduce((x,r)=>x+r.calls.length,0), failed:rows.reduce((x,r)=>x+r.errors+r.denied,0)};
+  toolsCache.set(ck,{n:evs.length, i:ins.length, m, v}); return v;
+}
+// allowVerdict says why a tool may run: the allowlist (bare name, or only for
+// matching input), the permission mode, or nothing (the CLI asks or denies).
+function allowVerdict(name, allowed, mode, skip){
+  if (skip) return {k:'mode', t:'allowed: permission checks skipped'};
+  const hits=allowed.filter(a=>a.name===name);
+  if (hits.some(a=>a.arg==null)) return {k:'yes', t:'in allowlist'};
+  if (hits.length) return {k:'scoped', t:'allowlist: '+hits.map(a=>a.pat).join(', ')};
+  if (mode==='bypassPermissions') return {k:'mode', t:'allowed by mode bypassPermissions'};
+  if (mode==='acceptEdits' && EDIT_TOOLS.test(name)) return {k:'mode', t:'allowed by mode acceptEdits'};
+  if (!allowed.length) return {k:'mode', t:'mode '+(mode||'default')+' decides'};
+  return {k:'no', t:'not in allowlist'};
+}
+// outsideAllow: a Bash call whose command matches none of the Bash(...)
+// patterns that are its only allowance. Only the plain "prefix:*" and exact
+// forms are checked; other tools' patterns are shown, not evaluated.
+function outsideAllow(r, allowed){
+  if (r.name!=='Bash') return false;
+  const hits=allowed.filter(a=>a.name==='Bash');
+  if (!hits.length || hits.some(a=>a.arg==null)) return false;
+  const cmd=String((r.input||{}).command||'').trim();
+  return !hits.some(a=>a.arg.endsWith(':*') ? cmd.startsWith(a.arg.slice(0,-2)) : cmd===a.arg);
+}
+const mcpServer = n => /^mcp__/.test(n) ? n.split('__')[1] : '';
+// toolOpenFor: the open state of a <details> in the tools view survives
+// repaints; def is its state until the person toggles it.
+function toolDetails(key, def, summary, ...body){
+  const open = S.toolOpen.has(key) ? S.toolOpen.get(key) : def;
+  const d=el('details',{open}, summary, ...body);
+  d.addEventListener('toggle',()=>S.toolOpen.set(key, d.open));
+  return d;
+}
+function toolCallView(c, key){
+  const res = c.result!=null ? String(c.result) : null;
+  const flags=[c.t1?fmtDur(c.t1-c.t0):'running', c.denied?'denied':'', c.err&&!c.denied?'failed':'', c.outside?'outside allowlist':''].filter(Boolean).join(' · ');
+  return el('div',{class:'ev tool_use'+(c.err||c.denied?' err':'')},
+    el('div',{class:'k',text:flags}),
+    el('div',{class:'tool',text:toolDetail(c.name,c.input)||'(no summary)'}),
+    toolDetails(key+'|in', false, el('summary',{text:'input'}), el('pre',{text:JSON.stringify(c.input,null,2)})),
+    res!=null ? toolDetails(key+'|res', !!c.err, el('summary',{text:'result · '+res.length+' chars'}), el('pre',{text:res})) : null);
+}
+function toolRowLabel(r, full){
+  const flags=[];
+  if (r.errors) flags.push(r.errors+' failed');
+  if (r.denied) flags.push(r.denied+' denied');
+  if (r.outside) flags.push(r.outside+' outside allowlist');
+  return [el('span',{class:'tn',text:full?r.name:shortTool(r.name)}),
+    el('span',{class:'tc'+(flags.length?' bad':''),text:r.calls.length+' call'+(r.calls.length>1?'s':'')+(flags.length?' · '+flags.join(' · '):'')})];
+}
+function toolsView(m, s){
+  const t=agentTools(m,s.node,s.step), out=[], base=s.node+'#'+s.step;
+  const modeRow=[el('span',{text:t.mode||'default'})];
+  if (t.skip) modeRow.push(el('span',{class:'pill failed',text:'permission checks skipped'}));
+  if (t.initMode && t.mode && t.initMode!==t.mode) modeRow.push(el('span',{class:'muted',text:'(CLI reported '+t.initMode+')'}));
+  out.push(el('div',{class:'kv'},el('div',{class:'key',text:'permission mode'}),el('div',{class:'val tmode'},...modeRow)));
+  out.push(...kvRows([['allowlist', t.allowed.length ? t.allowed.map(a=>a.pat).join('\n') : '(none: the permission mode decides)']]));
+  if (!t.avail) out.push(el('div',{class:'muted',text:'The agent has not reported its tools yet (system/init); calls made so far are listed.'}));
+  out.push(el('div',{class:'key',style:'margin:14px 0 6px',text:`used: ${t.used.length} of ${t.rows.length} tools · ${t.calls} call${t.calls===1?'':'s'}`+(t.failed?` · ${t.failed} failed or denied`:'')}));
+  if (!t.used.length) out.push(el('div',{class:'muted',text:'No tool calls in this step.'}));
+  for (const r of t.used){
+    const bad=r.errors+r.denied+r.outside>0, key=base+'|'+r.name;
+    const d=toolDetails(key, bad, el('summary',{},...toolRowLabel(r,true)),
+      el('div',{class:'tallow '+r.allow.k,text:r.allow.t}),
+      ...r.calls.map((c,i)=>toolCallView(c, key+'|'+(c.id||i))));
+    d.className='tl'+(bad?' bad':''); out.push(d);
+  }
+  const unused=t.rows.filter(r=>!r.calls.length);
+  if (unused.length){
+    const groups=new Map();
+    for (const r of unused){ const g=mcpServer(r.name); if (!groups.has(g)) groups.set(g,[]); groups.get(g).push(r); }
+    for (const sv of t.servers) if (!groups.has(sv.name)) groups.set(sv.name,[]);
+    const body=[...groups].sort((a,b)=>a[0].localeCompare(b[0])).map(([g,rows])=>{ const sv=g&&t.servers.find(x=>x.name===g);
+      return el('div',{class:'tug'},
+        el('div',{class:'tlg'}, el('span',{text:g?'MCP · '+g:'built-in'}), sv?el('span',{class:'pill '+(sv.status==='connected'?'done':'failed'),text:sv.status}):null),
+        rows.length ? el('div',{class:'tchips'}, rows.map(r=>el('span',{class:'tchip'+(r.allow.k==='no'?' off':''),title:r.allow.t,text:g?r.name.split('__').slice(2).join('__'):r.name})))
+          : el('div',{class:'muted',text:'no tools from this server'})); });
+    const d=toolDetails(base+'|unused', false, el('summary',{text:`${unused.length} available, not used`}), ...body);
+    d.className='tl tl-unused'; out.push(d);
+  }
+  return out;
+}
+function toolsTabLabel(m, s){
+  const t=agentTools(m,s.node,s.step);
+  const outside=t.rows.reduce((x,r)=>x+r.outside,0);
+  return 'Tools ('+t.used.length+' used'+(t.failed?' · '+t.failed+' failed':'')+(outside?' · '+outside+' outside':'')+')';
+}
+// runToolsView is the run overview's table: every tool any agent called, how
+// often, how often it failed, and by which node visits (click to inspect).
+const runToolsCache = {n:-1, m:null, v:null};
+function runToolsView(m){
+  if (runToolsCache.m===m && runToolsCache.n===m.nsteps) return runToolsCache.v;
+  const agg=new Map();
+  for (const k of Object.keys(m.agents)){
+    const i=k.lastIndexOf('#'), node=k.slice(0,i), step=+k.slice(i+1);
+    for (const r of agentTools(m,node,step).rows) if (r.calls.length){
+      const a=agg.get(r.name)||{calls:0,bad:0,visits:[]};
+      a.calls+=r.calls.length; a.bad+=r.errors+r.denied+r.outside; a.visits.push({node,step,n:r.calls.length}); agg.set(r.name,a); } }
+  let v=[];
+  if (agg.size){
+    const rows=[...agg].sort((a,b)=>(b[1].bad>0)-(a[1].bad>0)||b[1].calls-a[1].calls||a[0].localeCompare(b[0]));
+    v=[el('div',{class:'key',style:'margin:14px 0 6px',text:'tools used by agents'}),
+      el('div',{class:'rtools'}, rows.map(([name,a])=>el('div',{class:'rt'},
+        el('span',{class:'tn',text:shortTool(name)}),
+        el('span',{class:'tc'+(a.bad?' bad':''),text:a.calls+(a.bad?' · '+a.bad+' failed/denied/outside':'')}),
+        el('span',{class:'rn'}, a.visits.map(x=>el('button',{class:'btn',text:x.node+' #'+x.step+(x.n>1?' ×'+x.n:''),title:'inspect the tools of '+x.node+', step '+x.step,
+          onclick:()=>{ S.tab='tools'; selectNode(x.node,x.step); }}))))))];
+  }
+  runToolsCache.n=m.nsteps; runToolsCache.m=m; runToolsCache.v=v; return v;
+}
 function configView(m,s,v){
   const topo=S.topo[S.curRun]; const tn=topo&&topo.nodes.find(x=>x.id===s.node); const out=[];
   if (!tn) return [el('div',{class:'muted',text:'unknown node'})];
@@ -1661,7 +1829,7 @@ function playFx(fx){
 // ---------------- controls ----------------
 function postJSON(url,body){ return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-Graphweb-Token':BOOT.token},body:JSON.stringify(body)}); }
 function control(a){ postJSON('/api/control',{action:a}); }
-S.bsDraft = {};
+S.bsDraft = {}; S.toolOpen = new Map();
 $('bsbtn').onclick = ()=>{ if (S.bsOpen) bsClose(); else { S.bsOpen=true; S.bsErr=''; panelSig=''; paint(); } };
 document.addEventListener('keydown',e=>{ if (e.key==='Escape' && S.bsOpen && S.lb==null) bsClose(); });
 function toggleBp(id){ if (S.bps.has(id)) S.bps.delete(id); else S.bps.add(id); paint(); postJSON('/api/breakpoints',{nodes:[...S.bps]}).then(r=>r.json()).then(j=>{ S.bps=new Set(j.nodes); paint(); }); }

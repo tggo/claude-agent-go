@@ -44,7 +44,7 @@ func TestPageScriptsPinnedAndParse(t *testing.T) {
 	require.NotEmpty(t, inline)
 	js := inline[len(inline)-1][1]
 	assert.NotRegexp(t, `https?://`, regexp.MustCompile(`'http://www\.w3\.org/2000/svg'`).ReplaceAllString(js, ""), "inline JS must not reference external hosts")
-	for _, want := range []string{"layoutBlock", "autoGroups", "graphweb:ui:", "buildMini", "renderCard", "agentSteps", "watchPath", "paintMetrics", "bsView", "bsApply", "/api/babysitter"} {
+	for _, want := range []string{"layoutBlock", "autoGroups", "graphweb:ui:", "buildMini", "renderCard", "agentSteps", "watchPath", "paintMetrics", "bsView", "bsApply", "/api/babysitter", "toolsView", "runToolsView", "agentTools"} {
 		assert.Contains(t, js, want)
 	}
 
