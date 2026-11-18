@@ -292,13 +292,24 @@ func NewReplay(path string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	evs, err := readJournal(file)
+	if err != nil {
+		return nil, err
+	}
+	s := newServer("", nil)
+	s.readOnly = true
+	s.preload(evs)
+	return s, nil
+}
+
+// readJournal parses a JSONL journal into events.
+func readJournal(file string) ([]Event, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	s := newServer("", nil)
-	s.readOnly = true
+	var evs []Event
 	rd := bufio.NewReaderSize(f, 1<<20)
 	for n := 1; ; n++ {
 		line, err := rd.ReadBytes('\n')
@@ -310,14 +321,7 @@ func NewReplay(path string) (*Server, error) {
 			if ev.Type == "" {
 				return nil, fmt.Errorf("graphweb: %s line %d: not a graphweb event (no type)", file, n)
 			}
-			// Renumber so ids are dense even if a journal was edited.
-			ev.Seq = int64(len(s.events)) + 1
-			out, _ := json.Marshal(ev)
-			s.events = append(s.events, ev)
-			s.raw = append(s.raw, out)
-			if ev.Type == TypeGraphStart {
-				s.latest = ev.Run
-			}
+			evs = append(evs, ev)
 		}
 		if errors.Is(err, io.EOF) {
 			break
@@ -326,10 +330,37 @@ func NewReplay(path string) (*Server, error) {
 			return nil, err
 		}
 	}
-	if len(s.events) == 0 {
+	if len(evs) == 0 {
 		return nil, fmt.Errorf("graphweb: %s: empty journal", file)
 	}
-	return s, nil
+	return evs, nil
+}
+
+// preload appends earlier events (renumbered so ids stay dense) before any
+// live one, and mirrors them to the journal so it holds the whole run.
+func (s *Server) preload(evs []Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ev := range evs {
+		ev.Seq = int64(len(s.events)) + 1
+		out, _ := json.Marshal(ev)
+		s.events = append(s.events, ev)
+		s.raw = append(s.raw, out)
+		if ev.Type == TypeGraphStart {
+			s.latest = ev.Run
+		}
+		if ev.Run != "" {
+			if s.seen == nil {
+				s.seen = map[string]bool{}
+			}
+			s.seen[ev.Run] = true
+		}
+		if s.journal != nil {
+			if _, err := s.journal.Write(append(out, '\n')); err != nil && s.jerr == nil {
+				s.jerr = err
+			}
+		}
+	}
 }
 
 // ---- artifacts ----

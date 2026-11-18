@@ -136,6 +136,7 @@ type config struct {
 	journal      string
 	allowedHosts []string
 	babysitter   BabysitterControl
+	history      string
 }
 
 // Option configures New.
@@ -144,6 +145,12 @@ type Option func(*config)
 // WithJournal mirrors every event to a JSONL file (mode 0600). The file must
 // not exist yet, so a journal never mixes two sessions.
 func WithJournal(path string) Option { return func(c *config) { c.journal = path } }
+
+// WithHistory starts a live server with the events of an earlier journal, so
+// a run continued by graph.Recover in a new process shows its whole history
+// (nodes, agent messages, artifacts, cost), not only what happens after the
+// restart. The events are copied into the new WithJournal file too.
+func WithHistory(path string) Option { return func(c *config) { c.history = path } }
 
 // WithAllowedHosts accepts extra Host header names (without port), for when
 // the server is deliberately exposed beyond loopback.
@@ -209,6 +216,17 @@ func New(opts ...Option) (*Server, error) {
 			return nil, fmt.Errorf("graphweb: journal: %w", err)
 		}
 		s.journal = f
+	}
+	if cfg.history != "" {
+		file, err := JournalFile(cfg.history)
+		if err != nil {
+			return nil, err
+		}
+		evs, err := readJournal(file)
+		if err != nil {
+			return nil, fmt.Errorf("graphweb: history: %w", err)
+		}
+		s.preload(evs)
 	}
 	return s, nil
 }
