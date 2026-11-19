@@ -7,9 +7,7 @@ import (
 	"crypto/subtle"
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"mime"
 	"net"
 	"net/http"
@@ -320,7 +318,11 @@ func JournalFile(path string) (string, error) {
 
 // NewReplay loads a journal (a JSONL file, or a directory holding
 // journal.jsonl) into a read-only server: same UI, no controls, the whole
-// run available to the scrubber at once.
+// run available to the scrubber at once. A journal that is still being
+// written opens as it is, with the same rules as Summarize: a half-written
+// last line is ignored, and an empty journal or one without graph_start is an
+// empty replay (the run has not started). A missing file, or a line that is
+// not a graphweb event before the last one, is an error.
 func NewReplay(path string, opts ...Option) (*Server, error) {
 	cfg, err := buildConfig(opts)
 	if err != nil {
@@ -330,7 +332,7 @@ func NewReplay(path string, opts ...Option) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	evs, err := readJournal(file)
+	evs, err := readJournalLenient(file)
 	if err != nil {
 		return nil, err
 	}
@@ -338,40 +340,6 @@ func NewReplay(path string, opts ...Option) (*Server, error) {
 	s.readOnly = true
 	s.preload(evs)
 	return s, nil
-}
-
-// readJournal parses a JSONL journal into events.
-func readJournal(file string) ([]Event, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var evs []Event
-	rd := bufio.NewReaderSize(f, 1<<20)
-	for n := 1; ; n++ {
-		line, err := rd.ReadBytes('\n')
-		if t := bytes.TrimSpace(line); len(t) > 0 {
-			var ev Event
-			if jerr := json.Unmarshal(t, &ev); jerr != nil {
-				return nil, fmt.Errorf("graphweb: %s line %d: %w", file, n, jerr)
-			}
-			if ev.Type == "" {
-				return nil, fmt.Errorf("graphweb: %s line %d: not a graphweb event (no type)", file, n)
-			}
-			evs = append(evs, ev)
-		}
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	if len(evs) == 0 {
-		return nil, fmt.Errorf("graphweb: %s: empty journal", file)
-	}
-	return evs, nil
 }
 
 // preload appends earlier events (renumbered so ids stay dense) before any

@@ -240,7 +240,7 @@ func New(opts ...Option) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
-		evs, err := readJournal(file)
+		evs, err := readJournalLenient(file)
 		if err != nil {
 			return nil, fmt.Errorf("graphweb: history: %w", err)
 		}

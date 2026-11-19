@@ -22,6 +22,7 @@ Next version: v0.7.0 (unreleased).
 - `graphweb`: `WithBasePath(prefix)`: `Handler()` can be mounted under a prefix, with or without `http.StripPrefix`; every fetch, SSE and artifact URL respects it.
 - `graphweb`: `WithAllowedHosts` ignores a port, brackets and case, so a LAN address or a name works through the Host guard.
 - `graphweb`: `Summarize(path) (RunSummary, error)` summarizes a journal for a host that lists runs: graph, status, times, duration, cost, tokens, error and per node status, duration, cost, attempts, error. A partial journal is running, not an error.
+- `graphweb`: `NewReplay` (and `WithHistory`) open a journal that is still being written, with the rules of `Summarize`: a half-written last line is ignored, an empty journal or one without `graph_start` is an empty replay, not an error. Garbage before the last line and a missing file are still errors. The page shows status running (last event time on hover) for a run with no end event, and "the run has not started yet" for an empty replay.
 
 ## [0.6.0] - 2026-11-17
 

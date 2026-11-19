@@ -71,8 +71,9 @@ func Summarize(path string) (RunSummary, error) {
 	return summarizeEvents(evs), nil
 }
 
-// readJournalLenient is readJournal that accepts an empty file and a last
-// line cut by a crash.
+// readJournalLenient parses a JSONL journal into events. It accepts an empty
+// file and a last line cut by a crash or still being written; a bad line
+// before the last one is an error. Used by NewReplay, WithHistory and Summarize.
 func readJournalLenient(file string) ([]Event, error) {
 	f, err := os.Open(file)
 	if err != nil {

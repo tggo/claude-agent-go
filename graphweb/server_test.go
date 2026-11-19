@@ -624,8 +624,9 @@ func TestReplayErrors(t *testing.T) {
 	assert.Len(t, rp0.Events(), 1)
 	empty := filepath.Join(dir, "empty.jsonl")
 	require.NoError(t, os.WriteFile(empty, []byte("\n\n"), 0o600))
-	_, err = NewReplay(empty)
-	require.ErrorContains(t, err, "empty")
+	rpe, err := NewReplay(empty) // nothing yet: an empty replay, not an error
+	require.NoError(t, err)
+	assert.Empty(t, rpe.Events())
 	// a huge line and a missing trailing newline are fine
 	big := filepath.Join(dir, "big.jsonl")
 	line := `{"type":"agent_event","run":"r","node":"n","stream":{"x":"` + strings.Repeat("a", 3<<20) + `"}}`
@@ -702,4 +703,55 @@ func TestStartExplicitHostAllowed(t *testing.T) {
 	url, err := s.Start(ctx, "0.0.0.0:0")
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(url, "http://0.0.0.0:"))
+}
+
+// A journal that is still being written opens as a replay, with Summarize's rules.
+func TestReplayGrowingJournal(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(p, []byte(body), 0o600))
+		return p
+	}
+	start := `{"type":"graph_start","run":"r","ts":"2026-01-01T00:00:00Z"}` + "\n"
+	nodeStart := `{"type":"node_start","run":"r","node":"a","step":1,"ts":"2026-01-01T00:00:01Z"}` + "\n"
+
+	t.Run("half-written last line", func(t *testing.T) {
+		p := write("half.jsonl", start+nodeStart+`{"type":"node_en`)
+		rp, err := NewReplay(p)
+		require.NoError(t, err)
+		assert.Len(t, rp.Events(), 2)
+		sum, err := Summarize(p)
+		require.NoError(t, err)
+		assert.Equal(t, StatusRunning, sum.Status)
+	})
+	t.Run("empty file", func(t *testing.T) {
+		rp, err := NewReplay(write("empty0.jsonl", ""))
+		require.NoError(t, err)
+		assert.Empty(t, rp.Events())
+		ts := newTS(t, rp)
+		resp := do(t, "GET", ts.URL+"/", "", nil)
+		defer resp.Body.Close()
+		assert.Equal(t, 200, resp.StatusCode)
+	})
+	t.Run("only some events, no end", func(t *testing.T) {
+		rp, err := NewReplay(write("partial.jsonl", start+nodeStart))
+		require.NoError(t, err)
+		evs := rp.Events()
+		require.Len(t, evs, 2)
+		assert.Equal(t, TypeGraphStart, evs[0].Type)
+		assert.Equal(t, "2026-01-01T00:00:01Z", evs[1].TS.UTC().Format("2006-01-02T15:04:05Z"))
+	})
+	t.Run("headless journal", func(t *testing.T) {
+		rp, err := NewReplay(write("headless.jsonl", nodeStart))
+		require.NoError(t, err)
+		assert.Len(t, rp.Events(), 1)
+	})
+	t.Run("garbage in the middle is an error", func(t *testing.T) {
+		p := write("mid.jsonl", start+"garbage\n"+nodeStart)
+		_, err := NewReplay(p)
+		require.ErrorContains(t, err, "line 2")
+		_, err = Summarize(p)
+		require.Error(t, err)
+	})
 }

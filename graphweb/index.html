@@ -368,6 +368,7 @@ html[data-embed="1"] .app{height:100%}
 <script>
 'use strict';
 const BOOT = window.GRAPHWEB || {token:'', readOnly:true};
+if (BOOT.readOnly) document.getElementById('empty').textContent = 'the run has not started yet';
 // Every URL the page requests goes through API(): relative to the page by default, so it works under any
 // mount that ends in a slash, or under BOOT.base (WithBasePath) when the host set one.
 const API = p => (BOOT.base||'')+'api/'+p;
@@ -1083,6 +1084,7 @@ function paint(){
   // header
   const st = derivedStatus(m);
   $('status').textContent = st; $('status').className='pill '+st;
+  $('status').title = (BOOT.readOnly && st==='running' && m.tLast!=null) ? 'no end event yet: the run is still going. Last event '+new Date(m.tLast).toLocaleTimeString() : '';
   const topo=S.topo[S.curRun]; $('gname').textContent = topo?topo.name:'';
   $('cost').textContent = fmtCost(m.cost);
   $('path').replaceChildren(...m.path.slice(-14).flatMap((p,i)=>(i?[el('i',{text:' → '})]:[]).concat([document.createTextNode(p)])));
