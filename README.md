@@ -494,6 +494,61 @@ loopback and checks the Host header; a random token guards the control endpoints
 From a store, `graphweb.NewReplayStore` rebuilds the run from state diffs, costs
 and routing (the durable log carries no model messages).
 
+#### Theme and embedding
+
+The page is coloured by role tokens, in a light and a dark default that follow
+`prefers-color-scheme` (force one with `WithThemeMode`, `?theme=dark` or a
+`data-theme` attribute on `<html>`). A host sets only the roles it cares about, and
+the edges, bars and tints derive from them. The page loads no web font and no
+stylesheet from outside.
+
+| Token | Colours |
+|---|---|
+| `bg` | page background |
+| `surface` | header, side panel, node boxes |
+| `raised` | buttons, inputs, chips (a step above `surface`) |
+| `line` | borders, dividers, the dot grid |
+| `text`, `muted`, `faint` | main, secondary and tertiary text |
+| `accent` | selection, running, links, primary buttons |
+| `ok`, `warn`, `bad`, `info` | done, waiting or paused, failed, web tools |
+| `ui`, `mono` | font stacks of the interface and of code and numbers |
+
+```go
+srv, _ := graphweb.NewReplay("runs/x/journal.jsonl",
+	graphweb.WithTheme(map[string]string{"bg": "#111", "accent": "#7c5cff"}), // both themes
+	graphweb.WithFonts(`"Inter",system-ui,sans-serif`, ""),                  // "" keeps the default
+	graphweb.WithStylesheet(`.pill{text-transform:none}`),                    // after the built-in CSS
+	graphweb.WithEmbed(),                                                     // no brand, slim header
+	graphweb.WithBasePath("/runs/x/graph/"),                                  // where Handler is mounted
+	graphweb.WithAllowedHosts("192.168.88.210"),                              // a LAN name through the Host guard
+)
+mux := http.NewServeMux()
+mux.Handle("/runs/x/graph/", srv.Handler())
+```
+
+`New`, `NewReplay` and `NewReplayStore` take the options and return an error for a
+token value that is not plain CSS (`;`, braces, `<`, comments) so nothing can
+leave its declaration; `WithStylesheet` escapes every `<`, so `</style>` cannot end
+its element. Replay stays read-only under a prefix.
+
+To list runs without the UI, `graphweb.Summarize` reads a journal into a plain
+struct with JSON tags (`graphweb.RunSummary`): graph name, status, start, end,
+duration, cost, tokens when the agents reported them, the error, and per node its
+status, duration, cost, attempts and error. A journal of a run still going or
+crashed gives status `running` (or `waiting` on an open interrupt) and
+`last_event`, so the host can judge staleness; an empty or headless journal gives
+`unknown`.
+
+```go
+sum, err := graphweb.Summarize("runs/x/journal.jsonl")
+if err == nil {
+	fmt.Println(sum.Graph, sum.Status, sum.DurationMS, sum.CostUSD)
+	for _, n := range sum.Nodes {
+		fmt.Println(" ", n.Name, n.Status, n.Attempts, n.Error)
+	}
+}
+```
+
 ### Traces and recordings
 
 Record every stream run to JSONL, then replay it offline and free:

@@ -137,6 +137,22 @@ type config struct {
 	allowedHosts []string
 	babysitter   BabysitterControl
 	history      string
+
+	theme      map[string]string // WithTheme, WithFonts: tokens for every theme
+	themeMode  string            // "", "light", "dark" or "auto"
+	stylesheet string            // WithStylesheet
+	embed      bool              // WithEmbed
+	basePath   string            // WithBasePath, normalised: "" or "/a/b/"
+	err        error             // first invalid option, reported by New
+}
+
+// buildConfig applies the options and reports the first invalid one.
+func buildConfig(opts []Option) (config, error) {
+	var cfg config
+	for _, o := range opts {
+		o(&cfg)
+	}
+	return cfg, cfg.err
 }
 
 // Option configures New.
@@ -152,8 +168,9 @@ func WithJournal(path string) Option { return func(c *config) { c.journal = path
 // restart. The events are copied into the new WithJournal file too.
 func WithHistory(path string) Option { return func(c *config) { c.history = path } }
 
-// WithAllowedHosts accepts extra Host header names (without port), for when
-// the server is deliberately exposed beyond loopback.
+// WithAllowedHosts accepts extra Host header names, for when the server is
+// deliberately exposed beyond loopback: a LAN address ("192.168.88.210") or a
+// name ("runs.example.lan"). A port, brackets and case are ignored.
 func WithAllowedHosts(hosts ...string) Option {
 	return func(c *config) { c.allowedHosts = append(c.allowedHosts, hosts...) }
 }
@@ -173,6 +190,7 @@ type runState struct {
 // Server journals graph events and serves the UI. Create with New or
 // NewReplay; it is safe for concurrent use.
 type Server struct {
+	cfg      config
 	token    string
 	readOnly bool
 	hosts    map[string]bool
@@ -200,15 +218,15 @@ type Server struct {
 // New returns a live server. It fails only when the journal file cannot be
 // created.
 func New(opts ...Option) (*Server, error) {
-	var cfg config
-	for _, o := range opts {
-		o(&cfg)
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
 	}
 	var tok [16]byte
 	if _, err := rand.Read(tok[:]); err != nil {
 		return nil, err
 	}
-	s := newServer(hex.EncodeToString(tok[:]), cfg.allowedHosts)
+	s := newServer(hex.EncodeToString(tok[:]), cfg)
 	s.babysitter = cfg.babysitter
 	if cfg.journal != "" {
 		f, err := os.OpenFile(cfg.journal, os.O_WRONLY|os.O_CREATE|os.O_EXCL|os.O_APPEND, 0o600)
@@ -231,8 +249,9 @@ func New(opts ...Option) (*Server, error) {
 	return s, nil
 }
 
-func newServer(token string, extraHosts []string) *Server {
+func newServer(token string, cfg config) *Server {
 	s := &Server{
+		cfg:         cfg,
 		token:       token,
 		hosts:       map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true},
 		changed:     make(chan struct{}),
@@ -241,8 +260,8 @@ func newServer(token string, extraHosts []string) *Server {
 		release:     make(chan struct{}),
 		answers:     make(chan string, 16),
 	}
-	for _, h := range extraHosts {
-		s.hosts[h] = true
+	for _, h := range cfg.allowedHosts {
+		s.hosts[normHost(h)] = true
 	}
 	return s
 }

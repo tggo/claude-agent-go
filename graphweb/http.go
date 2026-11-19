@@ -27,6 +27,36 @@ var indexHTML []byte
 // Handler returns the HTTP handler (UI, SSE stream and control endpoints).
 // Use it to mount the UI in an existing server; Start does that for you.
 func (s *Server) Handler() http.Handler {
+	return s.hostGuard(s.withBase(s.routes()))
+}
+
+// withBase serves under WithBasePath. A request with the prefix gets it
+// stripped; the prefix without its trailing slash redirects to the page; any
+// other path is served as it is, so a host that strips the prefix itself works.
+func (s *Server) withBase(next http.Handler) http.Handler {
+	base := s.cfg.basePath
+	if base == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == strings.TrimSuffix(base, "/"):
+			http.Redirect(w, r, base, http.StatusMovedPermanently)
+		case strings.HasPrefix(r.URL.Path, base):
+			r2 := new(http.Request)
+			*r2 = *r
+			u := *r.URL
+			u.Path = "/" + strings.TrimPrefix(r.URL.Path, base)
+			u.RawPath = ""
+			r2.URL = &u
+			next.ServeHTTP(w, r2)
+		default:
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
@@ -38,7 +68,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/breakpoints", s.post(s.handleSetBreakpoints))
 	mux.HandleFunc("POST /api/control", s.post(s.handleControl))
 	mux.HandleFunc("POST /api/babysitter", s.post(s.handleBabysitter))
-	return s.hostGuard(mux)
+	return mux
 }
 
 // Start listens on addr and serves in the background until ctx ends. An
@@ -63,7 +93,7 @@ func (s *Server) Start(ctx context.Context, addr string) (string, error) {
 	bound := ln.Addr().(*net.TCPAddr)
 	if !bound.IP.IsLoopback() {
 		s.mu.Lock()
-		s.hosts[host] = true
+		s.hosts[normHost(host)] = true
 		s.mu.Unlock()
 	}
 	hs := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
@@ -83,11 +113,7 @@ func (s *Server) Start(ctx context.Context, addr string) (string, error) {
 // evil.example resolving to 127.0.0.1 still sends Host: evil.example.
 func (s *Server) hostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := r.Host
-		if hh, _, err := net.SplitHostPort(h); err == nil {
-			h = hh
-		}
-		h = strings.Trim(h, "[]")
+		h := normHost(r.Host)
 		s.mu.Lock()
 		ok := s.hosts[h]
 		s.mu.Unlock()
@@ -123,8 +149,16 @@ func (s *Server) post(h func(http.ResponseWriter, *http.Request)) http.HandlerFu
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
-	boot, _ := json.Marshal(map[string]any{"token": s.token, "readOnly": s.readOnly, "babysitter": s.babysitter != nil})
+	boot, _ := json.Marshal(map[string]any{"token": s.token, "readOnly": s.readOnly, "babysitter": s.babysitter != nil, "base": s.cfg.basePath})
 	page := bytes.Replace(indexHTML, []byte("/*GRAPHWEB_BOOT*/null"), boot, 1)
+	page = bytes.Replace(page, []byte("<!--GRAPHWEB_THEME-->"), []byte(s.cfg.themeBlock()), 1)
+	page = bytes.Replace(page, []byte("<!--GRAPHWEB_HOST_CSS-->"), []byte(s.cfg.hostCSS()), 1)
+	if m := s.cfg.themeMode; m == "light" || m == "dark" {
+		page = bytes.Replace(page, []byte(`data-theme="auto"`), []byte(`data-theme="`+m+`"`), 1)
+	}
+	if s.cfg.embed {
+		page = bytes.Replace(page, []byte(`data-embed="0"`), []byte(`data-embed="1"`), 1)
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -287,7 +321,11 @@ func JournalFile(path string) (string, error) {
 // NewReplay loads a journal (a JSONL file, or a directory holding
 // journal.jsonl) into a read-only server: same UI, no controls, the whole
 // run available to the scrubber at once.
-func NewReplay(path string) (*Server, error) {
+func NewReplay(path string, opts ...Option) (*Server, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	file, err := JournalFile(path)
 	if err != nil {
 		return nil, err
@@ -296,7 +334,7 @@ func NewReplay(path string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := newServer("", nil)
+	s := newServer("", cfg)
 	s.readOnly = true
 	s.preload(evs)
 	return s, nil

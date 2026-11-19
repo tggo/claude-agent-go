@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Next version: v0.7.0 (unreleased).
+
+### Breaking
+- `graphweb`: the page's CSS tokens are role names now (`--bg`, `--surface`, `--raised`, `--line`, `--text`, `--muted`, `--faint`, `--accent`, `--ok`, `--warn`, `--bad`, `--info`, `--ui`, `--mono`). The palette names (`--ink`, `--ink-2`, `--ink-3`, `--cyan`, `--cyan-deep`, `--coral`, `--amber`, `--green`, `--disp`) are gone; a host stylesheet that used them must move to the roles.
+- `graphweb`: the default theme follows `prefers-color-scheme`, so on a light system the page is light. The old look is the dark theme (`WithThemeMode("dark")`).
+- `graphweb`: the page no longer loads IBM Plex Mono and Space Grotesk from Google Fonts. It uses system font stacks. Set `WithFonts`, or an `@font-face` in `WithStylesheet`, to bring fonts back.
+- `graphweb`: `NewReplay` and `NewReplayStore` take `...Option` (callers that pass no option compile unchanged), and `New`, `NewReplay` and `NewReplayStore` return an error for an invalid theme option.
+- `graphweb`: the page requests `api/...` relative to itself (or under `WithBasePath`), not `/api/...`.
+
+### Added
+- `graphweb`: `WithTheme(map[string]string)`, `WithFonts(ui, mono)`, `WithStylesheet(css)`, `WithThemeMode("light"|"dark"|"auto")`. Token values are validated and the stylesheet escapes `<`, so nothing can close the `<style>` element. `?theme=` in the URL overrides per view.
+- `graphweb`: `WithEmbed()` (or `?embed=1`) drops the brand and fits the host's frame.
+- `graphweb`: `WithBasePath(prefix)`: `Handler()` can be mounted under a prefix, with or without `http.StripPrefix`; every fetch, SSE and artifact URL respects it.
+- `graphweb`: `WithAllowedHosts` ignores a port, brackets and case, so a LAN address or a name works through the Host guard.
+- `graphweb`: `Summarize(path) (RunSummary, error)` summarizes a journal for a host that lists runs: graph, status, times, duration, cost, tokens, error and per node status, duration, cost, attempts, error. A partial journal is running, not an error.
+
 ## [0.6.0] - 2026-11-17
 
 ### Added

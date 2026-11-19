@@ -17,7 +17,11 @@ import (
 // The durable log has no agent stream events, so node bodies show their state
 // diffs, costs and routing but not the model's messages. A run that crashed
 // shows its last node as started and never ended.
-func NewReplayStore(ctx context.Context, store graph.CheckpointStore, runID string) (*Server, error) {
+func NewReplayStore(ctx context.Context, store graph.CheckpointStore, runID string, opts ...Option) (*Server, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	if runID == "" {
 		runs, err := store.List(ctx)
 		if err != nil {
@@ -39,7 +43,7 @@ func NewReplayStore(ctx context.Context, store graph.CheckpointStore, runID stri
 	if err != nil {
 		return nil, err
 	}
-	s := newServer("", nil)
+	s := newServer("", cfg)
 	s.readOnly = true
 	for i, ev := range evs {
 		ev.Seq = int64(i + 1)
