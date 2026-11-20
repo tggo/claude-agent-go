@@ -19,6 +19,7 @@ Next version: v0.7.0 (unreleased).
 ### Added
 - `graphweb`: `WithTheme(map[string]string)`, `WithFonts(ui, mono)`, `WithStylesheet(css)`, `WithThemeMode("light"|"dark"|"auto")`. Token values are validated and the stylesheet escapes `<`, so nothing can close the `<style>` element. `?theme=` in the URL overrides per view.
 - `graphweb`: `WithEmbed()` (or `?embed=1`) drops the brand and fits the host's frame.
+- `graphweb`: `WithStatusPill(bool)` hides the header status pill, `WithStatusLabel(func(status) string)` renames it, `WithLogHeight(px)` sizes the event log and `WithLogCollapsed()` starts it folded (a `log` button toggles it), for a host that shows its own verdict and wants a short frame.
 - `graphweb`: `WithBasePath(prefix)`: `Handler()` can be mounted under a prefix, with or without `http.StripPrefix`; every fetch, SSE and artifact URL respects it.
 - `graphweb`: `WithAllowedHosts` ignores a port, brackets and case, so a LAN address or a name works through the Host guard.
 - `graphweb`: `Summarize(path) (RunSummary, error)` summarizes a journal for a host that lists runs: graph, status, times, duration, cost, tokens, error and per node status, duration, cost, attempts, error. A partial journal is running, not an error.

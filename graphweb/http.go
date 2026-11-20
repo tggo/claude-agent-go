@@ -147,7 +147,8 @@ func (s *Server) post(h func(http.ResponseWriter, *http.Request)) http.HandlerFu
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, _ *http.Request) {
-	boot, _ := json.Marshal(map[string]any{"token": s.token, "readOnly": s.readOnly, "babysitter": s.babysitter != nil, "base": s.cfg.basePath})
+	boot, _ := json.Marshal(map[string]any{"token": s.token, "readOnly": s.readOnly, "babysitter": s.babysitter != nil, "base": s.cfg.basePath,
+		"hidePill": s.cfg.hidePill, "labels": s.cfg.statusLabels(), "logHeight": s.cfg.logHeight, "logFolded": s.cfg.logFolded})
 	page := bytes.Replace(indexHTML, []byte("/*GRAPHWEB_BOOT*/null"), boot, 1)
 	page = bytes.Replace(page, []byte("<!--GRAPHWEB_THEME-->"), []byte(s.cfg.themeBlock()), 1)
 	page = bytes.Replace(page, []byte("<!--GRAPHWEB_HOST_CSS-->"), []byte(s.cfg.hostCSS()), 1)

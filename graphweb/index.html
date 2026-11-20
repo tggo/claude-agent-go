@@ -116,7 +116,8 @@ footer{border-top:1px solid var(--line);background:var(--surface)}
 .scrub input[type=range]{flex:1;accent-color:var(--accent)}
 .scrub label{font-family:var(--mono);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .scrub select{background:var(--raised);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
-#log{height:170px;overflow:auto;font-family:var(--mono);font-size:12px;border-top:1px solid var(--line)}
+#log[hidden]{display:none}
+#log{height:var(--log-h,170px);overflow:auto;font-family:var(--mono);font-size:12px;border-top:1px solid var(--line)}
 .row{display:flex;gap:10px;padding:2px 16px;cursor:pointer;white-space:nowrap;align-items:baseline}
 .row:hover{background:var(--raised)} .row.sel{background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
 .row .n{width:46px;color:var(--faint);text-align:right;flex:none}
@@ -358,6 +359,7 @@ html[data-embed="1"] .app{height:100%}
       <span id="pos" class="stat"></span>
       <label><input id="follow" type="checkbox" checked> follow live</label>
       <label><input id="showagent" type="checkbox"> agent events</label>
+      <button id="logbtn" class="btn" aria-pressed="true" title="show or hide the event log">log</button>
     </div>
     <div id="log" role="log"></div>
   </footer>
@@ -1083,7 +1085,7 @@ function paint(){
   const L=S.layout;
   // header
   const st = derivedStatus(m);
-  $('status').textContent = st; $('status').className='pill '+st;
+  $('status').textContent = (BOOT.labels&&BOOT.labels[st])||st; $('status').className='pill '+st;
   $('status').title = (BOOT.readOnly && st==='running' && m.tLast!=null) ? 'no end event yet: the run is still going. Last event '+new Date(m.tLast).toLocaleTimeString() : '';
   const topo=S.topo[S.curRun]; $('gname').textContent = topo?topo.name:'';
   $('cost').textContent = fmtCost(m.cost);
@@ -1793,6 +1795,12 @@ function paintLog(){
       el('span',{class:'ty '+e.type+' '+tcls,text:e.type}), el('span',{class:'d',text:describe(e)})); }));
   if (stick || S.follow) log.scrollTop=log.scrollHeight;
 }
+// host options: status pill, log height and fold
+if (BOOT.hidePill) $('status').hidden = true;
+if (BOOT.logHeight) document.documentElement.style.setProperty('--log-h', BOOT.logHeight+'px');
+function setLogShown(on){ $('log').hidden=!on; $('logbtn').setAttribute('aria-pressed', String(on)); }
+$('logbtn').onclick=()=>setLogShown($('log').hidden);
+setLogShown(!BOOT.logFolded);
 $('showagent').onchange=e=>{ S.showAgent=e.target.checked; $('log').dataset.sig=''; paintLog(); };
 
 // ---------------- scrubber / playback ----------------

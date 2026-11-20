@@ -138,12 +138,16 @@ type config struct {
 	babysitter   BabysitterControl
 	history      string
 
-	theme      map[string]string // WithTheme, WithFonts: tokens for every theme
-	themeMode  string            // "", "light", "dark" or "auto"
-	stylesheet string            // WithStylesheet
-	embed      bool              // WithEmbed
-	basePath   string            // WithBasePath, normalised: "" or "/a/b/"
-	err        error             // first invalid option, reported by New
+	theme      map[string]string   // WithTheme, WithFonts: tokens for every theme
+	themeMode  string              // "", "light", "dark" or "auto"
+	stylesheet string              // WithStylesheet
+	embed      bool                // WithEmbed
+	basePath   string              // WithBasePath, normalised: "" or "/a/b/"
+	hidePill   bool                // WithStatusPill(false)
+	label      func(string) string // WithStatusLabel
+	logHeight  int                 // WithLogHeight, px, 0 = default
+	logFolded  bool                // WithLogCollapsed
+	err        error               // first invalid option, reported by New
 }
 
 // buildConfig applies the options and reports the first invalid one.

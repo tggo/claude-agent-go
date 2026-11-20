@@ -519,6 +519,8 @@ srv, _ := graphweb.NewReplay("runs/x/journal.jsonl",
 	graphweb.WithFonts(`"Inter",system-ui,sans-serif`, ""),                  // "" keeps the default
 	graphweb.WithStylesheet(`.pill{text-transform:none}`),                    // after the built-in CSS
 	graphweb.WithEmbed(),                                                     // no brand, slim header
+	graphweb.WithStatusPill(false),                                           // the host shows its own verdict
+	graphweb.WithLogHeight(120),                                              // or WithLogCollapsed()
 	graphweb.WithBasePath("/runs/x/graph/"),                                  // where Handler is mounted
 	graphweb.WithAllowedHosts("192.168.88.210"),                              // a LAN name through the Host guard
 )

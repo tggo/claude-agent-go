@@ -150,3 +150,30 @@ func TestQueryOverridesInPage(t *testing.T) {
 	assert.Contains(t, html, "q.get('theme')")
 	assert.Contains(t, html, "q.get('embed')==='1'")
 }
+
+func TestHostOptionsInBoot(t *testing.T) {
+	srv := replaySrv(t,
+		WithStatusPill(false),
+		WithStatusLabel(func(s string) string {
+			if s == "done" {
+				return "finished"
+			}
+			return ""
+		}),
+		WithLogHeight(90), WithLogCollapsed())
+	p := page(t, srv, "/")
+	assert.Contains(t, p, `"hidePill":true`)
+	assert.Contains(t, p, `"labels":{"done":"finished"}`)
+	assert.Contains(t, p, `"logHeight":90`)
+	assert.Contains(t, p, `"logFolded":true`)
+
+	def := page(t, replaySrv(t), "/")
+	assert.Contains(t, def, `"hidePill":false`)
+	assert.Contains(t, def, `"labels":null`)
+	assert.Contains(t, def, `"logFolded":false`)
+}
+
+func TestLogHeightTooSmall(t *testing.T) {
+	_, err := NewReplay("testdata/chain16.jsonl", WithLogHeight(10))
+	assert.Error(t, err)
+}

@@ -95,6 +95,51 @@ func WithBasePath(prefix string) Option {
 	}
 }
 
+// WithStatusPill shows or hides the run status pill in the header (the word
+// next to the graph name: running, done, failed ...). A host that shows its
+// own verdict next to the graph hides it. The default is shown.
+func WithStatusPill(show bool) Option { return func(c *config) { c.hidePill = !show } }
+
+// WithStatusLabel renames the text of the status pill. fn gets the status the
+// page derives (idle, running, waiting, paused, done, failed, error,
+// cancelled, max_steps) and returns the text to show; an empty result keeps
+// the status itself. The colour still follows the status. fn is called once
+// per status when the page is served, so it needs no locking.
+func WithStatusLabel(fn func(status string) string) Option { return func(c *config) { c.label = fn } }
+
+// WithLogHeight sets the height of the event log panel in pixels (default
+// 170). Values below 40 are an error reported by New.
+func WithLogHeight(px int) Option {
+	return func(c *config) {
+		if px < 40 {
+			c.setErr(fmt.Errorf("graphweb: log height %d: want at least 40 px", px))
+			return
+		}
+		c.logHeight = px
+	}
+}
+
+// WithLogCollapsed starts the page with the event log folded; the "log"
+// button next to the scrubber opens it.
+func WithLogCollapsed() Option { return func(c *config) { c.logFolded = true } }
+
+// statusNames are the statuses the page can show in the pill.
+var statusNames = []string{"idle", "running", "waiting", "paused", "done", "failed", "error", "cancelled", "max_steps"}
+
+// statusLabels is the label map for the page, nil without WithStatusLabel.
+func (c *config) statusLabels() map[string]string {
+	if c.label == nil {
+		return nil
+	}
+	m := map[string]string{}
+	for _, s := range statusNames {
+		if l := c.label(s); l != "" && l != s {
+			m[s] = l
+		}
+	}
+	return m
+}
+
 func (c *config) setErr(err error) {
 	if c.err == nil {
 		c.err = err
