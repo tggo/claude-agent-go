@@ -93,8 +93,9 @@ func readJournalLenient(file string) ([]Event, error) {
 			switch {
 			case jerr == nil:
 				evs = append(evs, ev)
-			case errors.Is(rerr, io.EOF) && line[len(line)-1] != '\n':
-				// the last line is unfinished: the writer is mid-line or died
+			case errors.Is(rerr, io.EOF) && line[len(line)-1] != '\n' && t[0] == '{':
+				// the last line is an unfinished event: the writer is mid-line or died.
+				// An unfinished line that is no JSON object at all is not a journal.
 			default:
 				return nil, fmt.Errorf("graphweb: %s line %d: %w", file, n, jerr)
 			}

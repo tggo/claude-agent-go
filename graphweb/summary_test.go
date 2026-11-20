@@ -106,6 +106,11 @@ func TestSummarizeUnknownAndErrors(t *testing.T) {
 	assert.Error(t, err, "garbage before the last line is an error")
 	_, err = Summarize(writeTmp(t, `{"x":1}`+"\n"))
 	assert.Error(t, err, "a complete line that is not an event is an error")
+	_, err = Summarize(writeTmp(t, "x"))
+	assert.Error(t, err, "an unfinished line that is no JSON object is not a journal")
+	sum, err = Summarize(writeTmp(t, `{"v":1,"run":"run-aaaa`))
+	require.NoError(t, err, "an unfinished first event is a run that has not started")
+	assert.Equal(t, StatusUnknown, sum.Status)
 }
 
 // Live journal written by the server: failed run, retries, interrupt.
