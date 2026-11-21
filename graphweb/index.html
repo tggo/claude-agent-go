@@ -294,25 +294,42 @@ footer{border-top:1px solid var(--line);background:var(--surface)}
 .node.cgroup rect.box{fill:color-mix(in srgb,var(--accent) 8%,var(--surface));stroke:color-mix(in srgb,var(--accent) 35%,var(--line))}
 .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-family:var(--mono)}
 @media (max-width:900px){main{grid-template-columns:minmax(0,1fr);grid-template-rows:55vh 1fr}aside{border-left:0;border-top:1px solid var(--line)}}
-/* board: runs of this graph in the column of the workflow (group) they were routed to */
-#board{position:absolute;inset:0;z-index:6;overflow:auto;background:var(--bg);padding:14px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(230px,1fr);gap:12px;align-items:start}
+/* board: runs of this graph under the router, in the column of the workflow they were routed to */
+#board{position:absolute;inset:0;z-index:6;overflow:auto;background:var(--bg);padding:22px 18px 40px}
 #board[hidden]{display:none}
-main.boardon{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
-@media (max-width:900px){#board{grid-auto-flow:row;grid-auto-columns:auto;grid-template-columns:minmax(0,1fr)}}main.boardon aside{display:none}
-.bcol{background:var(--surface);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;gap:8px;padding:10px;min-width:0}
-
-.bhead{display:flex;align-items:baseline;gap:8px}.bhead b{font-size:14px}.bhead .n{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--raised);border-radius:6px;padding:1px 7px}
-.bsum{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-height:14px}
-.bnone{color:var(--muted);font-size:12.5px;padding:18px 0;text-align:center}
+main.boardon{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}main.boardon aside{display:none}
+.bwrap{display:flex;flex-direction:column;align-items:center;min-width:min-content}
+.bhub{width:340px;max-width:100%;position:relative;margin-bottom:30px}
+.bhub.haslanes::after{content:'';position:absolute;left:50%;bottom:-31px;height:30px;border-left:1.5px solid var(--edge)}
+.blanes{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(230px,300px);gap:16px;justify-content:center;width:100%}
+.blane{display:flex;flex-direction:column;gap:10px;min-width:0;position:relative}
+.blanes.wired .blane::before{content:'';position:absolute;left:50%;top:-16px;height:16px;border-left:1.5px solid var(--edge)}
+.blanes.wired .blane::after{content:'';position:absolute;top:-16px;left:-8px;right:-8px;border-top:1.5px solid var(--edge)}
+.blanes.wired .blane:first-child::after{left:50%}.blanes.wired .blane:last-child::after{right:50%}
+.blanes.wired .blane:only-child::after{display:none}
+.bbox{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.bbox.live{border-color:var(--accent)}.bbox.ask{border-color:var(--warn)}
+.bh{display:flex;align-items:center;gap:10px;min-width:0}
+.bico{width:30px;height:30px;border-radius:8px;background:var(--raised);border:1px solid var(--line);display:grid;place-items:center;flex:none;font-family:var(--mono);font-size:13px;color:var(--accent)}
+.bbox.ask .bico{color:var(--warn)}
+.bh .tt{display:flex;flex-direction:column;min-width:0;flex:1}.bh .tt b{font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bh .tt small{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bh .pill{font-size:10.5px;padding:1px 8px;flex:none}
+.bnow{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bprog{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;color:var(--muted)}.bprog i{flex:1;height:4px;border-radius:2px;background:var(--line);overflow:hidden;display:flex}.bprog i u{display:block;height:100%;background:var(--ok)}.bprog i s{display:block;height:100%;background:var(--bad)}.bprog i em{display:block;height:100%;background:var(--accent)}
+.blast{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bq{background:color-mix(in srgb,var(--surface) 55%,var(--bg));border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.bqh{display:flex;align-items:center;font-size:12.5px;color:var(--muted)}.bqh .n{margin-left:auto;font-family:var(--mono);font-size:11.5px;background:var(--raised);border-radius:6px;padding:1px 7px}
+.bnone{color:var(--muted);font-size:12.5px;padding:14px 0;text-align:center}
 .bcard{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:5px;padding:9px 10px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:8px;background:var(--raised);cursor:pointer;min-width:0}
 .bcard:hover{border-color:var(--accent)}.bcard:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .bcard.running{border-left-color:var(--accent)}.bcard.waiting,.bcard.paused{border-left-color:var(--warn)}.bcard.done{border-left-color:var(--ok)}.bcard.failed,.bcard.error,.bcard.cancelled,.bcard.max_steps{border-left-color:var(--bad)}
 .bcard.cur{box-shadow:0 0 0 1px var(--accent)}
-.bt{display:flex;gap:8px;align-items:flex-start}.bt b{font-size:13.5px;line-height:1.3;overflow-wrap:anywhere;flex:1;min-width:0}.bt .pill{font-size:10.5px;padding:1px 7px;flex:none}
-.bmeta{display:flex;gap:10px;font-family:var(--mono);font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.bt{display:flex;gap:8px;align-items:flex-start}.bt b{font-size:13px;line-height:1.3;overflow-wrap:anywhere;flex:1;min-width:0}.bt .pill{font-size:10px;padding:0 6px;flex:none}
+.bmeta{display:flex;gap:10px;font-family:var(--mono);font-size:11px;color:var(--muted);flex-wrap:wrap}
 .bmeta .err{color:var(--bad)}
-.btags{display:flex;gap:5px;flex-wrap:wrap}.btags span{font-size:11px;padding:1px 7px;border-radius:5px;background:transparent;border:1px solid var(--line);color:var(--muted)}
-.bconf{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--muted)}.bconf i{flex:1;height:4px;border-radius:2px;background:var(--line);overflow:hidden}.bconf i u{display:block;height:100%;background:var(--accent)}
+.btags{display:flex;gap:5px;flex-wrap:wrap}.btags span{font-size:11px;padding:0 7px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+.bconf{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--muted)}.bconf i{flex:1;height:3px;border-radius:2px;background:var(--line);overflow:hidden}.bconf i u{display:block;height:100%;background:var(--accent)}
+@media (max-width:900px){.blanes{grid-auto-flow:row;grid-template-columns:minmax(0,1fr);grid-auto-columns:auto}.blanes.wired .blane::before,.blanes.wired .blane::after,.bhub.haslanes::after{display:none}.bhub{margin-bottom:14px}}
 /* markers and glyphs coloured from tokens (SVG attributes cannot use var()) */
 #arrow path{fill:var(--edge)}#arrow-taken path{fill:var(--edge-taken)}#arrow-hot path{fill:var(--accent)}
 .node.start path,.node.end path{fill:var(--muted)}
@@ -1913,12 +1930,31 @@ function cardFacts(st){
   const tags = (Array.isArray(lc.tags)?lc.tags:[]).filter(t=>typeof t==='string'&&t).slice(0,4);
   return {title, conf: conf==null?null:Math.max(0,Math.min(100,Math.round(conf))), tags};
 }
-function boardColumns(topo){
-  const ids = new Set((topo.groups||[]).map(g=>g.id));
-  return [{id:'__in', label:'Not routed yet', hint:'running, not in a workflow yet'}]
-    .concat((topo.groups||[]).map(g=>({id:g.id, label:g.label||g.id})))
-    .concat([{id:'__direct', label:'No workflow', hint:'finished without entering a workflow'}])
-    .map(c=>Object.assign(c,{cards:[]})).filter(c=>c.id.startsWith('__')||ids.has(c.id));
+// The router is the node whose conditional edge fans out to the most workflows (groups); each of
+// its targets is a column: a group, or a plain node (a direct answer, a question to a person).
+// Without one, every group is a column. Groups the router does not reach are columns too.
+function boardLayout(topo){
+  const nodes = topo.nodes||[], byId = {}; nodes.forEach(n=>byId[n.id]=n);
+  const colOf = id => { const n = byId[id]; if (!n || n.kind==='end' || n.kind==='start') return null; return n.group ? 'g:'+n.group : 'n:'+id; };
+  let best = null;
+  for (const n of nodes){
+    const outs = (topo.edges||[]).filter(e=>e.from===n.id && e.conditional && !e.watch && !e.back);
+    const cols = [...new Set(outs.map(e=>colOf(e.to)).filter(c=>c && c!==colOf(n.id)))];
+    const groups = cols.filter(c=>c.startsWith('g:')).length;
+    if (cols.length>=2 && groups>=1 && (!best || groups>best.groups || groups===best.groups && cols.length>best.cols.length)) best = {id:n.id, cols, outs, groups};
+  }
+  const glabel = {}; (topo.groups||[]).forEach(g=>glabel[g.id]=g.label||g.id);
+  const cols = [];
+  const add = (key, via) => {
+    if (cols.some(c=>c.key===key)) return;
+    const isG = key.startsWith('g:'), id = key.slice(2), n = byId[id];
+    const size = isG ? nodes.filter(x=>x.group===id && !x.parent).length : 1;
+    cols.push({key, label: isG ? glabel[id] : shortId(n||{id}), sub: isG ? 'workflow · '+size+' step'+(size===1?'':'s') : (via&&via.label ? via.label : (n&&n.kind==='agent'?'agent':'step')),
+      ask: !isG && !!(via&&via.label&&/unsure|human|person|ask|review/i.test(via.label+' '+id)), cards:[]});
+  };
+  if (best) best.outs.forEach(e=>{ const k = colOf(e.to); if (k && k!==colOf(best.id)) add(k, e); });
+  (topo.groups||[]).forEach(g=>add('g:'+g.id));
+  return {router: best && byId[best.id], cols, colOf};
 }
 function openRun(run){
   S.bsErr=''; S.bsConfirm=false; S.curRun=run; S.follow=false; $('follow').checked=false; S.cursor=S.events.length;
@@ -1930,6 +1966,19 @@ function setBoard(on){
   if (on) { const c = $('board').querySelector('.bcard.cur') || $('board').querySelector('.bcard'); if (c) c.focus({preventScroll:false}); }
   else $('boardbtn').focus();
 }
+function boardCard(x, nodeOfId){
+  const at = x.m.path[x.m.path.length-1];
+  const where = x.m.end ? (x.st==='done'?'finished':x.st) : at ? 'at '+shortId(nodeOfId(at)||{id:at}) : 'starting';
+  const dur = x.m.t0!=null ? fmtDur(((x.m.tEnd||x.m.tLast||x.m.t0))-x.m.t0) : '';
+  return el('button',{class:'bcard '+x.st+(x.run===S.curRun?' cur':''), type:'button', 'data-run':x.run, title:'open run '+x.run, onclick:()=>openRun(x.run)},
+    el('div',{class:'bt'}, el('b',{text:clip(x.f.title||x.run,120)}), el('span',{class:'pill '+x.st, text:(BOOT.labels&&BOOT.labels[x.st])||x.st})),
+    x.f.conf!=null ? el('div',{class:'bconf',title:'confidence from the run state'}, el('i',{},el('u',{style:'width:'+x.f.conf+'%'})), el('span',{text:x.f.conf+'%'})) : null,
+    x.f.tags.length ? el('div',{class:'btags'}, x.f.tags.map(t=>el('span',{text:clip(t,24)}))) : null,
+    el('div',{class:'bmeta'}, el('span',{text:where}), dur?el('span',{text:dur}):null, x.m.cost?el('span',{text:trimCost(x.m.cost)}):null, x.f.title?el('span',{text:x.run.slice(0,14)}):null),
+    x.m.end&&x.m.end.err ? el('div',{class:'bmeta'}, el('span',{class:'err',text:clip(x.m.end.err,140)})) : null);
+}
+const BORDER = {running:0, waiting:1, paused:1, failed:2, error:2, idle:3, done:4};
+const stLabel = k => (BOOT.labels&&BOOT.labels[k])||k;
 function paintBoard(){
   const topo = S.topo[S.curRun]; const btn = $('boardbtn');
   const same = topo ? S.runs.filter(r=>S.topo[r]&&S.topo[r].name===topo.name) : [];
@@ -1939,40 +1988,58 @@ function paintBoard(){
   const sig = [S.events.length, S.curRun, topo.name].join('|'); if (S.boardSig===sig) return;
   const now = Date.now(); if (S.boardSig && now-(S.boardAt||0)<250) { if (!S.boardT) S.boardT = setTimeout(()=>{ S.boardT=null; paintBoard(); }, 260); return; }
   S.boardSig = sig; S.boardAt = now;
-  const ms = boardModels(), cols = boardColumns(topo), byId = {};
-  cols.forEach(c=>byId[c.id]=c);
-  const grp = {}; (topo.nodes||[]).forEach(n=>{ if (n.group) grp[n.id]=n.group; });
-  const order = {running:0, waiting:1, paused:1, failed:2, error:2, idle:3, done:4};
+  const ms = boardModels(), L = boardLayout(topo), byKey = {}, hub = [], other = [];
+  L.cols.forEach(c=>byKey[c.key]=c);
   same.forEach(run=>{
     const m = ms[run]; if (!m) return;
-    const st = derivedStatus(m);
-    let col = null; for (let i=m.path.length-1;i>=0;i--) if (grp[m.path[i]] && byId[grp[m.path[i]]]) { col = grp[m.path[i]]; break; }
-    if (!col) col = m.end ? '__direct' : '__in';
-    byId[col].cards.push({run, m, st, f:cardFacts(m.state||m.initial)});
+    const x = {run, m, st:derivedStatus(m), f:cardFacts(m.state||m.initial)};
+    let key = null; for (let i=m.path.length-1;i>=0;i--){ const k = L.colOf(m.path[i]); if (k && byKey[k]) { key = k; break; } }
+    if (key) byKey[key].cards.push(x); else if (m.end) other.push(x); else hub.push(x);
   });
+  if (other.length) L.cols.push({key:'__other', label:'Other', sub:'finished without being routed', cards:other});
   const nodeOfId = id => (topo.nodes||[]).find(n=>n.id===id);
-  const kids = cols.filter(c=>!c.id.startsWith('__')||c.cards.length).map(c=>{
-    c.cards.sort((a,b)=>(order[a.st]??3)-(order[b.st]??3) || (b.m.t0||0)-(a.m.t0||0));
+  const sortCards = cs => cs.sort((a,b)=>(BORDER[a.st]??3)-(BORDER[b.st]??3) || (b.m.t0||0)-(a.m.t0||0));
+  const routed = L.cols.reduce((n,c)=>n+(c.key==='__other'?0:c.cards.length),0);
+
+  // the router, with the runs it has not routed yet
+  let hubEl = null;
+  if (L.router){
+    sortCards(hub);
+    const busy = hub.some(x=>x.st==='running'), waiting = hub.filter(x=>x.st==='waiting'||x.st==='paused').length;
+    hubEl = el('section',{class:'bhub bbox'+(busy?' live':'')+(L.cols.length?' haslanes':''),'aria-label':'router '+L.router.id},
+      el('div',{class:'bh'}, el('span',{class:'bico','aria-hidden':'true',text:'⑂'}),
+        el('span',{class:'tt'}, el('b',{text:shortId(L.router)}), el('small',{text:(L.router.kind==='agent'?'agent':'step')+' · routes to '+L.cols.filter(c=>c.key!=='__other').length})),
+        el('span',{class:'pill '+(busy?'running':'idle'), text:busy?stLabel('running'):stLabel('idle')})),
+      el('div',{class:'bnow', text: hub.length ? (busy?'Routing: ':'Next: ')+(hub[0].f.title||hub[0].run) : 'Waiting for requests'}),
+      el('div',{class:'bmeta'}, el('span',{text:routed+' routed'}), hub.length?el('span',{text:hub.length+' in queue'}):null, waiting?el('span',{text:waiting+' waiting'}):null),
+      hub.length ? el('div',{class:'bq'}, hub.slice(0,6).map(x=>boardCard(x,nodeOfId)), hub.length>6?el('div',{class:'bnone',text:'+'+(hub.length-6)+' more'}):null) : null);
+  }
+
+  const lanes = L.cols.map(c=>{
+    sortCards(c.cards);
     const cnt = {}; c.cards.forEach(x=>cnt[x.st]=(cnt[x.st]||0)+1);
-    const sum = Object.keys(cnt).sort((a,b)=>(order[a]??3)-(order[b]??3)).map(k=>cnt[k]+' '+((BOOT.labels&&BOOT.labels[k])||k)).join(' · ');
-    const cards = c.cards.map(x=>{
-      const at = x.m.path[x.m.path.length-1];
-      const where = x.m.end ? (x.st==='done'?'finished':x.st) : at ? 'at '+shortId(nodeOfId(at)||{id:at}) : 'starting';
-      const dur = x.m.t0!=null ? fmtDur(((x.m.tEnd||x.m.tLast||x.m.t0))-x.m.t0) : '';
-      return el('button',{class:'bcard '+x.st+(x.run===S.curRun?' cur':''), type:'button', 'data-run':x.run, title:'open run '+x.run, onclick:()=>openRun(x.run)},
-        el('div',{class:'bt'}, el('b',{text:clip(x.f.title||x.run,120)}), el('span',{class:'pill '+x.st, text:(BOOT.labels&&BOOT.labels[x.st])||x.st})),
-        x.f.conf!=null ? el('div',{class:'bconf',title:'confidence from the run state'}, el('i',{},el('u',{style:'width:'+x.f.conf+'%'})), el('span',{text:x.f.conf+'% sure'})) : null,
-        x.f.tags.length ? el('div',{class:'btags'}, x.f.tags.map(t=>el('span',{text:clip(t,24)}))) : null,
-        el('div',{class:'bmeta'}, el('span',{text:where}), dur?el('span',{text:dur}):null, x.m.cost?el('span',{text:trimCost(x.m.cost)}):null, x.f.title?el('span',{text:x.run.slice(0,14)}):null),
-        x.m.end&&x.m.end.err ? el('div',{class:'bmeta'}, el('span',{class:'err',text:clip(x.m.end.err,140)})) : null);
-    });
-    return el('section',{class:'bcol'+(c.cards.length?'':' empty-col'),'aria-label':c.label},
-      el('div',{class:'bhead'}, el('b',{text:c.label}), el('span',{class:'n',text:String(c.cards.length),title:c.cards.length+' runs'})),
-      el('div',{class:'bsum',text:sum||c.hint||''}),
-      cards.length ? cards : el('div',{class:'bnone',text:'no runs'}));
+    const active = c.cards.find(x=>x.st==='running') || c.cards.find(x=>x.st==='waiting'||x.st==='paused');
+    const last = c.cards.filter(x=>x.m.end).sort((a,b)=>(b.m.tEnd||0)-(a.m.tEnd||0))[0];
+    const tot = c.cards.length || 1, pct = k => (100*(cnt[k]||0)/tot).toFixed(1)+'%';
+    const open = c.cards.filter(x=>!x.m.end).length;
+    const status = active ? active.st : c.cards.length ? 'done' : 'idle';
+    return el('section',{class:'blane','aria-label':c.label},
+      el('div',{class:'bbox'+(active&&active.st==='running'?' live':'')+(c.ask?' ask':'')},
+        el('div',{class:'bh'}, el('span',{class:'bico','aria-hidden':'true',text:c.ask?'?':c.key.startsWith('g:')?'▦':'•'}),
+          el('span',{class:'tt'}, el('b',{text:c.label}), el('small',{text:c.sub})),
+          el('span',{class:'pill '+status, text:stLabel(status)})),
+        el('div',{class:'bnow', text: active ? (active.st==='running'?'Working on ':'Waiting: ')+(active.f.title||active.run) : c.cards.length ? 'Nothing running' : 'Waiting for work'}),
+        el('div',{class:'bprog',title:(cnt.done||0)+' done · '+(cnt.failed||0)+' failed · '+open+' open'},
+          el('i',{}, el('u',{style:'width:'+pct('done')}), el('s',{style:'width:'+pct('failed')}), el('em',{style:'width:'+(100*open/tot).toFixed(1)+'%'})),
+          el('span',{text:(cnt.done||0)+'/'+c.cards.length+' done'+(cnt.failed?' · '+cnt.failed+' failed':'')})),
+        el('div',{class:'blast', text:'↳ '+(last ? (last.f.title||last.run)+' · '+(last.st==='done'?'finished':last.st) : 'nothing finished yet')})),
+      el('div',{class:'bq'},
+        el('div',{class:'bqh'}, el('span',{text:'Tasks'}), el('span',{class:'n',text:String(c.cards.length)})),
+        c.cards.length ? c.cards.map(x=>boardCard(x,nodeOfId)) : el('div',{class:'bnone',text:'No tasks yet'})));
   });
+  const wrap = el('div',{class:'bwrap'}, hubEl, el('div',{class:'blanes'+(hubEl?' wired':'')}, lanes));
   const b = $('board'), sc = b.scrollTop, sl = b.scrollLeft, fid = document.activeElement && b.contains(document.activeElement) ? document.activeElement.dataset.run : null;
-  b.replaceChildren(...kids); b.scrollTop = sc; b.scrollLeft = sl;
+  b.replaceChildren(wrap); b.scrollTop = sc; b.scrollLeft = sl;
   if (fid) { const f = b.querySelector('.bcard[data-run="'+CSS.escape(fid)+'"]') || b.querySelector('.bcard'); if (f) f.focus({preventScroll:true}); }
 }
 $('boardbtn').onclick = ()=>setBoard(!S.board);
@@ -1984,10 +2051,11 @@ document.addEventListener('keydown',e=>{
   // Arrows move between cards: up/down in a column, left/right to the next column.
   if (S.board && t && t.classList && t.classList.contains('bcard') && /^Arrow/.test(e.key)) {
     e.preventDefault();
-    const col = t.closest('.bcol'), cards = [...col.querySelectorAll('.bcard')], i = cards.indexOf(t);
+    const col = t.closest('.blane,.bhub'), cards = [...col.querySelectorAll('.bcard')], i = cards.indexOf(t);
     let next = null;
     if (e.key==='ArrowDown') next = cards[i+1]; else if (e.key==='ArrowUp') next = cards[i-1];
-    else { let c = col; do { c = e.key==='ArrowRight' ? c.nextElementSibling : c.previousElementSibling; } while (c && !c.querySelector('.bcard'));
+    else { let c = col; do { c = e.key==='ArrowRight' ? c.nextElementSibling : c.previousElementSibling; } while (c && c.classList.contains('blane') && !c.querySelector('.bcard'));
+      if (c && !c.classList.contains('blane')) c = null;
       if (c) { const cs = c.querySelectorAll('.bcard'); next = cs[Math.min(i, cs.length-1)]; } }
     if (next) next.focus();
   }
