@@ -62,6 +62,7 @@ type node[S any] struct {
 	agent  bool             // tagged by AddAgentNode / MarkAgent (topology only)
 	runner *runner.Runner   // set by AgentRunner (topology only)
 	group  *groupDef        // set by Compile from Group (presentation only)
+	sub    bool             // placeholder of AddSubgraph, replaced by Compile
 }
 
 type parallelSpec[S any] struct {
@@ -88,6 +89,7 @@ type Graph[S any] struct {
 	runners map[string]*runner.Runner
 	watches [][2]string
 	groups  []*groupDef
+	subs    []*subgraphDef[S]
 	errs    []error
 }
 
@@ -240,6 +242,7 @@ var ErrInvalidGraph = errors.New("graph: invalid graph")
 // Compile validates the wiring and returns a Runnable. All problems are
 // reported together (errors.Join); each names the offending node.
 func (g *Graph[S]) Compile(opts ...CompileOption) (*Runnable[S], error) {
+	g = g.expand(0)
 	cfg := options{maxSteps: 100}
 	for _, o := range opts {
 		o(&cfg)
