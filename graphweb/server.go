@@ -123,6 +123,7 @@ type Event struct {
 
 	Question string             `json:"question,omitempty"` // interrupt
 	Items    []graph.ReviewItem `json:"items,omitempty"`    // interrupt: files to review (served at /api/review/{seq}/{n})
+	Options  []string           `json:"options,omitempty"`  // interrupt: the answers offered (graph.InterruptChoice)
 	Answer   string             `json:"answer,omitempty"`   // resume
 
 	Babysitter *BabysitterEvent `json:"babysitter,omitempty"` // babysitter
@@ -358,7 +359,7 @@ func (s *Server) NodeEnd(_ context.Context, i graph.StepInfo, err error) {
 	s.emit(ev)
 	if i.Paused {
 		s.markOpen()
-		s.emit(Event{Run: i.RunID, Type: TypeInterrupt, Node: i.Node, Step: i.Step, Question: i.Question, Items: i.Items})
+		s.emit(Event{Run: i.RunID, Type: TypeInterrupt, Node: i.Node, Step: i.Step, Question: i.Question, Items: i.Items, Options: i.Options})
 	}
 }
 
@@ -597,7 +598,7 @@ func RunInteractive[S any](ctx context.Context, r *graph.Runnable[S], init S, sr
 		if !ok {
 			return st, rep, err
 		}
-		srv.ensureOpen(intr.Checkpoint.RunID, intr.Node, intr.Question, intr.Items)
+		srv.ensureOpen(intr.Checkpoint.RunID, intr.Node, intr.Question, intr.Items, intr.Options)
 		answer, aerr := srv.waitAnswer(ctx)
 		if aerr != nil {
 			return st, rep, aerr
@@ -607,7 +608,7 @@ func RunInteractive[S any](ctx context.Context, r *graph.Runnable[S], init S, sr
 }
 
 // ensureOpen opens the interrupt in the UI if the observer has not already.
-func (s *Server) ensureOpen(run, node, question string, items []graph.ReviewItem) {
+func (s *Server) ensureOpen(run, node, question string, items []graph.ReviewItem, options []string) {
 	s.mu.Lock()
 	if s.open > 0 {
 		s.mu.Unlock()
@@ -615,7 +616,7 @@ func (s *Server) ensureOpen(run, node, question string, items []graph.ReviewItem
 	}
 	s.open++
 	s.mu.Unlock()
-	s.emit(Event{Run: run, Type: TypeInterrupt, Node: node, Question: question, Items: items})
+	s.emit(Event{Run: run, Type: TypeInterrupt, Node: node, Question: question, Items: items, Options: options})
 }
 
 // ---- helpers ----

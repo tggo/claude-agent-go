@@ -14,6 +14,7 @@ var ErrInterrupt = errors.New("graph: interrupted")
 type interruptError struct {
 	Question string
 	Items    []ReviewItem
+	Options  []string
 }
 
 func (e *interruptError) Error() string        { return "graph: interrupted: " + e.Question }
@@ -22,6 +23,14 @@ func (e *interruptError) Is(target error) bool { return target == ErrInterrupt }
 // Interrupt returns the error a node returns to pause the run and ask a human
 // question. Run then fails with *Interrupted; answer it through Resume.
 func Interrupt(question string) error { return &interruptError{Question: question} }
+
+// InterruptChoice is Interrupt with the answers the node accepts. Viewers
+// offer them as buttons (graphweb draws one per option instead of yes/no);
+// the answer Resume passes in is still a plain string, so the node checks it
+// the same way. A free-text answer remains possible.
+func InterruptChoice(question string, options ...string) error {
+	return &interruptError{Question: question, Options: append([]string(nil), options...)}
+}
 
 // Checkpoint is everything needed to resume a paused run. It is plain data and
 // JSON-serializable whenever S is, so it can be stored between requests.
@@ -56,6 +65,8 @@ type Interrupted[S any] struct {
 	Checkpoint Checkpoint[S]
 	// Items are the things to review when the node called InterruptReview.
 	Items []ReviewItem
+	// Options are the answers offered when the node called InterruptChoice.
+	Options []string
 }
 
 func (e *Interrupted[S]) Is(target error) bool { return target == ErrInterrupt }

@@ -65,6 +65,8 @@ type StepInfo struct {
 	Question string
 	// Items is set with Paused when the node called InterruptReview.
 	Items []ReviewItem
+	// Options is set with Paused when the node called InterruptChoice.
+	Options []string
 }
 
 // Observer receives node lifecycle events. Calls for one run are made in

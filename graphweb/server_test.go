@@ -383,6 +383,30 @@ func TestRunInteractiveWithoutObserverAndCancel(t *testing.T) {
 	assert.ErrorIs(t, <-done, context.Canceled)
 }
 
+// InterruptChoice's options reach the interrupt event, so the page draws them as buttons.
+func TestInterruptChoiceOptionsInEvent(t *testing.T) {
+	s := newSrv(t)
+	r, err := graph.New[st]("pick").
+		AddNode("ask", func(ctx context.Context, x *st) error {
+			if _, ok := graph.Answer(ctx); ok {
+				return nil
+			}
+			return graph.InterruptChoice("which?", "red", "blue")
+		}).AddEdge(graph.Start, "ask").AddEdge("ask", graph.End).Compile(graph.WithObserver(s))
+	require.NoError(t, err)
+	done := make(chan error, 1)
+	go func() { _, _, err := RunInteractive(context.Background(), r, st{}, s); done <- err }()
+	require.Eventually(t, func() bool { return s.Answer("blue") == nil }, 2*time.Second, 5*time.Millisecond)
+	require.NoError(t, <-done)
+	var opts []string
+	for _, e := range s.Events() {
+		if e.Type == TypeInterrupt {
+			opts = e.Options
+		}
+	}
+	assert.Equal(t, []string{"red", "blue"}, opts)
+}
+
 func TestAskHelper(t *testing.T) {
 	s := newSrv(t)
 	r, err := graph.New[st]("ask").

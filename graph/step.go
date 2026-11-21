@@ -54,6 +54,7 @@ type StepResult[S any] struct {
 	Paused   bool
 	Question string
 	Items    []ReviewItem
+	Options  []string
 	// Step is the report entry of this execution (cost, duration, error).
 	Step Step
 }
@@ -118,7 +119,7 @@ func (r *Runnable[S]) Step(ctx context.Context, node string, s S, opt StepOption
 	if err != nil {
 		var ie *interruptError
 		if errors.As(err, &ie) {
-			res.Paused, res.Question, res.Items = true, ie.Question, slices.Clone(ie.Items)
+			res.Paused, res.Question, res.Items, res.Options = true, ie.Question, slices.Clone(ie.Items), slices.Clone(ie.Options)
 			return res, nil
 		}
 		return res, err

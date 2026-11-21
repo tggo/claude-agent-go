@@ -19,6 +19,7 @@ Next version: v0.7.0 (unreleased).
 ### Added
 - `graph`: `AddSubgraph(name, sub)` / `AddSubgraphWith(name, GroupOpts, sub)` embed a separate `Graph[S]` as one step, so workflows can be built apart and put behind a router. `Compile` inlines the nodes as `name/node`, wires edges to and from `name`, and makes a group of them (labelled with the subgraph's name). Nesting and embedding one graph several times work; durable runs pause and recover inside a subgraph.
 - `graphweb`: a **board** view (`board` button, `b`): every run of the graph as a card in the column of the workflow (group) it was routed to, with status, current node, duration, cost and error; title, confidence and tags from the run state. Nodes of a subgraph show their short name inside its box.
+- `graph`: `InterruptChoice(question, options...)`: an interrupt that names the answers it accepts. `Interrupted.Options`, `StepInfo.Options`, `StepResult.Options` and the log's interrupt record carry them; graphweb's question box shows a button per option instead of yes/no.
 - `examples/router`: a classifier in front of three workflow subgraphs and a direct answer, with a person routing the unsure task, on the board.
 - `graphweb`: `WithTheme(map[string]string)`, `WithFonts(ui, mono)`, `WithStylesheet(css)`, `WithThemeMode("light"|"dark"|"auto")`. Token values are validated and the stylesheet escapes `<`, so nothing can close the `<style>` element. `?theme=` in the URL overrides per view.
 - `graphweb`: `WithEmbed()` (or `?embed=1`) drops the brand and fits the host's frame.

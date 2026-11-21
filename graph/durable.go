@@ -355,7 +355,7 @@ func (r *Runnable[S]) Recover(ctx context.Context, runID string) (S, *Report, er
 		rep := rec.report()
 		cp := Checkpoint[S]{RunID: runID, State: s, Node: p.pending.Node, Step: p.pending.Step - 1,
 			Path: slices.Clone(p.path), Prior: Prior{Steps: rep.Steps, Duration: rep.Duration}}
-		return s, rep, &Interrupted[S]{Question: p.pending.Question, Node: p.pending.Node, Checkpoint: cp}
+		return s, rep, &Interrupted[S]{Question: p.pending.Question, Node: p.pending.Node, Checkpoint: cp, Options: p.pending.Options}
 	}
 
 	cur, step, answer, hasAnswer := p.next, p.step, "", false

@@ -485,7 +485,7 @@ function apply(m, ev, fx){
   case 'artifact':
     if (ev.artifact) m.arts.push(Object.assign({seq:ev.seq,node:ev.node,step:ev.step,parent:ev.parent}, ev.artifact)); break;
   case 'interrupt':
-    m.pending = {node:ev.node, step:ev.step, question:ev.question, seq:ev.seq, items:ev.items||null}; break;
+    m.pending = {node:ev.node, step:ev.step, question:ev.question, seq:ev.seq, items:ev.items||null, options:Array.isArray(ev.options)&&ev.options.length?ev.options:null}; break;
   case 'resume':
     m.pending = null; m.answers[nk(ev.node,ev.step)] = ev.answer; m.lastAnswer = {node:ev.node, answer:ev.answer}; break;
   case 'breakpoint_hit':
@@ -1271,7 +1271,7 @@ function paintBanners(m,st){
       input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&input.value) send(input.value); });
       ask.replaceChildren(el('div',{class:'ev k',text:`${p.node} asks`}), el('p',{class:'q',text:p.question}),
         live ? el('div',{class:'row2'}, input,
-          ...['yes','no'].map(v=>el('button',{class:'btn',text:v,onclick:()=>send(v)})),
+          ...(p.options||['yes','no']).map(v=>el('button',{class:'btn',text:v,onclick:()=>send(v)})),
           el('button',{class:'btn primary',text:'send',onclick:()=>input.value&&send(input.value)})) : el('div',{class:'muted',text:'(read-only)'}));
       if (live) setTimeout(()=>input.focus(),0);
       }

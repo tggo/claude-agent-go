@@ -49,6 +49,8 @@ const (
 	Answer    = "answer"
 )
 
+var workflows = []string{Coding, Research, Marketing, Answer}
+
 var tasks = []string{
 	"Fix the 502 on /api/orders after the deploy",
 	"Compare three vector databases for our search",
@@ -194,7 +196,7 @@ func build(step time.Duration, opts ...graph.CompileOption) (*graph.Runnable[Tas
 		AddNode("ask", func(ctx context.Context, s *Task) error {
 			a, ok := graph.Answer(ctx)
 			if !ok {
-				return graph.Interrupt(fmt.Sprintf("Not sure where %q belongs (%.0f%%). coding, research, marketing or answer?", s.Title, s.Confidence*100))
+				return graph.InterruptChoice(fmt.Sprintf("Not sure where %q belongs (%.0f%% sure). Which workflow?", s.Title, s.Confidence*100), workflows...)
 			}
 			a = strings.ToLower(strings.TrimSpace(a))
 			switch a {
@@ -203,7 +205,7 @@ func build(step time.Duration, opts ...graph.CompileOption) (*graph.Runnable[Tas
 				s.Tags = append(s.Tags, "routed by a person")
 				return nil
 			}
-			return graph.Interrupt(fmt.Sprintf("%q is not a workflow. coding, research, marketing or answer?", a))
+			return graph.InterruptChoice(fmt.Sprintf("%q is not a workflow. Which one?", a), workflows...)
 		}).
 		AddSubgraph(Coding, coding).
 		AddSubgraph(Research, research).

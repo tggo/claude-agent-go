@@ -193,7 +193,7 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 			if errors.As(err, &ie) {
 				if rec.ck != nil {
 					last := rec.last()
-					if cerr := rec.ck.append(ctx, Record{Kind: KindInterrupt, Node: n.name, Step: step, Question: ie.Question,
+					if cerr := rec.ck.append(ctx, Record{Kind: KindInterrupt, Node: n.name, Step: step, Question: ie.Question, Options: ie.Options,
 						State: snapshot(&s), CostUSD: last.CostUSD, DurationMS: last.Duration.Milliseconds()}); cerr != nil {
 						return s, rec.report(), cerr
 					}
@@ -203,7 +203,7 @@ func (r *Runnable[S]) loop(ctx context.Context, s S, cur string, step int, path 
 					Prior: Prior{Steps: rep.Steps, Duration: rep.Duration}}
 				// Step counts executions completed before this one, so the
 				// resumed attempt re-takes the same step number.
-				return s, rep, &Interrupted[S]{Question: ie.Question, Node: n.name, Checkpoint: cp, Items: ie.Items}
+				return s, rep, &Interrupted[S]{Question: ie.Question, Node: n.name, Checkpoint: cp, Items: ie.Items, Options: ie.Options}
 			}
 			return s, rec.report(), err
 		}
@@ -289,7 +289,7 @@ func (r *Runnable[S]) exec(ctx context.Context, name, parent string, step int, r
 	obsErr := err
 	if paused {
 		st.Paused, st.Question, obsErr = true, ie.Question, nil
-		info.Items = ie.Items
+		info.Items, info.Options = ie.Items, ie.Options
 	} else {
 		st.Err = err
 	}

@@ -113,7 +113,7 @@ func EventsFromRecords(runID string, recs []graph.Record) ([]Event, error) {
 			ev.DurationMS, ev.CostUSD, ev.State, ev.Diff = r.DurationMS, r.CostUSD, r.State, diffState(prev, r.State)
 			prev = r.State
 			evs = append(evs, ev)
-			evs = append(evs, Event{V: SchemaVersion, Run: runID, TS: r.Time, Type: TypeInterrupt, Node: r.Node, Step: r.Step, Question: r.Question})
+			evs = append(evs, Event{V: SchemaVersion, Run: runID, TS: r.Time, Type: TypeInterrupt, Node: r.Node, Step: r.Step, Question: r.Question, Options: r.Options})
 		case graph.KindResume:
 			ev.Type, ev.Node, ev.Step, ev.Answer = TypeResume, r.Node, r.Step, r.Answer
 			evs = append(evs, ev)

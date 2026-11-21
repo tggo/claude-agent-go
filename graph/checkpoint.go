@@ -85,11 +85,12 @@ type Record struct {
 	CostUSD    float64 `json:"cost_usd,omitempty"`   // node_commit, interrupt
 	DurationMS int64   `json:"duration_ms,omitempty"`
 
-	Question string `json:"question,omitempty"` // interrupt
-	Answer   string `json:"answer,omitempty"`   // resume
-	From     string `json:"from,omitempty"`     // edge: source node; fork: the run forked from
-	FromSeq  int    `json:"from_seq,omitempty"` // fork: seq of the commit forked at
-	Err      string `json:"err,omitempty"`      // run_end, recover
+	Question string   `json:"question,omitempty"` // interrupt
+	Options  []string `json:"options,omitempty"`  // interrupt: the answers InterruptChoice offered
+	Answer   string   `json:"answer,omitempty"`   // resume
+	From     string   `json:"from,omitempty"`     // edge: source node; fork: the run forked from
+	FromSeq  int      `json:"from_seq,omitempty"` // fork: seq of the commit forked at
+	Err      string   `json:"err,omitempty"`      // run_end, recover
 }
 
 // CheckpointStore is the durable, append-only log of runs. Records are JSON

@@ -374,6 +374,11 @@ if errors.As(err, &it) {
 }
 ```
 
+`graph.InterruptChoice(question, "coding", "research", "answer")` asks the same way
+but names the answers it accepts: `Interrupted.Options` lists them, a durable log
+keeps them for `Recover`, and graphweb shows a button per option instead of yes/no.
+The answer is still a string, so the node checks it as before.
+
 `graph.InterruptReview(question, items)` pauses on a list of items (files, images)
 for a human to approve or comment on; the node reads the verdict with
 `graph.ReviewAnswer(ctx)`. A node can also publish files it produced with
