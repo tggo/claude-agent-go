@@ -49,6 +49,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -213,8 +214,7 @@ type Server struct {
 	pauseNext   bool
 	release     chan struct{}
 
-	answers chan string
-	open    int
+	inboxes map[string]*inbox // by run id: the questions waiting for an answer
 
 	babysitter BabysitterControl // nil: the panel has no buttons
 	seen       map[string]bool   // run ids that have events: babysitter actions are limited to them
@@ -263,7 +263,7 @@ func newServer(token string, cfg config) *Server {
 		runs:        map[string]*runState{},
 		breakpoints: map[string]bool{},
 		release:     make(chan struct{}),
-		answers:     make(chan string, 16),
+		inboxes:     map[string]*inbox{},
 	}
 	for _, h := range cfg.allowedHosts {
 		s.hosts[normHost(h)] = true
@@ -358,7 +358,7 @@ func (s *Server) NodeEnd(_ context.Context, i graph.StepInfo, err error) {
 	s.mu.Unlock()
 	s.emit(ev)
 	if i.Paused {
-		s.markOpen()
+		s.markOpen(i.RunID)
 		s.emit(Event{Run: i.RunID, Type: TypeInterrupt, Node: i.Node, Step: i.Step, Question: i.Question, Items: i.Items, Options: i.Options})
 	}
 }
@@ -541,31 +541,85 @@ func (s *Server) Control(action string) error {
 
 // ---- human answers ----
 
-func (s *Server) markOpen() {
+// inbox holds one run's open questions and the answers given to them. Answers
+// go to the run they were given for, so two runs waiting at once never get
+// each other's answer.
+type inbox struct {
+	open int
+	ch   chan string
+}
+
+// box returns run's inbox, creating it. Callers hold s.mu.
+func (s *Server) box(run string) *inbox {
+	b := s.inboxes[run]
+	if b == nil {
+		b = &inbox{ch: make(chan string, 16)}
+		s.inboxes[run] = b
+	}
+	return b
+}
+
+func (s *Server) markOpen(run string) {
 	s.mu.Lock()
-	s.open++
+	s.box(run).open++
 	s.mu.Unlock()
 }
 
 // errNoQuestion means an answer arrived with no interrupt open.
 var errNoQuestion = errors.New("graphweb: no question is waiting for an answer")
 
-// Answer delivers a human answer to the pending interrupt (what POST
-// /api/answer does).
+// ErrAmbiguousAnswer is returned by Answer when several runs wait for an
+// answer: name the run with AnswerRun (POST /api/answer with "run").
+var ErrAmbiguousAnswer = errors.New("graphweb: several runs are waiting for an answer; name the run")
+
+// Answer delivers a human answer to the open question when exactly one run
+// has one. With several open it returns ErrAmbiguousAnswer; use AnswerRun.
 func (s *Server) Answer(a string) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.open == 0 {
-		return errNoQuestion
+	var runs []string
+	for run, b := range s.inboxes {
+		if b.open > 0 {
+			runs = append(runs, run)
+		}
 	}
-	s.open--
-	s.answers <- a
+	s.mu.Unlock()
+	switch len(runs) {
+	case 0:
+		return errNoQuestion
+	case 1:
+		return s.AnswerRun(runs[0], a)
+	}
+	slices.Sort(runs)
+	return fmt.Errorf("%w (%s)", ErrAmbiguousAnswer, strings.Join(runs, ", "))
+}
+
+// AnswerRun delivers a human answer to run's open question (what POST
+// /api/answer does with "run").
+func (s *Server) AnswerRun(run, a string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b := s.inboxes[run]
+	if b == nil || b.open == 0 {
+		return fmt.Errorf("%w for run %q", errNoQuestion, run)
+	}
+	b.open--
+	b.ch <- a
 	return nil
 }
 
-func (s *Server) waitAnswer(ctx context.Context) (string, error) {
+func (s *Server) waitAnswer(ctx context.Context, run string) (string, error) {
+	s.mu.Lock()
+	ch := s.box(run).ch
+	s.mu.Unlock()
+	defer func() { // forget a run with nothing open or queued
+		s.mu.Lock()
+		if b := s.inboxes[run]; b != nil && b.open == 0 && len(b.ch) == 0 {
+			delete(s.inboxes, run)
+		}
+		s.mu.Unlock()
+	}()
 	select {
-	case a := <-s.answers:
+	case a := <-ch:
 		return a, nil
 	case <-ctx.Done():
 		return "", ctx.Err()
@@ -577,9 +631,9 @@ func (s *Server) waitAnswer(ctx context.Context) (string, error) {
 // graph.Interrupt flows prefer RunInteractive.
 func (s *Server) Ask(ctx context.Context, question string) (string, error) {
 	run, node := graph.RunID(ctx), graph.NodeName(ctx)
-	s.markOpen()
+	s.markOpen(run)
 	s.emit(Event{Run: run, Type: TypeInterrupt, Node: node, Question: question})
-	a, err := s.waitAnswer(ctx)
+	a, err := s.waitAnswer(ctx, run)
 	if err != nil {
 		return "", err
 	}
@@ -599,7 +653,7 @@ func RunInteractive[S any](ctx context.Context, r *graph.Runnable[S], init S, sr
 			return st, rep, err
 		}
 		srv.ensureOpen(intr.Checkpoint.RunID, intr.Node, intr.Question, intr.Items, intr.Options)
-		answer, aerr := srv.waitAnswer(ctx)
+		answer, aerr := srv.waitAnswer(ctx, intr.Checkpoint.RunID)
 		if aerr != nil {
 			return st, rep, aerr
 		}
@@ -610,11 +664,12 @@ func RunInteractive[S any](ctx context.Context, r *graph.Runnable[S], init S, sr
 // ensureOpen opens the interrupt in the UI if the observer has not already.
 func (s *Server) ensureOpen(run, node, question string, items []graph.ReviewItem, options []string) {
 	s.mu.Lock()
-	if s.open > 0 {
+	b := s.box(run)
+	if b.open > 0 {
 		s.mu.Unlock()
 		return
 	}
-	s.open++
+	b.open++
 	s.mu.Unlock()
 	s.emit(Event{Run: run, Type: TypeInterrupt, Node: node, Question: question, Items: items, Options: options})
 }

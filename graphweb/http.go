@@ -247,13 +247,18 @@ func (s *Server) handleGetBreakpoints(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleAnswer(w http.ResponseWriter, r *http.Request) {
 	var in struct {
+		Run    string `json:"run"` // the run asking; empty works only while one run waits
 		Answer string `json:"answer"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		http.Error(w, "bad json: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.Answer(in.Answer); err != nil {
+	answer := s.Answer
+	if in.Run != "" {
+		answer = func(a string) error { return s.AnswerRun(in.Run, a) }
+	}
+	if err := answer(in.Answer); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}

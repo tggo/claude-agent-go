@@ -779,3 +779,65 @@ func TestReplayGrowingJournal(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+// Two runs wait at once: each answer reaches the run it was given for, a bare
+// Answer is refused as ambiguous, and the HTTP endpoint takes the run.
+func TestAnswersGoToTheirRun(t *testing.T) {
+	s := newSrv(t)
+	r, err := graph.New[st]("two").
+		AddNode("ask", func(ctx context.Context, x *st) error {
+			if a, ok := graph.Answer(ctx); ok {
+				x.Note = a
+				return nil
+			}
+			return graph.Interrupt("name?")
+		}).AddEdge(graph.Start, "ask").AddEdge("ask", graph.End).Compile(graph.WithObserver(s))
+	require.NoError(t, err)
+
+	out := make(chan string, 2)
+	for range 2 {
+		go func() {
+			x, _, err := RunInteractive(context.Background(), r, st{}, s)
+			assert.NoError(t, err)
+			out <- x.Note
+		}()
+	}
+	var runs []string
+	require.Eventually(t, func() bool {
+		runs = runs[:0]
+		for _, e := range s.Events() {
+			if e.Type == TypeInterrupt {
+				runs = append(runs, e.Run)
+			}
+		}
+		return len(runs) == 2
+	}, 2*time.Second, 5*time.Millisecond)
+
+	assert.ErrorIs(t, s.Answer("x"), ErrAmbiguousAnswer)
+	assert.ErrorContains(t, s.AnswerRun("run-nope", "x"), "no question is waiting")
+
+	// The answer names its run: the run's resume event carries it.
+	require.NoError(t, s.AnswerRun(runs[1], "second"))
+	ts := newTS(t, s)
+	resp := do(t, "POST", ts.URL+"/api/answer", `{"run":"`+runs[0]+`","answer":"first"}`,
+		map[string]string{"X-Graphweb-Token": s.Token(), "Content-Type": "application/json"})
+	require.Equal(t, 200, resp.StatusCode)
+	got := map[string]bool{}
+	for range 2 {
+		got[<-out] = true
+	}
+	assert.Equal(t, map[string]bool{"first": true, "second": true}, got)
+	resumed := map[string]string{}
+	for _, e := range s.Events() {
+		if e.Type == TypeResume {
+			resumed[e.Run] = e.Answer
+		}
+	}
+	assert.Equal(t, map[string]string{runs[0]: "first", runs[1]: "second"}, resumed)
+
+	// Nothing open: both forms refuse.
+	assert.ErrorIs(t, s.Answer("late"), errNoQuestion)
+	resp = do(t, "POST", ts.URL+"/api/answer", `{"run":"`+runs[0]+`","answer":"late"}`,
+		map[string]string{"X-Graphweb-Token": s.Token(), "Content-Type": "application/json"})
+	assert.Equal(t, 409, resp.StatusCode)
+}

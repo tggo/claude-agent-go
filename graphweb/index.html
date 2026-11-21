@@ -1267,7 +1267,7 @@ function paintBanners(m,st){
       if (rev) { ask.replaceChildren(...reviewView(p,live)); }
       else {
       const input = el('input',{type:'text',placeholder:'your answer…','aria-label':'answer'});
-      const send = v=>postJSON(API('answer'),{answer:v}).then(r=>{ if(!r.ok) r.text().then(t=>alert(t)); });
+      const send = v=>postJSON(API('answer'),{run:S.curRun,answer:v}).then(r=>{ if(!r.ok) r.text().then(t=>alert(t)); });
       input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&input.value) send(input.value); });
       ask.replaceChildren(el('div',{class:'ev k',text:`${p.node} asks`}), el('p',{class:'q',text:p.question}),
         live ? el('div',{class:'row2'}, input,
@@ -1292,7 +1292,7 @@ function reviewView(p,live){
   const gen=el('textarea',{rows:2,placeholder:'general comment (optional)…','aria-label':'general comment'}); gen.value=d.g||''; gen.addEventListener('input',()=>{d.g=gen.value;});
   const send=approved=>{ const comments={}; for (const k in d.c) if (d.c[k].trim()) comments[k]=d.c[k].trim();
     const body={approved}; if (Object.keys(comments).length) body.comments=comments; if (d.g.trim()) body.general=d.g.trim();
-    postJSON(API('answer'),{answer:JSON.stringify(body)}).then(r=>{ if(!r.ok) r.text().then(t=>alert(t)); }); };
+    postJSON(API('answer'),{run:S.curRun,answer:JSON.stringify(body)}).then(r=>{ if(!r.ok) r.text().then(t=>alert(t)); }); };
   return [head,q,el('div',{class:'rgrid'},cards),el('div',{class:'rfoot'},gen,el('div',{class:'row2'},
     el('button',{class:'btn primary',text:'Approve all',onclick:()=>send(true)}),el('button',{class:'btn warn',text:'Send comments',onclick:()=>send(false)})))];
 }
