@@ -324,6 +324,40 @@ g.Group("verify", "lint", "unit", "vuln", "checks")
 g.GroupWith("ship", graph.GroupOpts{Label: "Ship it", Collapsed: true}, "docs", "publish")
 ```
 
+### A router in front of workflows: subgraphs
+
+Build each workflow as its own `Graph[S]` and embed it with `AddSubgraph`. The
+name is used like a node name in edges: an edge to it enters the workflow, and
+the route out of it is taken where the workflow reaches `End`. A classifier
+node picks one with a conditional edge:
+
+```go
+coding := graph.New[Task]("Coding").AddNode("plan", plan).AddNode("impl", impl).
+	AddEdge(graph.Start, "plan").AddEdge("plan", "impl").AddEdge("impl", graph.End)
+
+g := graph.New[Task]("support").
+	AddAgentNode("classify", classify). // sets s.Kind, s.Confidence
+	AddSubgraph("coding", coding).
+	AddSubgraph("research", research).
+	AddNode("answer", answer).
+	AddEdge(graph.Start, "classify").
+	AddConditionalEdge("classify", func(s *Task) string { return s.Kind }, "coding", "research", "answer").
+	AddEdge("coding", graph.End).AddEdge("research", graph.End).AddEdge("answer", graph.End)
+```
+
+`Compile` copies the workflow's nodes in as `coding/plan`, `coding/impl` and puts
+them in a group named `coding`, labelled with the workflow's graph name. graphweb
+draws it as one collapsible box, durable runs checkpoint, pause and `Recover`
+inside it like anywhere else, and a workflow can be embedded more than once or
+inside another one (inner groups fold into the outer box). Each workflow shares
+the parent's state type.
+
+graphweb's **board** (button or `b`) shows every run of the graph in the column
+of the workflow it was routed to, with its status and where it is. A card's
+title, `confidence` (0..1 or 0..100) and `tags` come from the run's state when
+it has fields by those names (`title`, `task`, `subject`, `name`, `query`,
+`prompt` or `input` for the title). `go run ./examples/router` shows both.
+
 ### Interrupt, resume and human review
 
 A node can stop the graph to ask a question. `Run` returns `*graph.Interrupted[S]`
