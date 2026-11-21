@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Next version: v0.7.0 (unreleased).
+## [0.7.0] - 2026-11-21
 
 ### Breaking
 - `graphweb`: the page's CSS tokens are role names now (`--bg`, `--surface`, `--raised`, `--line`, `--text`, `--muted`, `--faint`, `--accent`, `--ok`, `--warn`, `--bad`, `--info`, `--ui`, `--mono`). The palette names (`--ink`, `--ink-2`, `--ink-3`, `--cyan`, `--cyan-deep`, `--coral`, `--amber`, `--green`, `--disp`) are gone; a host stylesheet that used them must move to the roles.
@@ -284,7 +284,8 @@ First public release. A Go SDK for building agents on top of the Claude Code CLI
   `tools`). >90% unit coverage on every substantive package; 18 integration tests
   assert behavior against the real binary.
 
-[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/tggo/claude-agent-go/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/tggo/claude-agent-go/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/tggo/claude-agent-go/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/tggo/claude-agent-go/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tggo/claude-agent-go/compare/v0.3.0...v0.4.0
